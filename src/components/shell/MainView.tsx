@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -26,21 +26,70 @@ type AssistantMeta = {
   usage: { input: number | null; output: number | null; totalTokens: number | null }
 }
 
+function sanitizeTerminalText(text: string): string {
+  if (!text) return ''
+
+  // Strip common ANSI CSI + OSC escape sequences to keep logs readable in cards.
+  const withoutAnsi = text
+    .replace(/\u001B\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/\u001B\][^\u0007]*(?:\u0007|\u001B\\)/g, '')
+  return withoutAnsi.replace(/\r\n?/g, '\n')
+}
+
 function ToolTerminal({ text, isError = false }: { text: string; isError?: boolean }) {
   const outputRef = useRef<HTMLPreElement | null>(null)
+  const sanitizedText = useMemo(() => sanitizeTerminalText(text), [text])
 
   useEffect(() => {
     const node = outputRef.current
     if (!node) return
     node.scrollTop = node.scrollHeight
-  }, [text])
+  }, [sanitizedText])
 
   return (
     <div className={`chat-tool-terminal ${isError ? 'chat-tool-terminal-error' : ''}`}>
       <pre ref={outputRef} className="chat-tool-code">
-        {text}
+        {sanitizedText}
       </pre>
     </div>
+  )
+}
+
+function CollapsibleToolBlock({
+  title,
+  badge,
+  startExpanded,
+  children,
+}: {
+  title: ReactNode
+  badge: ReactNode
+  startExpanded: boolean
+  children: ReactNode
+}) {
+  const [isOpen, setIsOpen] = useState(startExpanded)
+  const prevStartExpandedRef = useRef(startExpanded)
+
+  useEffect(() => {
+    const wasExpanded = prevStartExpandedRef.current
+    if (startExpanded && !wasExpanded) {
+      setIsOpen(true)
+    }
+    if (!startExpanded && wasExpanded) {
+      setIsOpen(false)
+    }
+    prevStartExpandedRef.current = startExpanded
+  }, [startExpanded])
+
+  return (
+    <section className="chat-tool-block">
+      <details className="chat-tool-details" open={isOpen} onToggle={(event) => setIsOpen(event.currentTarget.open)}>
+        <summary className="chat-tool-title chat-tool-title-row chat-tool-summary">
+          <span>{title}</span>
+          {badge}
+        </summary>
+        <div className="chat-tool-content">{children}</div>
+      </details>
+    </section>
   )
 }
 
@@ -203,6 +252,20 @@ export function MainView() {
     return selectedRuntime.messages
   }, [selectedRuntime?.messages])
 
+  const toolResultStatusByCallId = useMemo(() => {
+    const statusByCallId = new Map<string, 'success' | 'error'>()
+    for (const message of messages) {
+      const blocks = getToolBlocks(message)
+      for (const block of blocks) {
+        if (block.kind !== 'toolResult' || !block.toolCallId) {
+          continue
+        }
+        statusByCallId.set(block.toolCallId, block.isError ? 'error' : 'success')
+      }
+    }
+    return statusByCallId
+  }, [messages])
+
   useEffect(() => {
     const container = scrollRef.current
     if (!container || !isAtBottom) {
@@ -269,23 +332,50 @@ export function MainView() {
                 <div className="chat-message-body">
                   {hasToolBlocks ? (
                     <div className="chat-tool-blocks">
-                      {toolBlocks.map((block, blockIndex) =>
-                        block.kind === 'toolCall' ? (
-                          <section key={`${id}-toolcall-${blockIndex}`} className="chat-tool-block">
-                            <div className="chat-tool-title chat-tool-title-row">
-                              Appel outil: <strong>{block.name}</strong>
+                      {toolBlocks.map((block, blockIndex) => {
+                        if (block.kind === 'toolCall') {
+                          const callStatus = block.toolCallId ? toolResultStatusByCallId.get(block.toolCallId) : null
+                          const isRunning = !callStatus
+                          const badge =
+                            callStatus === 'error' ? (
+                              <span className="chat-tool-badge chat-tool-badge-error">error</span>
+                            ) : callStatus === 'success' ? (
+                              <span className="chat-tool-badge chat-tool-badge-success">success</span>
+                            ) : (
                               <span className="chat-tool-badge">running</span>
-                            </div>
-                            {block.arguments ? <ToolTerminal text={block.arguments} /> : null}
-                          </section>
-                        ) : (
-                          <section key={`${id}-toolresult-${blockIndex}`} className="chat-tool-block">
-                            <div className="chat-tool-title chat-tool-title-row">
-                              Résultat outil: <strong>{block.toolName}</strong>
+                            )
+
+                          return (
+                            <CollapsibleToolBlock
+                              key={`${id}-toolcall-${blockIndex}`}
+                              title={
+                                <>
+                                  Appel outil: <strong>{block.name}</strong>
+                                </>
+                              }
+                              badge={badge}
+                              startExpanded={isRunning}
+                            >
+                              {block.arguments ? <ToolTerminal text={block.arguments} /> : null}
+                            </CollapsibleToolBlock>
+                          )
+                        }
+
+                        return (
+                          <CollapsibleToolBlock
+                            key={`${id}-toolresult-${blockIndex}`}
+                            title={
+                              <>
+                                Résultat outil: <strong>{block.toolName}</strong>
+                              </>
+                            }
+                            badge={
                               <span className={`chat-tool-badge ${block.isError ? 'chat-tool-badge-error' : 'chat-tool-badge-success'}`}>
                                 {block.isError ? 'error' : 'success'}
                               </span>
-                            </div>
+                            }
+                            startExpanded={false}
+                          >
                             <ToolTerminal text={block.text || '[résultat vide]'} isError={block.isError} />
                             {block.truncated ? (
                               <div className="chat-tool-note">
@@ -298,9 +388,9 @@ export function MainView() {
                                 ) : null}
                               </div>
                             ) : null}
-                          </section>
-                        ),
-                      )}
+                          </CollapsibleToolBlock>
+                        )
+                      })}
                     </div>
                   ) : null}
                   {text ? (
