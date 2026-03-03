@@ -232,7 +232,7 @@ class PiRpcProcess {
     const sessionFile =
       conversation.pi_session_file && conversation.pi_session_file.trim().length > 0
         ? conversation.pi_session_file
-        : path.join(process.env.HOME ?? '', '.pi', 'agent', 'sessions', 'dashboard', `${conversation.id}.jsonl`)
+        : path.join(process.env.HOME ?? '', '.pi', 'agent', 'sessions', 'chaton', `${conversation.id}.jsonl`)
 
     fs.mkdirSync(path.dirname(sessionFile), { recursive: true })
 

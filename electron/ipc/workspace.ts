@@ -818,8 +818,10 @@ export function registerWorkspaceIpc() {
       return { ok: false as const, reason: 'conversation_not_found' as const }
     }
 
-    const startsWithDefault = conversation.title.startsWith('Nouveau fil - ')
-    if (!startsWithDefault) {
+    const titreActuel = conversation.title.trim()
+    const titreParDefaut = /^Nouveau\s+fil\s*[-–—:]\s*/i.test(titreActuel)
+    const titreVide = titreActuel.length === 0
+    if (!titreParDefaut && !titreVide) {
       return { ok: true as const, skipped: true as const }
     }
 

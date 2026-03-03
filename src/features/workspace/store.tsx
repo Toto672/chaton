@@ -26,6 +26,7 @@ import type {
   WorkspaceState,
 } from './types'
 import type {
+  ImageContent,
   JsonValue,
   PiConversationRuntime,
   PiRendererEvent,
@@ -68,6 +69,7 @@ const defaultSettings: SidebarSettings = {
   showAssistantStats: false,
   searchQuery: '',
   collapsedProjectIds: [],
+  sidebarWidth: 320,
 }
 
 const makePiRuntime = (): PiConversationRuntime => ({
@@ -118,7 +120,62 @@ function getPiMessageRole(message: JsonValue): string | null {
     return null
   }
   const record = message as Record<string, JsonValue>
-  return typeof record.role === 'string' ? record.role : null
+  if (typeof record.role === 'string') {
+    return record.role
+  }
+  const nested = record.message
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    const nestedRole = (nested as Record<string, JsonValue>).role
+    return typeof nestedRole === 'string' ? nestedRole : null
+  }
+  return null
+}
+
+function mergeMessageToolBlocks(existing: JsonValue, incoming: JsonValue): JsonValue {
+  if (!existing || typeof existing !== 'object' || Array.isArray(existing)) return incoming
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return incoming
+
+  const existingRecord = existing as Record<string, JsonValue>
+  const incomingRecord = incoming as Record<string, JsonValue>
+  const existingContent = Array.isArray(existingRecord.content) ? existingRecord.content : null
+  const incomingContent = Array.isArray(incomingRecord.content) ? incomingRecord.content : null
+  if (!existingContent || !incomingContent) return incoming
+
+  const getToolKey = (part: JsonValue, fallbackIndex: number): string | null => {
+    if (!part || typeof part !== 'object' || Array.isArray(part)) return null
+    const value = part as Record<string, JsonValue>
+    if (value.type === 'toolCall') {
+      const callId = typeof value.id === 'string' ? value.id : null
+      const name = typeof value.name === 'string' ? value.name : 'tool'
+      return `toolCall:${callId ?? `${name}:${fallbackIndex}`}`
+    }
+    if (value.type === 'toolResult') {
+      const callId = typeof value.toolCallId === 'string' ? value.toolCallId : null
+      const name = typeof value.toolName === 'string' ? value.toolName : 'tool'
+      return `toolResult:${callId ?? `${name}:${fallbackIndex}`}`
+    }
+    return null
+  }
+
+  const incomingKeys = new Set<string>()
+  for (let i = 0; i < incomingContent.length; i += 1) {
+    const key = getToolKey(incomingContent[i], i)
+    if (key) incomingKeys.add(key)
+  }
+
+  const mergedContent = [...incomingContent]
+  for (let i = 0; i < existingContent.length; i += 1) {
+    const part = existingContent[i]
+    const key = getToolKey(part, i)
+    if (key && !incomingKeys.has(key)) {
+      mergedContent.push(part)
+    }
+  }
+
+  return {
+    ...incomingRecord,
+    content: mergedContent,
+  }
 }
 
 function reducer(state: WorkspaceState, action: Action): WorkspaceState {
@@ -344,7 +401,7 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
                 return [...current.messages, incoming]
               }
               const updated = [...current.messages]
-              updated[index] = incoming
+              updated[index] = mergeMessageToolBlocks(current.messages[index], incoming)
               return updated
             })()
 
@@ -440,7 +497,7 @@ type WorkspaceContextValue = {
   deleteProject: (projectId: string) => Promise<DeleteProjectResult>
   updateSettings: (settings: SidebarSettings) => Promise<void>
   setSearchQuery: (query: string) => Promise<void>
-  sendPiPrompt: (args: { conversationId: string; message: string; steer?: boolean }) => Promise<void>
+  sendPiPrompt: (args: { conversationId: string; message: string; steer?: boolean; images?: ImageContent[] }) => Promise<void>
   stopPi: (conversationId: string) => Promise<void>
   setPiModel: (conversationId: string, provider: string, modelId: string) => Promise<RpcResponse>
   setPiThinkingLevel: (conversationId: string, level: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh') => Promise<RpcResponse>
@@ -508,16 +565,21 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
   }
 
   if (payload.type === 'response') {
-    dispatch({
-      type: 'setPiRuntime',
-      payload: {
-        conversationId,
-        runtime: {
-          pendingUserMessage: false,
-          pendingUserMessageText: null,
+    const shouldClearPendingUserMessage =
+      payload.command === 'prompt' || payload.command === 'follow_up' || payload.command === 'steer'
+
+    if (shouldClearPendingUserMessage && !payload.success) {
+      dispatch({
+        type: 'setPiRuntime',
+        payload: {
+          conversationId,
+          runtime: {
+            pendingUserMessage: false,
+            pendingUserMessageText: null,
+          },
         },
-      },
-    })
+      })
+    }
 
     if (payload.command === 'get_state' && payload.success) {
       dispatch({
@@ -558,18 +620,21 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
   }
 
   if (payload.type === 'message_update') {
-    dispatch({
-      type: 'setPiRuntime',
-      payload: {
-        conversationId,
-        runtime: {
-          pendingUserMessage: false,
-          pendingUserMessageText: null,
-        },
-      },
-    })
-
     const message = payload.message as JsonValue
+    const role = getPiMessageRole(message)
+    if (role === 'user') {
+      dispatch({
+        type: 'setPiRuntime',
+        payload: {
+          conversationId,
+          runtime: {
+            pendingUserMessage: false,
+            pendingUserMessageText: null,
+          },
+        },
+      })
+    }
+
     if (message) {
       dispatch({
         type: 'upsertPiMessage',
@@ -589,6 +654,8 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
         runtime: {
           status: 'ready',
           pendingCommands: 0,
+          pendingUserMessage: false,
+          pendingUserMessageText: null,
         },
       },
     })
@@ -879,7 +946,17 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   )
 
   const sendPiPrompt = useCallback(
-    async ({ conversationId, message, steer = false }: { conversationId: string; message: string; steer?: boolean }) => {
+    async ({
+      conversationId,
+      message,
+      steer = false,
+      images = [],
+    }: {
+      conversationId: string
+      message: string
+      steer?: boolean
+      images?: ImageContent[]
+    }) => {
       dispatch({
         type: 'setPiRuntime',
         payload: {
@@ -897,16 +974,16 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       const isStreaming = effectiveRuntime?.status === 'streaming' || effectiveRuntime?.state?.isStreaming
 
       if (steer && isStreaming) {
-        await sendPiCommand(conversationId, { type: 'steer', message })
+        await sendPiCommand(conversationId, { type: 'steer', message, images })
         return
       }
 
       if (isStreaming) {
-        await sendPiCommand(conversationId, { type: 'follow_up', message })
+        await sendPiCommand(conversationId, { type: 'follow_up', message, images })
         return
       }
 
-      await sendPiCommand(conversationId, { type: 'prompt', message })
+      await sendPiCommand(conversationId, { type: 'prompt', message, images })
     },
     [hydrateConversationRuntime, sendPiCommand, state.piByConversation],
   )

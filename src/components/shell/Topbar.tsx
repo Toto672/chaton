@@ -69,28 +69,26 @@ export function Topbar() {
         <div className="extension-modal-backdrop" onClick={() => setIsQueueDialogOpen(false)}>
           <div className="extension-modal max-w-[560px]" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
             <div className="extension-modal-title">{t('Queue Pi')}</div>
-            <div className="mt-3 space-y-2 text-sm text-[#2c3140]">
-              <div className="flex items-center justify-between rounded-lg bg-[#f5f7fb] px-3 py-2">
+            <div className="queue-panel-content">
+              <div className="queue-panel-row">
                 <span>{t('Commandes en attente')}</span>
                 <strong>{runtime.pendingCommands}</strong>
               </div>
-              <div className="flex items-center justify-between rounded-lg bg-[#f5f7fb] px-3 py-2">
+              <div className="queue-panel-row">
                 <span>{t('Message utilisateur en attente')}</span>
                 <strong>{runtime.pendingUserMessage ? t('Oui') : t('Non')}</strong>
               </div>
-              <div className="flex items-center justify-between rounded-lg bg-[#f5f7fb] px-3 py-2">
+              <div className="queue-panel-row">
                 <span>{t('État runtime')}</span>
                 <strong>{runtime.status}</strong>
               </div>
               {runtime.state ? (
-                <div className="flex items-center justify-between rounded-lg bg-[#f5f7fb] px-3 py-2">
+                <div className="queue-panel-row">
                   <span>{t('Messages en attente (session Pi)')}</span>
                   <strong>{runtime.state.pendingMessageCount}</strong>
                 </div>
               ) : null}
-              {runtime.lastError ? (
-                <div className="rounded-lg border border-[#f2c9bf] bg-[#fff3ef] px-3 py-2 text-[#8a3d2a]">{runtime.lastError}</div>
-              ) : null}
+              {runtime.lastError ? <div className="queue-panel-error">{runtime.lastError}</div> : null}
             </div>
             <div className="extension-modal-actions">
               <button type="button" className="extension-modal-btn extension-modal-btn-primary" onClick={() => setIsQueueDialogOpen(false)}>

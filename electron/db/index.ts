@@ -32,7 +32,7 @@ export function getDb() {
     return dbInstance
   }
 
-  const dbPath = path.join(app.getPath('userData'), 'dashboard.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'chaton.sqlite')
   dbInstance = new Database(dbPath)
   dbInstance.pragma('foreign_keys = ON')
   runMigrations(dbInstance)

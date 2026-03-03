@@ -19,7 +19,7 @@ export function SessionsSection({
         <button
           type="button"
           className="settings-action"
-          onClick={() => exportSession(`${sessionDir || '~/.pi/agent/sessions'}/dashboard/session.jsonl`)}
+          onClick={() => exportSession(`${sessionDir || '~/.pi/agent/sessions'}/chaton/session.jsonl`)}
         >
           {t('Export HTML (exemple)')}
         </button>

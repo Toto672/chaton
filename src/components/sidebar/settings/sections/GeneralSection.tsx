@@ -23,7 +23,7 @@ function setPath(obj: PiSettingsJson, path: string[], value: unknown) {
 const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const
 const STEERING_MODES = ['one-at-a-time', 'all'] as const
 const DOUBLE_ESCAPE_ACTIONS = ['tree', 'fork', 'none'] as const
-const THEMES = ['light', 'dark'] as const
+const THEMES = ['system', 'light', 'dark'] as const
 
 export function GeneralSection({ settings, models, setSettings, onSave }: Props) {
   const providerOptions = Array.from(new Set(models.map((model) => model.provider))).sort((a, b) => a.localeCompare(b))
@@ -121,7 +121,7 @@ export function GeneralSection({ settings, models, setSettings, onSave }: Props)
           <span className="settings-label">theme</span>
           <select
             className="settings-input"
-            value={String(settings.theme ?? 'dark')}
+            value={String(settings.theme ?? 'system')}
             onChange={(e) => setSettings({ ...settings, theme: e.target.value })}
           >
             {THEMES.map((theme) => (

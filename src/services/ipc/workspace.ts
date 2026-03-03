@@ -18,7 +18,7 @@ import type {
 } from '@/features/workspace/rpc'
 
 function getApi() {
-  return window.dashboard
+  return window.chaton
 }
 
 type ImportProjectResult =
@@ -43,7 +43,7 @@ type PiCommandParams = { search?: string; source?: string; local?: boolean }
 
 
 export const workspaceIpc = {
-  getInitialState: () => window.dashboard.getInitialState(),
+  getInitialState: () => window.chaton.getInitialState(),
   pickProjectFolder: () => getApi().pickProjectFolder(),
   importProjectFromFolder: (folderPath: string) => getApi().importProjectFromFolder(folderPath),
   deleteProject: (projectId: string): Promise<DeleteProjectResult> => getApi().deleteProject(projectId),

@@ -7,6 +7,8 @@ import { MainView } from '@/components/shell/MainView'
 import { Topbar } from '@/components/shell/Topbar'
 import { PiSettingsProvider } from '@/features/workspace/pi-settings-store'
 import { WorkspaceProvider } from '@/features/workspace/store'
+import { useWorkspace } from '@/features/workspace/store'
+import { workspaceIpc } from '@/services/ipc/workspace'
 
 const SIDEBAR_MIN_WIDTH = 260
 const SIDEBAR_MAX_WIDTH = 460
@@ -19,10 +21,20 @@ function clamp(value: number, min: number, max: number) {
 
 function AppShell() {
   const { t } = useTranslation()
+  const { state, isLoading, updateSettings } = useWorkspace()
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
   const [isResizing, setIsResizing] = useState(false)
   const resizeStartXRef = useRef(0)
   const resizeStartWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH)
+  const hasHydratedSidebarWidthRef = useRef(false)
+
+  useEffect(() => {
+    if (isLoading || hasHydratedSidebarWidthRef.current) {
+      return
+    }
+    setSidebarWidth(clamp(state.settings.sidebarWidth, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH))
+    hasHydratedSidebarWidthRef.current = true
+  }, [isLoading, state.settings.sidebarWidth])
 
   useEffect(() => {
     if (!isResizing) {
@@ -62,14 +74,71 @@ function AppShell() {
   const handleSidebarResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'ArrowLeft') {
       event.preventDefault()
-      setSidebarWidth((width) => clamp(width - SIDEBAR_RESIZE_STEP, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH))
+      const nextWidth = clamp(sidebarWidth - SIDEBAR_RESIZE_STEP, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+      setSidebarWidth(nextWidth)
     }
 
     if (event.key === 'ArrowRight') {
       event.preventDefault()
-      setSidebarWidth((width) => clamp(width + SIDEBAR_RESIZE_STEP, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH))
+      const nextWidth = clamp(sidebarWidth + SIDEBAR_RESIZE_STEP, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+      setSidebarWidth(nextWidth)
     }
   }
+
+  useEffect(() => {
+    if (isLoading || isResizing || !hasHydratedSidebarWidthRef.current) {
+      return
+    }
+    if (state.settings.sidebarWidth === sidebarWidth) {
+      return
+    }
+    const timeout = window.setTimeout(() => {
+      void updateSettings({ ...state.settings, sidebarWidth })
+    }, 120)
+    return () => window.clearTimeout(timeout)
+  }, [isLoading, isResizing, sidebarWidth, state.settings, updateSettings])
+
+  useEffect(() => {
+    let currentTheme: 'system' | 'light' | 'dark' = 'system'
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+
+    const applyTheme = () => {
+      const isDark = currentTheme === 'dark' || (currentTheme === 'system' && media.matches)
+      document.documentElement.classList.toggle('dark', isDark)
+    }
+
+    const readThemeFromSettings = async () => {
+      const snapshot = await workspaceIpc.getPiConfigSnapshot()
+      const nextTheme = snapshot.settings?.theme
+      if (nextTheme === 'light' || nextTheme === 'dark' || nextTheme === 'system') {
+        currentTheme = nextTheme
+      } else {
+        currentTheme = 'system'
+      }
+      applyTheme()
+    }
+
+    const onSystemThemeChange = () => {
+      if (currentTheme === 'system') {
+        applyTheme()
+      }
+    }
+
+    const onStorageChange = () => {
+      void readThemeFromSettings()
+    }
+
+    void readThemeFromSettings()
+    media.addEventListener('change', onSystemThemeChange)
+    window.addEventListener('focus', onStorageChange)
+    document.addEventListener('visibilitychange', onStorageChange)
+
+    return () => {
+      media.removeEventListener('change', onSystemThemeChange)
+      window.removeEventListener('focus', onStorageChange)
+      document.removeEventListener('visibilitychange', onStorageChange)
+    }
+  }, [])
 
   return (
     <div className={`app-shell ${isResizing ? 'is-resizing' : ''}`}>

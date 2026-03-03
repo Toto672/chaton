@@ -8,6 +8,7 @@ export type DbSidebarSettings = {
   showAssistantStats: boolean
   searchQuery: string
   collapsedProjectIds: string[]
+  sidebarWidth: number
 }
 
 export type DbWindowBounds = Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>
@@ -19,6 +20,7 @@ const DEFAULT_SETTINGS: DbSidebarSettings = {
   showAssistantStats: false,
   searchQuery: '',
   collapsedProjectIds: [],
+  sidebarWidth: 320,
 }
 
 const DEFAULT_WINDOW_BOUNDS: DbWindowBounds = {

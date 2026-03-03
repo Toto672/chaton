@@ -4,7 +4,7 @@ contextBridge.exposeInMainWorld('desktop', {
   platform: process.platform,
 })
 
-contextBridge.exposeInMainWorld('dashboard', {
+contextBridge.exposeInMainWorld('chaton', {
   platform: process.platform,
   pickProjectFolder: () => ipcRenderer.invoke('dialog:pickProjectFolder') as Promise<string | null>,
   importProjectFromFolder: (folderPath: string) => ipcRenderer.invoke('projects:importFromFolder', folderPath),

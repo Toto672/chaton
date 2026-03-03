@@ -41,6 +41,7 @@ export type SidebarSettings = {
   showAssistantStats: boolean
   searchQuery: string
   collapsedProjectIds: string[]
+  sidebarWidth: number
 }
 
 export type SidebarMode = 'default' | 'settings'

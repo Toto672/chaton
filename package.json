@@ -1,5 +1,5 @@
 {
-  "name": "dashboard-native",
+  "name": "chaton-native",
   "private": true,
   "version": "0.1.0",
   "description": "Electron + React + TypeScript + shadcn UI skeleton",
@@ -18,8 +18,8 @@
     "dist": "npm run build && electron-builder --mac dmg"
   },
   "build": {
-    "appId": "com.thibaut.dashboard",
-    "productName": "Dashboard Native",
+    "appId": "com.thibaut.chaton",
+    "productName": "Chaton Native",
     "files": [
       "dist/**/*",
       "dist-electron/**/*",

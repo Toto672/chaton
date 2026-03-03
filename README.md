@@ -1,4 +1,4 @@
-# Dashboard Native
+# Chaton Native
 
 Electron + React + TypeScript + shadcn UI skeleton for macOS.
 

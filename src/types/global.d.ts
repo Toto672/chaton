@@ -14,7 +14,7 @@ import type { PiRendererEvent, RpcCommand, RpcExtensionUiResponse, RpcResponse }
 
 declare global {
   interface Window {
-    dashboard: {
+    chaton: {
       platform: string
       pickProjectFolder: () => Promise<string | null>
       importProjectFromFolder: (

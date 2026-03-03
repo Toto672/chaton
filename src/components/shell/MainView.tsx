@@ -20,6 +20,13 @@ type ToolBlock =
       toolCallId: string | null
     }
 
+type ParsedDiffFile = {
+  path: string
+  added: number
+  removed: number
+  lines: string[]
+}
+
 type AssistantMeta = {
   provider: string | null
   model: string | null
@@ -83,8 +90,27 @@ function looksLikeCode(text: string): boolean {
 
 function ToolResultContent({ text, isError }: { text: string; isError: boolean }) {
   const sanitizedText = useMemo(() => sanitizeTerminalText(text), [text])
+  const parsedDiffFiles = useMemo(() => parseUnifiedDiff(sanitizedText), [sanitizedText])
+  const parsedChangedFiles = useMemo(() => parseChangedFilesList(sanitizedText), [sanitizedText])
   const codeLike = useMemo(() => looksLikeCode(sanitizedText), [sanitizedText])
   const language = useMemo(() => guessCodeLanguage(sanitizedText), [sanitizedText])
+
+  if (!isError && parsedDiffFiles.length > 0) {
+    return <DiffPreview files={parsedDiffFiles} />
+  }
+
+  if (!isError && parsedChangedFiles.length > 0) {
+    return (
+      <div className="chat-file-change-list">
+        {parsedChangedFiles.map((path, index) => (
+          <div key={`${path}-${index}`} className="chat-file-change-row">
+            <span className="chat-file-change-label">Modifie</span>
+            <code>{path}</code>
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   if (!codeLike) {
     return <ToolTerminal text={sanitizedText} isError={isError} />
@@ -97,6 +123,147 @@ function ToolResultContent({ text, isError }: { text: string; isError: boolean }
           {sanitizedText}
         </SyntaxHighlighter>
       </div>
+    </div>
+  )
+}
+
+function parseUnifiedDiff(text: string): ParsedDiffFile[] {
+  if (!text.includes('diff --git') && !text.includes('@@')) return []
+  const lines = text.split('\n')
+  const files: ParsedDiffFile[] = []
+  let current: ParsedDiffFile | null = null
+
+  const ensureCurrent = () => {
+    if (!current) {
+      current = { path: 'diff', added: 0, removed: 0, lines: [] }
+      files.push(current)
+    }
+  }
+
+  for (const line of lines) {
+    if (line.startsWith('diff --git ')) {
+      const match = line.match(/^diff --git a\/(.+?) b\/(.+)$/)
+      const path = match?.[2] ?? match?.[1] ?? 'diff'
+      current = { path, added: 0, removed: 0, lines: [] }
+      files.push(current)
+      continue
+    }
+    if (line.startsWith('+++ b/')) {
+      ensureCurrent()
+      current!.path = line.slice('+++ b/'.length).trim() || current!.path
+      continue
+    }
+    if (line.startsWith('--- a/')) {
+      continue
+    }
+
+    ensureCurrent()
+    if (line.startsWith('+') && !line.startsWith('+++')) current!.added += 1
+    if (line.startsWith('-') && !line.startsWith('---')) current!.removed += 1
+    if (current!.lines.length < 80) current!.lines.push(line)
+  }
+
+  return files.filter((file) => file.lines.length > 0)
+}
+
+function parseChangedFilesList(text: string): string[] {
+  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean)
+  const out: string[] = []
+  let listStarted = false
+
+  for (const line of lines) {
+    if (/^Success\. (Updated|Added|Deleted) the following files:?$/i.test(line) || /^Updated files:?$/i.test(line)) {
+      listStarted = true
+      continue
+    }
+    if (!listStarted) continue
+    const match = line.match(/^[MADRCU?]{1,2}\s+(.+)$/)
+    if (match?.[1]) {
+      out.push(match[1].trim())
+      continue
+    }
+    if (!/^[A-Za-z0-9_./-]+$/.test(line)) {
+      break
+    }
+    out.push(line)
+  }
+  return out
+}
+
+function getToolResultTitle(toolName: string, text: string): ReactNode {
+  const diffFiles = parseUnifiedDiff(text)
+  if (diffFiles.length === 1) {
+    const file = diffFiles[0]
+    return (
+      <>
+        Modifie <strong>{file.path}</strong>{' '}
+        <span className="chat-inline-diff-plus">+{file.added}</span>{' '}
+        <span className="chat-inline-diff-minus">-{file.removed}</span>
+      </>
+    )
+  }
+  if (diffFiles.length > 1) {
+    const added = diffFiles.reduce((sum, file) => sum + file.added, 0)
+    const removed = diffFiles.reduce((sum, file) => sum + file.removed, 0)
+    return (
+      <>
+        Fichiers modifies ({diffFiles.length}){' '}
+        <span className="chat-inline-diff-plus">+{added}</span>{' '}
+        <span className="chat-inline-diff-minus">-{removed}</span>
+      </>
+    )
+  }
+
+  const changedFiles = parseChangedFilesList(text)
+  if (changedFiles.length === 1) {
+    return (
+      <>
+        Modifie <strong>{changedFiles[0]}</strong>
+      </>
+    )
+  }
+  if (changedFiles.length > 1) {
+    return <>Fichiers modifies ({changedFiles.length})</>
+  }
+
+  return (
+    <>
+      Resultat outil: <strong>{toolName}</strong>
+    </>
+  )
+}
+
+function DiffPreview({ files }: { files: ParsedDiffFile[] }) {
+  return (
+    <div className="chat-diff-preview">
+      {files.slice(0, 3).map((file, fileIndex) => (
+        <section key={`${file.path}-${fileIndex}`} className="chat-diff-file">
+          <header className="chat-diff-file-header">
+            <code>{file.path}</code>
+            <span className="chat-diff-file-counts">
+              <span className="chat-inline-diff-plus">+{file.added}</span>
+              <span className="chat-inline-diff-minus">-{file.removed}</span>
+            </span>
+          </header>
+          <pre className="chat-diff-lines">
+            {file.lines.slice(0, 28).map((line, lineIndex) => (
+              <div
+                key={`${file.path}-${lineIndex}`}
+                className={
+                  line.startsWith('+') && !line.startsWith('+++')
+                    ? 'chat-diff-line-plus'
+                    : line.startsWith('-') && !line.startsWith('---')
+                      ? 'chat-diff-line-minus'
+                      : 'chat-diff-line-neutral'
+                }
+              >
+                {line || ' '}
+              </div>
+            ))}
+          </pre>
+        </section>
+      ))}
+      {files.length > 3 ? <div className="chat-diff-more">+{files.length - 3} fichiers supplementaires</div> : null}
     </div>
   )
 }
@@ -119,8 +286,8 @@ function CollapsibleToolBlock({
 
   useEffect(() => {
     const wasExpanded = prevStartExpandedRef.current
-    if (startExpanded && !wasExpanded) {
-      setIsOpen(true)
+    if (startExpanded !== wasExpanded) {
+      setIsOpen(startExpanded)
     }
     prevStartExpandedRef.current = startExpanded
   }, [startExpanded])
@@ -182,6 +349,21 @@ function getToolBlocks(value: JsonValue): ToolBlock[] {
   const source = nestedMessage ?? record
   const content = Array.isArray(source.content) ? source.content : null
   if (!content) {
+    if (source.role === 'toolResult') {
+      const toolName = typeof source.toolName === 'string' ? source.toolName : 'tool'
+      const text = extractText(source.content) || extractText(source.result)
+      const isError = source.isError === true || source.error === true
+      const details = source.details && typeof source.details === 'object' && !Array.isArray(source.details)
+        ? (source.details as Record<string, JsonValue>)
+        : null
+      const truncation = details?.truncation && typeof details.truncation === 'object' && !Array.isArray(details.truncation)
+        ? (details.truncation as Record<string, JsonValue>)
+        : null
+      const truncated = truncation?.truncated === true
+      const fullOutputPath = typeof details?.fullOutputPath === 'string' ? details.fullOutputPath : null
+      const toolCallId = typeof source.toolCallId === 'string' ? source.toolCallId : null
+      return [{ kind: 'toolResult', toolName, text, isError, truncated, fullOutputPath, toolCallId }]
+    }
     return []
   }
 
@@ -394,6 +576,8 @@ export function MainView() {
     return selectedRuntime.messages
   }, [selectedRuntime?.messages])
   const pendingUserMessageText = selectedRuntime?.pendingUserMessageText ?? null
+  const isExecutionActive =
+    isStreaming || Boolean(selectedRuntime?.pendingUserMessage) || (selectedRuntime?.pendingCommands ?? 0) > 0
 
   const toolResultStatusByCallId = useMemo(() => {
     const statusByCallId = new Map<string, 'success' | 'error' | 'running'>()
@@ -449,12 +633,13 @@ export function MainView() {
 
   useEffect(() => {
     const container = scrollRef.current
-    if (!container || !isAtBottom) {
+    if (!container) {
       return
     }
+    if (!isAtBottom && !isExecutionActive) return
 
     container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
-  }, [isAtBottom, messages, selectedRuntime?.status])
+  }, [isAtBottom, isExecutionActive, messages, selectedRuntime?.status])
 
   if (state.sidebarMode === 'settings') {
     return <PiSettingsMainPanel />
@@ -507,10 +692,6 @@ export function MainView() {
             const isMarkdown = hasMarkdownSyntax(text)
             const toolBlocks = getToolBlocks(message)
             const hasToolBlocks = toolBlocks.length > 0
-            // Skip rendering toolResult messages as standalone messages
-            if (role === 'toolResult') {
-              return null
-            }
             if (!hasToolBlocks && !text) {
               return null
             }
@@ -521,7 +702,7 @@ export function MainView() {
             return (
               <article
                 key={id}
-                className={`chat-message chat-message-${role}${hasAssistantMeta ? ' chat-message-with-meta' : ''}`}
+                className={`chat-message chat-message-${role}${hasAssistantMeta ? ' chat-message-with-meta' : ''}${hasToolBlocks && !text ? ' chat-message-tools-only' : ''}`}
               >
                 <div className="chat-message-body">
                   {hasToolBlocks ? (
@@ -575,11 +756,7 @@ export function MainView() {
                         return (
                           <CollapsibleToolBlock
                             key={`${id}-toolresult-${blockIndex}`}
-                            title={
-                              <>
-                                Résultat outil: <strong>{block.toolName}</strong>
-                              </>
-                            }
+                            title={getToolResultTitle(block.toolName, block.text)}
                             badge={
                               <span className={`chat-tool-badge ${block.isError ? 'chat-tool-badge-error' : 'chat-tool-badge-success'}`}>
                                 {block.isError ? 'error' : 'success'}
