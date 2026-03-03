@@ -304,7 +304,7 @@ export function MainView() {
     >
       <section className="chat-section">
         <div className="chat-timeline">
-          {messages.length === 0 && !selectedRuntime?.pendingUserMessage ? (
+          {messages.length === 0 && !selectedRuntime?.pendingUserMessage && !isStreaming ? (
             <section className="hero-section">
               <div className="hero-group">
                 <h1 className="hero-title">Démarrez la conversation</h1>
