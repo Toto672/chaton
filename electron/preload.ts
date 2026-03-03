@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('dashboard', {
   createConversationForProject: (projectId: string) => ipcRenderer.invoke('conversations:createForProject', projectId),
   deleteConversation: (conversationId: string) => ipcRenderer.invoke('conversations:delete', conversationId),
   listPiModels: () => ipcRenderer.invoke('models:listPi'),
+  syncPiModels: () => ipcRenderer.invoke('models:syncPi'),
   setPiModelScoped: (provider: string, id: string, scoped: boolean) =>
     ipcRenderer.invoke('models:setPiScoped', provider, id, scoped),
   getPiConfigSnapshot: () => ipcRenderer.invoke('pi:getConfigSnapshot'),

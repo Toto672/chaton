@@ -12,7 +12,6 @@ export function PackagesSection({
   const packages = Array.isArray(settings.packages) ? settings.packages : []
   return (
     <section className="settings-card">
-      <h3 className="settings-card-title">Packages & Extensions</h3>
       <div className="settings-list">
         {packages.map((pkg, idx) => (
           <div key={idx} className="settings-list-row">

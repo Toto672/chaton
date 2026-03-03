@@ -28,6 +28,10 @@ declare global {
         | { ok: true; models: Array<{ id: string; provider: string; scoped: boolean; key: string }> }
         | { ok: false; reason: 'pi_not_available' | 'unknown'; message?: string }
       >
+      syncPiModels: () => Promise<
+        | { ok: true; models: Array<{ id: string; provider: string; scoped: boolean; key: string }> }
+        | { ok: false; reason: 'pi_not_available' | 'unknown'; message?: string }
+      >
       setPiModelScoped: (
         provider: string,
         id: string,

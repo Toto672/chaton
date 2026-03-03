@@ -1,6 +1,9 @@
-import { AlertCircle, Bot, Loader2, User } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
+import { PiSettingsMainPanel } from '@/components/shell/PiSettingsMainPanel'
 import { useWorkspace } from '@/features/workspace/store'
 import type { JsonValue } from '@/features/workspace/rpc'
 
@@ -62,6 +65,11 @@ function getMessageId(message: JsonValue, index: number): string {
   return typeof record.id === 'string' ? record.id : `msg-${index}`
 }
 
+function hasMarkdownSyntax(text: string): boolean {
+  if (!text) return false
+  return /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+\.\s|>\s|```)|`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|__[^_]+__/.test(text)
+}
+
 export function MainView() {
   const { state, respondExtensionUi } = useWorkspace()
   const [isAtBottom, setIsAtBottom] = useState(true)
@@ -85,6 +93,10 @@ export function MainView() {
 
     container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
   }, [isAtBottom, messages, selectedRuntime?.status])
+
+  if (state.sidebarMode === 'settings') {
+    return <PiSettingsMainPanel />
+  }
 
   if (!selectedConversation) {
     return (
@@ -110,32 +122,27 @@ export function MainView() {
       }}
     >
       <section className="chat-section">
-        <div className="chat-status-row">
-          <span className={`runtime-pill runtime-pill-${selectedRuntime?.status ?? 'stopped'}`}>
-            {selectedRuntime?.status ?? 'stopped'}
-          </span>
-          {selectedRuntime?.state?.pendingMessageCount ? (
-            <span className="runtime-pending-badge">{selectedRuntime.state.pendingMessageCount} en attente</span>
-          ) : null}
-          {selectedRuntime?.lastError ? (
-            <span className="runtime-error-inline">
-              <AlertCircle className="h-3.5 w-3.5" /> {selectedRuntime.lastError}
-            </span>
-          ) : null}
-        </div>
-
         <div className="chat-timeline">
           {messages.length === 0 ? <div className="chat-empty">Aucun message pour le moment.</div> : null}
           {messages.map((message, index) => {
             const id = getMessageId(message, index)
             const role = getMessageRole(message)
             const text = extractText(message)
+            const isMarkdown = hasMarkdownSyntax(text)
             return (
               <article key={id} className={`chat-message chat-message-${role}`}>
-                <div className="chat-message-icon">{role === 'assistant' ? <Bot className="h-4 w-4" /> : <User className="h-4 w-4" />}</div>
                 <div className="chat-message-body">
-                  <div className="chat-message-role">{role}</div>
-                  <pre className="chat-message-text">{text || '[message non textuel]'}</pre>
+                  {text ? (
+                    isMarkdown ? (
+                      <div className="chat-markdown">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <pre className="chat-message-text">{text}</pre>
+                    )
+                  ) : (
+                    <pre className="chat-message-text">[message non textuel]</pre>
+                  )}
                 </div>
               </article>
             )

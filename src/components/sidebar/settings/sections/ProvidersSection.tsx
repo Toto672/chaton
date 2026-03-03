@@ -15,7 +15,6 @@ export function ProvidersSection({
 
   return (
     <section className="settings-card">
-      <h3 className="settings-card-title">Providers</h3>
       {Object.entries(providers).map(([name, cfg]) => {
         const provider = (cfg ?? {}) as Record<string, unknown>
         return (

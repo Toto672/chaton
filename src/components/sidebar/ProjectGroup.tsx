@@ -10,7 +10,7 @@ type ProjectGroupProps = {
 }
 
 export function ProjectGroup({ project }: ProjectGroupProps) {
-  const { state, selectConversation, selectProject, startConversationDraft, toggleProjectCollapsed, deleteConversation } =
+  const { state, selectConversation, selectProject, createConversationForProject, toggleProjectCollapsed, deleteConversation } =
     useWorkspace()
 
   const conversations = selectConversationsForProject(state.conversations, project.id, state.settings)
@@ -42,7 +42,7 @@ export function ProjectGroup({ project }: ProjectGroupProps) {
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
-            startConversationDraft(project.id)
+            void createConversationForProject(project.id)
           }}
         >
           <PencilLine className="h-4 w-4" />

@@ -1,28 +1,28 @@
-import { ChevronDown, Loader2, Plus, Send, Square, Star } from 'lucide-react'
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  ArrowUp,
+  Brain,
+  ChevronDown,
+  Loader2,
+  Plus,
+  Square,
+  Star,
+} from "lucide-react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { useWorkspace } from '@/features/workspace/store'
-import { workspaceIpc } from '@/services/ipc/workspace'
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useWorkspace } from "@/features/workspace/store";
+import { workspaceIpc } from "@/services/ipc/workspace";
 
-const THINKING_LEVELS: Array<'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'> = [
-  'off',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-]
-
-function StatusButton({ label, warning = false }: { label: string; warning?: boolean }) {
-  return (
-    <button type="button" className={`status-button ${warning ? 'status-button-warning' : ''}`}>
-      <span>{label}</span>
-      <ChevronDown className="h-3.5 w-3.5" />
-    </button>
-  )
-}
+const THINKING_LEVELS: Array<
+  "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
+> = ["off", "minimal", "low", "medium", "high", "xhigh"];
 
 export function Composer() {
   const {
@@ -33,197 +33,278 @@ export function Composer() {
     setPiThinkingLevel,
     stopPi,
     setNotice,
-  } = useWorkspace()
-  const [message, setMessage] = useState('')
-  const [modelsMenuOpen, setModelsMenuOpen] = useState(false)
-  const [showAllModels, setShowAllModels] = useState(false)
-  const [thinkingMenuOpen, setThinkingMenuOpen] = useState(false)
-  const [models, setModels] = useState<Array<{ id: string; provider: string; key: string; scoped: boolean }>>([])
-  const [selectedModelKey, setSelectedModelKey] = useState<string>('openai-codex/gpt-5.3-codex')
-  const [selectedThinking, setSelectedThinking] = useState<'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'>('medium')
-  const [isLoadingModels, setIsLoadingModels] = useState(false)
-  const [isUpdatingScope, setIsUpdatingScope] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
-  const modelsMenuRef = useRef<HTMLDivElement | null>(null)
-  const selectedConversation = state.conversations.find((conversation) => conversation.id === state.selectedConversationId)
-  const selectedRuntime = selectedConversation ? state.piByConversation[selectedConversation.id] : null
-  const isDraftConversation = state.selectedProjectId !== null && !selectedConversation
+  } = useWorkspace();
+  const [message, setMessage] = useState("");
+  const [modelsMenuOpen, setModelsMenuOpen] = useState(false);
+  const [showAllModels, setShowAllModels] = useState(false);
+  const [thinkingMenuOpen, setThinkingMenuOpen] = useState(false);
+  const [models, setModels] = useState<
+    Array<{ id: string; provider: string; key: string; scoped: boolean }>
+  >([]);
+  const [selectedModelKey, setSelectedModelKey] = useState<string>(
+    "openai-codex/gpt-5.3-codex",
+  );
+  const [selectedThinking, setSelectedThinking] = useState<
+    "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
+  >("medium");
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [isUpdatingScope, setIsUpdatingScope] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const backgroundSyncRef = useRef(0);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const modelsMenuRef = useRef<HTMLDivElement | null>(null);
+  const modelsMenuListRef = useRef<HTMLDivElement | null>(null);
+  const [modelsMenuListHeight, setModelsMenuListHeight] = useState(0);
+  const selectedConversation = state.conversations.find(
+    (conversation) => conversation.id === state.selectedConversationId,
+  );
+  const selectedRuntime = selectedConversation
+    ? state.piByConversation[selectedConversation.id]
+    : null;
+  const isDraftConversation =
+    state.selectedProjectId !== null && !selectedConversation;
 
   const handleSendMessage = async () => {
-    const nextMessage = message.trim()
+    const nextMessage = message.trim();
     if (!nextMessage || isSubmitting) {
-      return
+      return;
     }
 
-    setIsSubmitting(true)
+    setIsSubmitting(true);
     try {
-      let conversationId = selectedConversation?.id
+      let conversationId = selectedConversation?.id;
 
       if (!conversationId) {
         if (!state.selectedProjectId) {
-          setNotice('Sélectionnez un projet pour démarrer un fil.')
-          return
+          setNotice("Sélectionnez un projet pour démarrer un fil.");
+          return;
         }
 
-        const createdConversation = await createConversationForProject(state.selectedProjectId)
+        const createdConversation = await createConversationForProject(
+          state.selectedProjectId,
+        );
         if (!createdConversation) {
-          return
+          return;
         }
-        conversationId = createdConversation.id
+        conversationId = createdConversation.id;
       }
 
-      await sendPiPrompt({ conversationId, message: nextMessage })
-      setMessage('')
+      await sendPiPrompt({ conversationId, message: nextMessage });
+      setMessage("");
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== 'Enter' || event.shiftKey) {
-      return
+    if (event.key !== "Enter" || event.shiftKey) {
+      return;
     }
 
-    event.preventDefault()
-    void handleSendMessage()
-  }
+    event.preventDefault();
+    void handleSendMessage();
+  };
 
   useEffect(() => {
-    const textarea = textareaRef.current
-    if (!textarea) return
+    const textarea = textareaRef.current;
+    if (!textarea) return;
 
-    textarea.style.height = '0px'
-    const computedStyles = window.getComputedStyle(textarea)
-    const lineHeight = parseFloat(computedStyles.lineHeight) || 20
-    const maxHeight = lineHeight * 6
-    const nextHeight = Math.min(textarea.scrollHeight, maxHeight)
+    textarea.style.height = "0px";
+    const computedStyles = window.getComputedStyle(textarea);
+    const lineHeight = parseFloat(computedStyles.lineHeight) || 20;
+    const maxHeight = lineHeight * 6;
+    const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
 
-    textarea.style.height = `${nextHeight}px`
-    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
-  }, [message])
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY =
+      textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [message]);
 
   useEffect(() => {
-    let mounted = true
-    setIsLoadingModels(true)
+    let mounted = true;
+    setIsLoadingModels(true);
     workspaceIpc
       .listPiModels()
       .then((result) => {
-        if (!mounted) return
+        if (!mounted) return;
 
         if (!result.ok) {
-          setNotice('Impossible de récupérer les modèles Pi.')
-          return
+          setNotice("Impossible de récupérer les modèles Pi.");
+          return;
         }
 
-        setModels(result.models)
-        const scoped = result.models.filter((model) => model.scoped)
-        const defaultModel = scoped[0] ?? result.models[0]
+        setModels(result.models);
+        const scoped = result.models.filter((model) => model.scoped);
+        const defaultModel = scoped[0] ?? result.models[0];
         if (defaultModel) {
-          setSelectedModelKey(defaultModel.key)
+          setSelectedModelKey(defaultModel.key);
         }
       })
       .finally(() => {
         if (mounted) {
-          setIsLoadingModels(false)
+          setIsLoadingModels(false);
         }
-      })
+      });
 
     return () => {
-      mounted = false
-    }
-  }, [setNotice])
+      mounted = false;
+    };
+  }, [setNotice]);
+
+  useEffect(() => {
+    const syncId = backgroundSyncRef.current + 1;
+    backgroundSyncRef.current = syncId;
+
+    workspaceIpc.syncPiModels().then((result) => {
+      if (backgroundSyncRef.current !== syncId) return;
+      if (!result.ok) return;
+
+      setModels(result.models);
+      setSelectedModelKey((current) => {
+        if (result.models.some((model) => model.key === current)) {
+          return current;
+        }
+        const fallback =
+          result.models.find((model) => model.scoped) ?? result.models[0];
+        return fallback ? fallback.key : current;
+      });
+    });
+  }, [state.selectedConversationId, state.selectedProjectId]);
 
   useEffect(() => {
     const handleWindowClick = (event: MouseEvent) => {
-      if (!modelsMenuRef.current) return
-      if (modelsMenuRef.current.contains(event.target as Node)) return
-      setModelsMenuOpen(false)
-      setShowAllModels(false)
-      setThinkingMenuOpen(false)
-    }
+      if (!modelsMenuRef.current) return;
+      if (modelsMenuRef.current.contains(event.target as Node)) return;
+      setModelsMenuOpen(false);
+      setShowAllModels(false);
+      setThinkingMenuOpen(false);
+    };
 
-    window.addEventListener('mousedown', handleWindowClick)
-    return () => window.removeEventListener('mousedown', handleWindowClick)
-  }, [])
+    window.addEventListener("mousedown", handleWindowClick);
+    return () => window.removeEventListener("mousedown", handleWindowClick);
+  }, []);
 
   useEffect(() => {
     if (!selectedConversation) {
-      return
+      return;
     }
 
     if (selectedConversation.modelProvider && selectedConversation.modelId) {
-      setSelectedModelKey(`${selectedConversation.modelProvider}/${selectedConversation.modelId}`)
+      setSelectedModelKey(
+        `${selectedConversation.modelProvider}/${selectedConversation.modelId}`,
+      );
     }
     if (selectedConversation.thinkingLevel) {
-      const level = selectedConversation.thinkingLevel as typeof selectedThinking
+      const level =
+        selectedConversation.thinkingLevel as typeof selectedThinking;
       if (THINKING_LEVELS.includes(level)) {
-        setSelectedThinking(level)
+        setSelectedThinking(level);
       }
     }
-  }, [selectedConversation])
+  }, [selectedConversation]);
 
-  const visibleModels = showAllModels ? models : models.filter((model) => model.scoped)
-  const currentModelLabel = models.find((model) => model.key === selectedModelKey)?.id ?? selectedModelKey
+  const visibleModels = showAllModels
+    ? models
+    : models.filter((model) => model.scoped);
+  const currentModelLabel =
+    models.find((model) => model.key === selectedModelKey)?.id ??
+    selectedModelKey;
 
-  const handleToggleModelScoped = async (model: { id: string; provider: string; scoped: boolean }) => {
-    if (isUpdatingScope) return
+  const handleToggleModelScoped = async (model: {
+    id: string;
+    provider: string;
+    scoped: boolean;
+  }) => {
+    if (isUpdatingScope) return;
 
-    setIsUpdatingScope(true)
-    const result = await workspaceIpc.setPiModelScoped(model.provider, model.id, !model.scoped)
-    setIsUpdatingScope(false)
+    setIsUpdatingScope(true);
+    const result = await workspaceIpc.setPiModelScoped(
+      model.provider,
+      model.id,
+      !model.scoped,
+    );
+    setIsUpdatingScope(false);
 
     if (!result.ok) {
-      setNotice('Impossible de modifier le scope du modèle dans Pi.')
-      return
+      setNotice("Impossible de modifier le scope du modèle dans Pi.");
+      return;
     }
 
-    setModels(result.models)
+    setModels(result.models);
     if (!result.models.some((item) => item.key === selectedModelKey)) {
-      const fallback = result.models.find((item) => item.scoped) ?? result.models[0]
+      const fallback =
+        result.models.find((item) => item.scoped) ?? result.models[0];
       if (fallback) {
-        setSelectedModelKey(fallback.key)
+        setSelectedModelKey(fallback.key);
       }
     }
-  }
+  };
 
   const handleApplyModel = async (modelKey: string) => {
-    setSelectedModelKey(modelKey)
-    setModelsMenuOpen(false)
-    setShowAllModels(false)
+    setSelectedModelKey(modelKey);
+    setModelsMenuOpen(false);
+    setShowAllModels(false);
 
     if (!selectedConversation) {
-      return
+      return;
     }
 
-    const [provider, modelId] = modelKey.split('/')
-    const response = await setPiModel(selectedConversation.id, provider, modelId)
+    const [provider, modelId] = modelKey.split("/");
+    const response = await setPiModel(
+      selectedConversation.id,
+      provider,
+      modelId,
+    );
     if (!response.success) {
-      setNotice(response.error ?? 'Impossible de changer de modèle.')
+      setNotice(response.error ?? "Impossible de changer de modèle.");
     }
-  }
+  };
 
   const handleThinkingChange = async (level: typeof selectedThinking) => {
-    setSelectedThinking(level)
-    setThinkingMenuOpen(false)
+    setSelectedThinking(level);
+    setThinkingMenuOpen(false);
 
     if (!selectedConversation) {
-      return
+      return;
     }
 
-    const response = await setPiThinkingLevel(selectedConversation.id, level)
+    const response = await setPiThinkingLevel(selectedConversation.id, level);
     if (!response.success) {
-      setNotice(response.error ?? 'Impossible de changer le niveau de réflexion.')
+      setNotice(
+        response.error ?? "Impossible de changer le niveau de réflexion.",
+      );
     }
-  }
+  };
 
-  const isStreaming = Boolean(selectedRuntime?.state?.isStreaming || selectedRuntime?.status === 'streaming')
+  useLayoutEffect(() => {
+    if (!modelsMenuOpen) {
+      return;
+    }
+    const list = modelsMenuListRef.current;
+    if (!list) {
+      return;
+    }
+    setModelsMenuListHeight(Math.min(list.scrollHeight, 260));
+  }, [modelsMenuOpen, showAllModels, visibleModels.length, isLoadingModels]);
+
+  const isStreaming = Boolean(
+    selectedRuntime?.state?.isStreaming ||
+    selectedRuntime?.status === "streaming",
+  );
+
+  if (state.sidebarMode === "settings") {
+    return null;
+  }
 
   return (
     <footer className="composer-footer">
       <div className="content-wrap">
         {state.notice ? (
-          <div className="app-notice" role="status" onClick={() => setNotice(null)}>
+          <div
+            className="app-notice"
+            role="status"
+            onClick={() => setNotice(null)}
+          >
             {state.notice}
           </div>
         ) : null}
@@ -235,8 +316,8 @@ export function Composer() {
               selectedConversation
                 ? `Répondre dans « ${selectedConversation.title} »`
                 : isDraftConversation
-                  ? 'Écrivez votre premier message pour créer ce fil'
-                  : 'Sélectionnez un fil pour commencer'
+                  ? "Écrivez votre premier message pour créer ce fil"
+                  : "Sélectionnez un fil pour commencer"
             }
             value={message}
             onChange={(event) => setMessage(event.target.value)}
@@ -247,8 +328,13 @@ export function Composer() {
 
           <div className="composer-meta">
             <div className="flex items-center gap-1.5" ref={modelsMenuRef}>
-              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full text-[#696b73]">
-                <Plus className="h-4 w-4" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full text-[#696b73]"
+              >
+                <Plus className="h-5 w-5" />
               </Button>
               <div className="relative">
                 <Badge
@@ -258,38 +344,60 @@ export function Composer() {
                   tabIndex={0}
                   onClick={() => setModelsMenuOpen((open) => !open)}
                 >
-                  {currentModelLabel} <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                  {currentModelLabel} <ChevronDown className="ml-1 h-4 w-4" />
                 </Badge>
 
                 {modelsMenuOpen ? (
-                  <div className="models-menu" role="menu" aria-label="Sélecteur de modèle">
-                    <div className="models-menu-list">
+                  <div
+                    className="models-menu"
+                    role="menu"
+                    aria-label="Sélecteur de modèle"
+                  >
+                    <div
+                      ref={modelsMenuListRef}
+                      className="models-menu-list"
+                      style={{ height: `${modelsMenuListHeight}px` }}
+                    >
                       {isLoadingModels ? (
-                        <div className="models-menu-empty">Chargement des modèles...</div>
+                        <div className="models-menu-empty">
+                          Chargement des modèles...
+                        </div>
                       ) : visibleModels.length === 0 ? (
                         <div className="models-menu-empty">
-                          {showAllModels ? 'Aucun modèle disponible.' : 'Aucun modèle scoped. Cliquez sur more.'}
+                          {showAllModels
+                            ? "Aucun modèle disponible."
+                            : "Aucun modèle scoped. Cliquez sur more."}
                         </div>
                       ) : (
                         visibleModels.map((model) => (
                           <div key={model.key} className="models-menu-row">
                             <button
                               type="button"
-                              className={`models-menu-item ${selectedModelKey === model.key ? 'models-menu-item-active' : ''}`}
+                              className={`models-menu-item ${selectedModelKey === model.key ? "models-menu-item-active" : ""}`}
                               onClick={() => void handleApplyModel(model.key)}
                             >
                               <span>{model.id}</span>
-                              <span className="models-menu-provider">{model.provider}</span>
+                              <span className="models-menu-provider">
+                                {model.provider}
+                              </span>
                             </button>
                             {showAllModels ? (
                               <button
                                 type="button"
                                 className="models-scope-button"
-                                aria-label={model.scoped ? 'Retirer du scope' : 'Ajouter au scope'}
-                                onClick={() => void handleToggleModelScoped(model)}
+                                aria-label={
+                                  model.scoped
+                                    ? "Retirer du scope"
+                                    : "Ajouter au scope"
+                                }
+                                onClick={() =>
+                                  void handleToggleModelScoped(model)
+                                }
                                 disabled={isUpdatingScope}
                               >
-                                <Star className={`h-3.5 w-3.5 ${model.scoped ? 'fill-current' : ''}`} />
+                                <Star
+                                  className={`h-4 w-4 ${model.scoped ? "fill-current" : ""}`}
+                                />
                               </button>
                             ) : null}
                           </div>
@@ -298,8 +406,12 @@ export function Composer() {
                     </div>
 
                     <div className="models-menu-header">
-                      <button type="button" className="models-more-button" onClick={() => setShowAllModels((show) => !show)}>
-                        {showAllModels ? 'scoped only' : 'more'}
+                      <button
+                        type="button"
+                        className="models-more-button"
+                        onClick={() => setShowAllModels((show) => !show)}
+                      >
+                        {showAllModels ? "scoped only" : "more"}
                       </button>
                     </div>
                   </div>
@@ -314,15 +426,20 @@ export function Composer() {
                   tabIndex={0}
                   onClick={() => setThinkingMenuOpen((open) => !open)}
                 >
-                  thinking:{selectedThinking} <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                  <Brain className="h-4 w-4 mr-1" /> {selectedThinking}{" "}
+                  <ChevronDown className="ml-1 h-4 w-4" />
                 </Badge>
                 {thinkingMenuOpen ? (
-                  <div className="thinking-menu" role="menu" aria-label="Sélecteur de réflexion">
+                  <div
+                    className="thinking-menu"
+                    role="menu"
+                    aria-label="Sélecteur de réflexion"
+                  >
                     {THINKING_LEVELS.map((level) => (
                       <button
                         key={level}
                         type="button"
-                        className={`thinking-menu-item ${selectedThinking === level ? 'thinking-menu-item-active' : ''}`}
+                        className={`thinking-menu-item ${selectedThinking === level ? "thinking-menu-item-active" : ""}`}
                         onClick={() => void handleThinkingChange(level)}
                       >
                         {level}
@@ -341,21 +458,27 @@ export function Composer() {
                   variant="secondary"
                   onClick={() => void stopPi(selectedConversation.id)}
                 >
-                  <Square className="h-3.5 w-3.5" />
+                  <Square className="h-4 w-4" />
                 </Button>
               ) : null}
 
-              <Button type="button" className="send-button" onClick={() => void handleSendMessage()} disabled={isSubmitting}>
-                {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              <Button
+                type="button"
+                className="send-button"
+                onClick={() => void handleSendMessage()}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <Loader2 className="h-10 w-10 animate-spin" />
+                ) : (
+                  <ArrowUp className="h-10 w-10" />
+                )}
               </Button>
             </div>
           </div>
         </div>
 
-        <div className="status-row">
-          <StatusButton label={`⌘ ${selectedRuntime?.status ?? 'stopped'}`} warning={selectedRuntime?.status === 'error'} />
-        </div>
       </div>
     </footer>
-  )
+  );
 }

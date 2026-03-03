@@ -11,7 +11,6 @@ export function CommandsSection({
 }) {
   return (
     <section className="settings-card">
-      <h3 className="settings-card-title">Commandes Pi</h3>
       <div className="settings-actions-grid">
         <button type="button" className="settings-action" onClick={() => onRun('list')}>pi list</button>
         <button type="button" className="settings-action" onClick={() => onRun('list-models')}>pi --list-models</button>

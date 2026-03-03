@@ -1,20 +1,10 @@
-import { CircleDashed, Command, MessageSquarePlus, PanelRightOpen, Pencil } from 'lucide-react'
-
 import { Button } from '@/components/ui/button'
 import { useWorkspace } from '@/features/workspace/store'
 
-function TopPill({ label }: { label: string }) {
+function TopPill({ label, chime = false }: { label: string; chime?: boolean }) {
   return (
-    <Button type="button" variant="outline" className="top-pill top-pill-default">
+    <Button type="button" variant="outline" className={`top-pill top-pill-default ${chime ? 'top-pill-chime' : ''}`}>
       <span>{label}</span>
-    </Button>
-  )
-}
-
-function IconBtn({ icon: Icon }: { icon: React.ComponentType<{ className?: string }> }) {
-  return (
-    <Button type="button" variant="ghost" size="icon" className="icon-button">
-      <Icon className="h-4 w-4" />
     </Button>
   )
 }
@@ -22,21 +12,21 @@ function IconBtn({ icon: Icon }: { icon: React.ComponentType<{ className?: strin
 export function Topbar() {
   const { state } = useWorkspace()
 
+  if (state.sidebarMode === 'settings') {
+    return null
+  }
+
   const selectedConversation = state.conversations.find((conversation) => conversation.id === state.selectedConversationId)
   const runtime = selectedConversation ? state.piByConversation[selectedConversation.id] : null
+  const shouldShowRuntimePills = Boolean(runtime && (runtime.status !== 'stopped' || runtime.pendingCommands > 0 || runtime.lastError))
 
   return (
     <header className="topbar">
       <div className="topbar-title">{selectedConversation?.title ?? 'Nouveau fil'}</div>
 
       <div className="flex items-center gap-2">
-        <TopPill label={`Pi ${runtime?.status ?? 'stopped'}`} />
-        <TopPill label={`Queue ${runtime?.pendingCommands ?? 0}`} />
-        <IconBtn icon={Command} />
-        <IconBtn icon={CircleDashed} />
-        <IconBtn icon={PanelRightOpen} />
-        <IconBtn icon={MessageSquarePlus} />
-        <IconBtn icon={Pencil} />
+        {shouldShowRuntimePills ? <TopPill label={`Pi ${runtime?.status}`} chime={runtime?.status === 'starting'} /> : null}
+        {shouldShowRuntimePills ? <TopPill label={`Queue ${runtime?.pendingCommands ?? 0}`} /> : null}
       </div>
     </header>
   )

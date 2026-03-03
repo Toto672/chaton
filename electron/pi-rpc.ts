@@ -350,6 +350,19 @@ class PiRpcProcess {
         lastRuntimeError: response.error,
       })
     }
+    if (response.success && command.type === 'set_model') {
+      const db = getDb()
+      saveConversationPiRuntime(db, this.conversationId, {
+        modelProvider: command.provider,
+        modelId: command.modelId,
+      })
+    }
+    if (response.success && command.type === 'set_thinking_level') {
+      const db = getDb()
+      saveConversationPiRuntime(db, this.conversationId, {
+        thinkingLevel: command.level,
+      })
+    }
 
     return response
   }

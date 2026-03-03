@@ -3,7 +3,6 @@ import type { PiDiagnostics } from '@/features/workspace/types'
 export function DiagnosticsSection({ diagnostics, onRefresh }: { diagnostics: PiDiagnostics | null; onRefresh: () => void }) {
   return (
     <section className="settings-card">
-      <h3 className="settings-card-title">Diagnostic</h3>
       {diagnostics ? (
         <>
           <div className="settings-card-note">Pi: <span className="settings-mono">{diagnostics.piPath}</span></div>

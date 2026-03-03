@@ -15,6 +15,7 @@ import {
   replaceConversationMessagesCache,
   type DbConversation,
 } from '../db/repos/conversations.js'
+import { listPiModelsCache, replacePiModelsCache } from '../db/repos/pi-models-cache.js'
 import { findProjectByRepoPath, insertProject, listProjects } from '../db/repos/projects.js'
 import { getSidebarSettings, saveSidebarSettings, type DbSidebarSettings } from '../db/repos/settings.js'
 import {
@@ -424,13 +425,50 @@ async function listPiModels(): Promise<PiModelsResult> {
   }
 }
 
+function listPiModelsFromCache(): PiModel[] {
+  const db = getDb()
+  const enabledScopedModels = parseEnabledScopedModels()
+  return listPiModelsCache(db).map((model) => ({
+    id: model.id,
+    provider: model.provider,
+    key: model.key,
+    scoped: enabledScopedModels.has(model.key),
+  }))
+}
+
+async function syncPiModelsCache(): Promise<PiModelsResult> {
+  const result = await listPiModels()
+  if (!result.ok) {
+    return result
+  }
+
+  const db = getDb()
+  replacePiModelsCache(
+    db,
+    result.models.map((model) => ({
+      key: model.key,
+      provider: model.provider,
+      id: model.id,
+    })),
+  )
+  return result
+}
+
+async function listPiModelsCached(): Promise<PiModelsResult> {
+  const cached = listPiModelsFromCache()
+  if (cached.length > 0) {
+    return { ok: true, models: cached }
+  }
+  return syncPiModelsCache()
+}
+
 async function setPiModelScoped(provider: string, id: string, scoped: boolean): Promise<SetPiModelScopedResult> {
   const settingsPath = getPiSettingsPath()
   if (!settingsPath || !fs.existsSync(settingsPath)) {
     return { ok: false, reason: 'pi_not_available' }
   }
 
-  const listResult = await listPiModels()
+  const listResult = await syncPiModelsCache()
   if (!listResult.ok) {
     return listResult
   }
@@ -468,7 +506,7 @@ async function setPiModelScoped(provider: string, id: string, scoped: boolean): 
     }
   }
 
-  return listPiModels()
+  return syncPiModelsCache()
 }
 
 function cacheMessagesFromSnapshot(conversationId: string, snapshot: { messages: unknown[] }) {
@@ -518,7 +556,8 @@ export function registerWorkspaceIpc() {
     return settings
   })
 
-  ipcMain.handle('models:listPi', async () => listPiModels())
+  ipcMain.handle('models:listPi', async () => listPiModelsCached())
+  ipcMain.handle('models:syncPi', async () => syncPiModelsCache())
   ipcMain.handle('models:setPiScoped', async (_event, provider: string, id: string, scoped: boolean) =>
     setPiModelScoped(provider, id, scoped),
   )

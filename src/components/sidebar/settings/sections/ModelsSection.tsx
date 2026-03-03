@@ -21,7 +21,6 @@ export function ModelsSection({
 
   return (
     <section className="settings-card">
-      <h3 className="settings-card-title">Modèles</h3>
       <label className="settings-row-wrap">
         <span className="settings-label">enabledModels (CSV)</span>
         <input

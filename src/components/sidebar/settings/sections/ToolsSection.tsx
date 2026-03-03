@@ -1,5 +1,7 @@
 import type { PiSettingsJson } from '@/features/workspace/types'
 
+const TOOL_VALUES = ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'] as const
+
 export function ToolsSection({
   settings,
   setSettings,
@@ -9,16 +11,32 @@ export function ToolsSection({
   setSettings: (next: PiSettingsJson) => void
   onSave: () => void
 }) {
+  const selected = Array.isArray(settings.defaultTools)
+    ? settings.defaultTools.filter((tool): tool is string => typeof tool === 'string')
+    : ['read', 'bash', 'edit', 'write']
+
   return (
     <section className="settings-card">
-      <h3 className="settings-card-title">Outils & Exécution</h3>
       <label className="settings-row-wrap">
-        <span className="settings-label">defaultTools (CSV)</span>
-        <input
-          className="settings-input"
-          value={String((settings.defaultTools as string[] | undefined)?.join(',') ?? '')}
-          onChange={(e) => setSettings({ ...settings, defaultTools: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}
-        />
+        <span className="settings-label">defaultTools</span>
+        <div className="settings-chip-row">
+          {TOOL_VALUES.map((tool) => {
+            const active = selected.includes(tool)
+            return (
+              <button
+                key={tool}
+                type="button"
+                className={`settings-chip ${active ? 'settings-chip-active' : ''}`}
+                onClick={() => {
+                  const next = active ? selected.filter((item) => item !== tool) : [...selected, tool]
+                  setSettings({ ...settings, defaultTools: next })
+                }}
+              >
+                {tool}
+              </button>
+            )
+          })}
+        </div>
       </label>
       {['extensionsEnabled', 'skillsEnabled', 'promptTemplatesEnabled', 'themesEnabled', 'offlineMode'].map((key) => (
         <label className="settings-toggle-row" key={key}>

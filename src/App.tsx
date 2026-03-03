@@ -4,6 +4,7 @@ import { Sidebar } from '@/components/sidebar/Sidebar'
 import { Composer } from '@/components/shell/Composer'
 import { MainView } from '@/components/shell/MainView'
 import { Topbar } from '@/components/shell/Topbar'
+import { PiSettingsProvider } from '@/features/workspace/pi-settings-store'
 import { WorkspaceProvider } from '@/features/workspace/store'
 
 const SIDEBAR_MIN_WIDTH = 260
@@ -96,7 +97,9 @@ function AppShell() {
 export default function App() {
   return (
     <WorkspaceProvider>
-      <AppShell />
+      <PiSettingsProvider>
+        <AppShell />
+      </PiSettingsProvider>
     </WorkspaceProvider>
   )
 }

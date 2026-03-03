@@ -43,6 +43,7 @@ export const workspaceIpc = {
   deleteConversation: (conversationId: string): Promise<DeleteConversationResult> => getApi().deleteConversation(conversationId),
   getConversationMessageCache: (conversationId: string): Promise<unknown[]> => getApi().getConversationMessageCache(conversationId),
   listPiModels: (): Promise<ListPiModelsResult> => getApi().listPiModels(),
+  syncPiModels: (): Promise<ListPiModelsResult> => getApi().syncPiModels(),
   setPiModelScoped: (provider: string, id: string, scoped: boolean): Promise<SetPiModelScopedResult> =>
     getApi().setPiModelScoped(provider, id, scoped),
   getPiConfigSnapshot: (): Promise<PiConfigSnapshot> => getApi().getPiConfigSnapshot(),
