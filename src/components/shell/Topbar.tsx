@@ -23,14 +23,15 @@ export function Topbar() {
   const { state } = useWorkspace()
 
   const selectedConversation = state.conversations.find((conversation) => conversation.id === state.selectedConversationId)
+  const runtime = selectedConversation ? state.piByConversation[selectedConversation.id] : null
 
   return (
     <header className="topbar">
       <div className="topbar-title">{selectedConversation?.title ?? 'Nouveau fil'}</div>
 
       <div className="flex items-center gap-2">
-        <TopPill label="Ouvrir" />
-        <TopPill label="Validation" />
+        <TopPill label={`Pi ${runtime?.status ?? 'stopped'}`} />
+        <TopPill label={`Queue ${runtime?.pendingCommands ?? 0}`} />
         <IconBtn icon={Command} />
         <IconBtn icon={CircleDashed} />
         <IconBtn icon={PanelRightOpen} />

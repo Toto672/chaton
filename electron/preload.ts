@@ -11,4 +11,30 @@ contextBridge.exposeInMainWorld('dashboard', {
   getInitialState: () => ipcRenderer.invoke('workspace:getInitialState'),
   updateSettings: (settings: unknown) => ipcRenderer.invoke('workspace:updateSettings', settings),
   createConversationForProject: (projectId: string) => ipcRenderer.invoke('conversations:createForProject', projectId),
+  deleteConversation: (conversationId: string) => ipcRenderer.invoke('conversations:delete', conversationId),
+  listPiModels: () => ipcRenderer.invoke('models:listPi'),
+  setPiModelScoped: (provider: string, id: string, scoped: boolean) =>
+    ipcRenderer.invoke('models:setPiScoped', provider, id, scoped),
+  getPiConfigSnapshot: () => ipcRenderer.invoke('pi:getConfigSnapshot'),
+  updatePiSettingsJson: (next: unknown) => ipcRenderer.invoke('pi:updateSettingsJson', next),
+  updatePiModelsJson: (next: unknown) => ipcRenderer.invoke('pi:updateModelsJson', next),
+  runPiCommand: (action: unknown, params: unknown) => ipcRenderer.invoke('pi:runCommand', action, params),
+  getPiDiagnostics: () => ipcRenderer.invoke('pi:getDiagnostics'),
+  openPath: (target: unknown) => ipcRenderer.invoke('pi:openPath', target),
+  exportPiSessionHtml: (sessionFile: unknown, outputFile: unknown) =>
+    ipcRenderer.invoke('pi:exportSessionHtml', sessionFile, outputFile),
+  getConversationMessageCache: (conversationId: string) => ipcRenderer.invoke('conversations:getMessageCache', conversationId),
+  piStartSession: (conversationId: string) => ipcRenderer.invoke('pi:startSession', conversationId),
+  piStopSession: (conversationId: string) => ipcRenderer.invoke('pi:stopSession', conversationId),
+  piSendCommand: (conversationId: string, command: unknown) => ipcRenderer.invoke('pi:sendCommand', conversationId, command),
+  piGetSnapshot: (conversationId: string) => ipcRenderer.invoke('pi:getSnapshot', conversationId),
+  piRespondExtensionUi: (conversationId: string, response: unknown) =>
+    ipcRenderer.invoke('pi:respondExtensionUi', conversationId, response),
+  onPiEvent: (listener: (event: unknown) => void) => {
+    const wrapped = (_event: unknown, payload: unknown) => listener(payload)
+    ipcRenderer.on('pi:event', wrapped)
+    return () => {
+      ipcRenderer.removeListener('pi:event', wrapped)
+    }
+  },
 })

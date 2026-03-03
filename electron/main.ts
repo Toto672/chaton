@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 import { getDb } from './db/index.js'
 import { getWindowBounds, saveWindowBounds } from './db/repos/settings.js'
-import { registerWorkspaceIpc } from './ipc/workspace.js'
+import { registerWorkspaceIpc, stopPiRuntimes } from './ipc/workspace.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -88,6 +88,10 @@ app.whenReady().then(() => {
       createWindow()
     }
   })
+})
+
+app.on('before-quit', () => {
+  void stopPiRuntimes()
 })
 
 app.on('window-all-closed', () => {

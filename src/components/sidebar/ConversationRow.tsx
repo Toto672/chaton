@@ -1,4 +1,5 @@
-import { Clock4 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
+import { type MouseEvent, useEffect, useRef, useState } from 'react'
 
 import type { Conversation } from '@/features/workspace/types'
 
@@ -6,20 +7,79 @@ type ConversationRowProps = {
   conversation: Conversation
   isActive: boolean
   onSelect: (conversationId: string) => void
+  onDelete: (conversationId: string) => Promise<unknown>
 }
 
-export function ConversationRow({ conversation, isActive, onSelect }: ConversationRowProps) {
+const CONFIRM_WINDOW_MS = 2000
+
+export function ConversationRow({ conversation, isActive, onSelect, onDelete }: ConversationRowProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const resetTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current)
+      }
+    }
+  }, [])
+
+  const scheduleReset = () => {
+    if (resetTimerRef.current !== null) {
+      window.clearTimeout(resetTimerRef.current)
+    }
+    resetTimerRef.current = window.setTimeout(() => {
+      setConfirmDelete(false)
+      resetTimerRef.current = null
+    }, CONFIRM_WINDOW_MS)
+  }
+
+  const onDeleteClick = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      scheduleReset()
+      return
+    }
+
+    if (resetTimerRef.current !== null) {
+      window.clearTimeout(resetTimerRef.current)
+      resetTimerRef.current = null
+    }
+    setConfirmDelete(false)
+    await onDelete(conversation.id)
+  }
+
   return (
-    <button
-      type="button"
+    <div
       className={`thread-row ${isActive ? 'thread-row-active' : ''}`}
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(conversation.id)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onSelect(conversation.id)
+        }
+      }}
       aria-current={isActive ? 'true' : undefined}
     >
       <span className="thread-row-title">{conversation.title}</span>
       <span className="thread-row-meta">
-        <Clock4 className="h-3.5 w-3.5" />
+        <button
+          type="button"
+          className={`thread-delete-button ${confirmDelete ? 'thread-delete-button-confirm' : ''}`}
+          onClick={(event) => {
+            void onDeleteClick(event)
+          }}
+          aria-label={confirmDelete ? `Confirmer la suppression de ${conversation.title}` : `Supprimer ${conversation.title}`}
+          title={confirmDelete ? 'Cliquer à nouveau pour supprimer' : 'Supprimer le fil'}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </span>
-    </button>
+    </div>
   )
 }

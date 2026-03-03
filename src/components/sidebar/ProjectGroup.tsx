@@ -10,7 +10,8 @@ type ProjectGroupProps = {
 }
 
 export function ProjectGroup({ project }: ProjectGroupProps) {
-  const { state, selectConversation, selectProject, startConversationDraft, toggleProjectCollapsed } = useWorkspace()
+  const { state, selectConversation, selectProject, startConversationDraft, toggleProjectCollapsed, deleteConversation } =
+    useWorkspace()
 
   const conversations = selectConversationsForProject(state.conversations, project.id, state.settings)
   const collapsed = state.settings.collapsedProjectIds.includes(project.id)
@@ -59,6 +60,7 @@ export function ProjectGroup({ project }: ProjectGroupProps) {
                 conversation={conversation}
                 isActive={state.selectedConversationId === conversation.id}
                 onSelect={selectConversation}
+                onDelete={deleteConversation}
               />
             ))
           )}

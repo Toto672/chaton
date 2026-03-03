@@ -14,6 +14,10 @@ export function listProjects(db: Database.Database): DbProject[] {
   return db.prepare('SELECT * FROM projects WHERE is_archived = 0 ORDER BY updated_at DESC').all() as DbProject[]
 }
 
+export function findProjectById(db: Database.Database, id: string): DbProject | undefined {
+  return db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as DbProject | undefined
+}
+
 export function findProjectByRepoPath(db: Database.Database, repoPath: string): DbProject | undefined {
   return db.prepare('SELECT * FROM projects WHERE repo_path = ?').get(repoPath) as DbProject | undefined
 }

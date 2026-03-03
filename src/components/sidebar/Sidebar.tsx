@@ -1,14 +1,24 @@
 import { Gauge, Search, Settings, Workflow } from 'lucide-react'
 
+import { ConversationRow } from '@/components/sidebar/ConversationRow'
+import { SettingsSidebar } from '@/components/sidebar/settings/SettingsSidebar'
 import { SidebarHeaderActions } from '@/components/sidebar/SidebarHeaderActions'
 import { ProjectGroup } from '@/components/sidebar/ProjectGroup'
 import { useWorkspace } from '@/features/workspace/store'
 import { selectVisibleConversations } from '@/features/workspace/selectors'
 
 export function Sidebar({ width }: { width: number }) {
-  const { state, selectConversation, setSearchQuery } = useWorkspace()
+  const { state, selectConversation, setSearchQuery, deleteConversation, openSettings } = useWorkspace()
 
   const visibleConversations = selectVisibleConversations(state.conversations, state.settings)
+
+  if (state.sidebarMode === 'settings') {
+    return (
+      <aside className="sidebar-panel" style={{ width: `${width}px` }}>
+        <SettingsSidebar />
+      </aside>
+    )
+  }
 
   return (
     <aside className="sidebar-panel" style={{ width: `${width}px` }}>
@@ -50,15 +60,13 @@ export function Sidebar({ width }: { width: number }) {
         {state.settings.organizeBy === 'chronological' ? (
           <section aria-label="Liste chronologique" role="list" className="sidebar-thread-list">
             {visibleConversations.map((conversation) => (
-              <button
+              <ConversationRow
                 key={conversation.id}
-                type="button"
-                className={`thread-row ${state.selectedConversationId === conversation.id ? 'thread-row-active' : ''}`}
-                onClick={() => selectConversation(conversation.id)}
-                aria-current={state.selectedConversationId === conversation.id ? 'true' : undefined}
-              >
-                <span className="thread-row-title">{conversation.title}</span>
-              </button>
+                conversation={conversation}
+                isActive={state.selectedConversationId === conversation.id}
+                onSelect={selectConversation}
+                onDelete={deleteConversation}
+              />
             ))}
           </section>
         ) : (
@@ -67,7 +75,7 @@ export function Sidebar({ width }: { width: number }) {
       </div>
 
       <div className="border-t border-[#dcdddf] px-3 py-3">
-        <button type="button" className="sidebar-item text-[#45464d]">
+        <button type="button" className="sidebar-item text-[#45464d]" onClick={openSettings}>
           <Settings className="h-4 w-4" />
           Paramètres
         </button>
