@@ -55,6 +55,7 @@ type Action =
   | { type: 'setSidebarMode'; payload: { mode: 'default' | 'settings' } }
   | { type: 'setPiRuntime'; payload: { conversationId: string; runtime: Partial<PiConversationRuntime> } }
   | { type: 'setPiMessages'; payload: { conversationId: string; messages: JsonValue[] } }
+  | { type: 'upsertPiMessage'; payload: { conversationId: string; message: JsonValue } }
   | { type: 'pushPiExtensionRequest'; payload: { conversationId: string; request: { id: string; method: string; payload: Record<string, JsonValue | undefined> } } }
   | { type: 'popPiExtensionRequest'; payload: { conversationId: string; id: string } }
   | { type: 'updateConversationModel'; payload: { conversationId: string; provider: string; modelId: string } }
@@ -72,6 +73,7 @@ const makePiRuntime = (): PiConversationRuntime => ({
   status: 'stopped',
   state: null,
   messages: [],
+  pendingUserMessage: false,
   pendingCommands: 0,
   lastError: null,
   extensionRequests: [],
@@ -99,6 +101,22 @@ function ensureRuntimeMap(state: WorkspaceState, conversationId: string) {
     ...state.piByConversation,
     [conversationId]: makePiRuntime(),
   }
+}
+
+function getPiMessageId(message: JsonValue): string | null {
+  if (!message || typeof message !== 'object' || Array.isArray(message)) {
+    return null
+  }
+  const record = message as Record<string, JsonValue>
+  return typeof record.id === 'string' ? record.id : null
+}
+
+function getPiMessageRole(message: JsonValue): string | null {
+  if (!message || typeof message !== 'object' || Array.isArray(message)) {
+    return null
+  }
+  const record = message as Record<string, JsonValue>
+  return typeof record.role === 'string' ? record.role : null
 }
 
 function reducer(state: WorkspaceState, action: Action): WorkspaceState {
@@ -292,6 +310,53 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         },
       }
     }
+    case 'upsertPiMessage': {
+      const piByConversation = ensureRuntimeMap(state, action.payload.conversationId)
+      const current = piByConversation[action.payload.conversationId]
+      const incoming = action.payload.message
+      const incomingId = getPiMessageId(incoming)
+      const incomingRole = getPiMessageRole(incoming)
+
+      const nextMessages =
+        incomingId === null
+          ? (() => {
+              // Some streaming events don't carry stable ids. In that case, replace the
+              // latest streaming assistant/tool message instead of appending duplicates.
+              const shouldCoalesce =
+                current.status === 'streaming' && (incomingRole === 'assistant' || incomingRole === 'toolResult')
+              if (!shouldCoalesce || current.messages.length === 0) {
+                return [...current.messages, incoming]
+              }
+              const lastIndex = current.messages.length - 1
+              const lastRole = getPiMessageRole(current.messages[lastIndex])
+              if (lastRole === incomingRole) {
+                const updated = [...current.messages]
+                updated[lastIndex] = incoming
+                return updated
+              }
+              return [...current.messages, incoming]
+            })()
+          : (() => {
+              const index = current.messages.findIndex((item) => getPiMessageId(item) === incomingId)
+              if (index === -1) {
+                return [...current.messages, incoming]
+              }
+              const updated = [...current.messages]
+              updated[index] = incoming
+              return updated
+            })()
+
+      return {
+        ...state,
+        piByConversation: {
+          ...piByConversation,
+          [action.payload.conversationId]: {
+            ...current,
+            messages: nextMessages,
+          },
+        },
+      }
+    }
     case 'pushPiExtensionRequest': {
       const piByConversation = ensureRuntimeMap(state, action.payload.conversationId)
       const current = piByConversation[action.payload.conversationId]
@@ -365,7 +430,10 @@ type WorkspaceContextValue = {
   startConversationDraft: (projectId: string) => void
   toggleProjectCollapsed: (projectId: string) => void
   importProject: () => Promise<void>
-  createConversationForProject: (projectId: string) => Promise<Conversation | null>
+  createConversationForProject: (
+    projectId: string,
+    options?: { modelProvider?: string; modelId?: string; thinkingLevel?: string },
+  ) => Promise<Conversation | null>
   deleteConversation: (conversationId: string) => Promise<DeleteConversationResult>
   deleteProject: (projectId: string) => Promise<DeleteProjectResult>
   updateSettings: (settings: SidebarSettings) => Promise<void>
@@ -414,6 +482,7 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
         conversationId,
         runtime: {
           status: nextStatus,
+          ...(nextStatus === 'streaming' ? { pendingUserMessage: false } : {}),
           lastError: nextStatus === 'error' ? nextMessage : null,
         },
       },
@@ -437,6 +506,16 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
   }
 
   if (payload.type === 'response') {
+    dispatch({
+      type: 'setPiRuntime',
+      payload: {
+        conversationId,
+        runtime: {
+          pendingUserMessage: false,
+        },
+      },
+    })
+
     if (payload.command === 'get_state' && payload.success) {
       dispatch({
         type: 'setPiRuntime',
@@ -476,15 +555,23 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
   }
 
   if (payload.type === 'message_update') {
+    dispatch({
+      type: 'setPiRuntime',
+      payload: {
+        conversationId,
+        runtime: {
+          pendingUserMessage: false,
+        },
+      },
+    })
+
     const message = payload.message as JsonValue
     if (message) {
       dispatch({
-        type: 'setPiMessages',
+        type: 'upsertPiMessage',
         payload: {
           conversationId,
-          messages: [
-            ...(message ? [message] : []),
-          ],
+          message,
         },
       })
     }
@@ -654,8 +741,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   }, [])
 
   const createConversationForProject = useCallback(
-    async (projectId: string) => {
-      const result = await workspaceIpc.createConversationForProject(projectId)
+    async (projectId: string, options?: { modelProvider?: string; modelId?: string; thinkingLevel?: string }) => {
+      const result = await workspaceIpc.createConversationForProject(projectId, options)
       if (!result.ok) {
         dispatch({
           type: 'setNotice',
@@ -789,6 +876,14 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
   const sendPiPrompt = useCallback(
     async ({ conversationId, message, steer = false }: { conversationId: string; message: string; steer?: boolean }) => {
+      dispatch({
+        type: 'setPiRuntime',
+        payload: {
+          conversationId,
+          runtime: { pendingUserMessage: true },
+        },
+      })
+
       const runtime = state.piByConversation[conversationId]
       if (!runtime) {
         await hydrateConversationRuntime(conversationId)

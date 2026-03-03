@@ -24,6 +24,18 @@ const THINKING_LEVELS: Array<
   "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
 > = ["off", "minimal", "low", "medium", "high", "xhigh"];
 
+function parseModelKey(modelKey: string): { provider: string; modelId: string } | null {
+  const separator = modelKey.indexOf("/");
+  if (separator <= 0 || separator >= modelKey.length - 1) {
+    return null;
+  }
+
+  return {
+    provider: modelKey.slice(0, separator),
+    modelId: modelKey.slice(separator + 1),
+  };
+}
+
 export function Composer() {
   const {
     state,
@@ -39,7 +51,16 @@ export function Composer() {
   const [showAllModels, setShowAllModels] = useState(false);
   const [thinkingMenuOpen, setThinkingMenuOpen] = useState(false);
   const [models, setModels] = useState<
-    Array<{ id: string; provider: string; key: string; scoped: boolean }>
+    Array<{
+      id: string;
+      provider: string;
+      key: string;
+      scoped: boolean;
+      supportsThinking: boolean;
+      thinkingLevels: Array<
+        "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
+      >;
+    }>
   >([]);
   const [selectedModelKey, setSelectedModelKey] = useState<string>(
     "openai-codex/gpt-5.3-codex",
@@ -102,13 +123,30 @@ export function Composer() {
           return;
         }
 
+        const parsedModel = parseModelKey(selectedModelKey);
         const createdConversation = await createConversationForProject(
           state.selectedProjectId,
+          {
+            modelProvider: parsedModel?.provider,
+            modelId: parsedModel?.modelId,
+            thinkingLevel: selectedThinking,
+          },
         );
         if (!createdConversation) {
           return;
         }
         conversationId = createdConversation.id;
+
+        const setThinkingResponse = await setPiThinkingLevel(
+          conversationId,
+          selectedThinking,
+        );
+        if (!setThinkingResponse.success) {
+          setNotice(
+            setThinkingResponse.error ??
+              "Impossible de changer le niveau de réflexion.",
+          );
+        }
       }
 
       await sendPiPrompt({ conversationId, message: nextMessage });
@@ -181,7 +219,7 @@ export function Composer() {
     return () => {
       mounted = false;
     };
-  }, [setNotice]);
+  }, []);
 
   useEffect(() => {
     const syncId = backgroundSyncRef.current + 1;
@@ -225,6 +263,16 @@ export function Composer() {
       setSelectedModelKey(
         `${selectedConversation.modelProvider}/${selectedConversation.modelId}`,
       );
+    } else if (selectedRuntime?.state?.model) {
+      setSelectedModelKey(
+        `${selectedRuntime.state.model.provider}/${selectedRuntime.state.model.id}`,
+      );
+    } else {
+      const fallback =
+        models.find((model) => model.scoped) ?? models[0];
+      if (fallback) {
+        setSelectedModelKey(fallback.key);
+      }
     }
     if (selectedConversation.thinkingLevel) {
       const level =
@@ -233,14 +281,29 @@ export function Composer() {
         setSelectedThinking(level);
       }
     }
-  }, [selectedConversation]);
+  }, [models, selectedConversation, selectedRuntime?.state?.model]);
 
   const visibleModels = showAllModels
     ? models
     : models.filter((model) => model.scoped);
+  const selectedModel = models.find((model) => model.key === selectedModelKey);
+  const availableThinkingLevels =
+    selectedModel?.supportsThinking && selectedModel.thinkingLevels.length > 0
+      ? selectedModel.thinkingLevels
+      : [];
+  const supportsThinkingLevel = availableThinkingLevels.length > 0;
   const currentModelLabel =
-    models.find((model) => model.key === selectedModelKey)?.id ??
-    selectedModelKey;
+    selectedModel?.id ?? selectedModelKey;
+
+  useEffect(() => {
+    if (!supportsThinkingLevel) {
+      setThinkingMenuOpen(false);
+      return;
+    }
+    if (!availableThinkingLevels.includes(selectedThinking)) {
+      setSelectedThinking(availableThinkingLevels[0]);
+    }
+  }, [availableThinkingLevels, selectedThinking, supportsThinkingLevel]);
 
   const handleToggleModelScoped = async (model: {
     id: string;
@@ -281,11 +344,15 @@ export function Composer() {
       return;
     }
 
-    const [provider, modelId] = modelKey.split("/");
+    const parsedModel = parseModelKey(modelKey);
+    if (!parsedModel) {
+      setNotice("Format de modèle invalide.");
+      return;
+    }
     const response = await setPiModel(
       selectedConversation.id,
-      provider,
-      modelId,
+      parsedModel.provider,
+      parsedModel.modelId,
     );
     if (!response.success) {
       setNotice(response.error ?? "Impossible de changer de modèle.");
@@ -293,6 +360,9 @@ export function Composer() {
   };
 
   const handleThinkingChange = async (level: typeof selectedThinking) => {
+    if (!availableThinkingLevels.includes(level)) {
+      return;
+    }
     setSelectedThinking(level);
     setThinkingMenuOpen(false);
 
@@ -454,36 +524,38 @@ export function Composer() {
                 ) : null}
               </div>
 
-              <div className="relative">
-                <Badge
-                  variant="secondary"
-                  className="meta-chip cursor-pointer"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setThinkingMenuOpen((open) => !open)}
-                >
-                  <Brain className="h-4 w-4 mr-1" /> {selectedThinking}{" "}
-                  <ChevronDown className="ml-1 h-4 w-4" />
-                </Badge>
-                {thinkingMenuOpen ? (
-                  <div
-                    className="thinking-menu"
-                    role="menu"
-                    aria-label="Sélecteur de réflexion"
+              {supportsThinkingLevel ? (
+                <div className="relative">
+                  <Badge
+                    variant="secondary"
+                    className="meta-chip cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setThinkingMenuOpen((open) => !open)}
                   >
-                    {THINKING_LEVELS.map((level) => (
-                      <button
-                        key={level}
-                        type="button"
-                        className={`thinking-menu-item ${selectedThinking === level ? "thinking-menu-item-active" : ""}`}
-                        onClick={() => void handleThinkingChange(level)}
-                      >
-                        {level}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+                    <Brain className="h-4 w-4 mr-1" /> {selectedThinking}{" "}
+                    <ChevronDown className="ml-1 h-4 w-4" />
+                  </Badge>
+                  {thinkingMenuOpen ? (
+                    <div
+                      className="thinking-menu"
+                      role="menu"
+                      aria-label="Sélecteur de réflexion"
+                    >
+                      {availableThinkingLevels.map((level) => (
+                        <button
+                          key={level}
+                          type="button"
+                          className={`thinking-menu-item ${selectedThinking === level ? "thinking-menu-item-active" : ""}`}
+                          onClick={() => void handleThinkingChange(level)}
+                        >
+                          {level}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             <div className="flex items-center gap-2">

@@ -62,6 +62,8 @@ type PiModel = {
   provider: string
   scoped: boolean
   key: string
+  supportsThinking: boolean
+  thinkingLevels: Array<'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'>
 }
 
 type PiModelsResult =
@@ -353,6 +355,15 @@ function readPiSettings(): { enabledModels: string[]; raw: Record<string, unknow
   }
 }
 
+const THINKING_LEVELS: Array<'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'> = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+]
+
 function parsePiListModels(stdout: string, enabledScopedModels: Set<string>): PiModel[] {
   const lines = stdout
     .split(/\r?\n/)
@@ -383,6 +394,8 @@ function parsePiListModels(stdout: string, enabledScopedModels: Set<string>): Pi
       provider,
       key,
       scoped: enabledScopedModels.has(key),
+      supportsThinking: columns[4] === 'yes',
+      thinkingLevels: columns[4] === 'yes' ? THINKING_LEVELS : [],
     })
   }
 
@@ -436,6 +449,23 @@ function listPiModelsFromCache(): PiModel[] {
     provider: model.provider,
     key: model.key,
     scoped: enabledScopedModels.has(model.key),
+    supportsThinking: Boolean(model.supports_thinking),
+    thinkingLevels: (() => {
+      if (!model.thinking_levels_json) {
+        return []
+      }
+      try {
+        const parsed = JSON.parse(model.thinking_levels_json) as unknown
+        if (!Array.isArray(parsed)) {
+          return []
+        }
+        return parsed.filter((value): value is 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' =>
+          THINKING_LEVELS.includes(value as 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'),
+        )
+      } catch {
+        return []
+      }
+    })(),
   }))
 }
 
@@ -452,6 +482,8 @@ async function syncPiModelsCache(): Promise<PiModelsResult> {
       key: model.key,
       provider: model.provider,
       id: model.id,
+      supportsThinking: model.supportsThinking,
+      thinkingLevels: model.thinkingLevels,
     })),
   )
   return result
@@ -563,7 +595,9 @@ async function generateConversationTitleFromPi(params: {
   }
 
   const prompt = generateConversationTitlePrompt(params.firstMessage)
-  const result = await runPiExec(['-m', `${params.provider}/${params.modelId}`, '-p', prompt], 20_000, params.repoPath)
+  const modelKey = `${params.provider}/${params.modelId}`
+  const primary = await runPiExec(['--model', modelKey, '-p', prompt], 20_000, params.repoPath)
+  const result = primary.ok ? primary : await runPiExec(['-m', modelKey, '-p', prompt], 20_000, params.repoPath)
   if (!result.ok) {
     return null
   }
@@ -694,7 +728,13 @@ export function registerWorkspaceIpc() {
     return runPiExec(args, 45_000)
   })
 
-  ipcMain.handle('conversations:createForProject', (_event, projectId: string) => {
+  ipcMain.handle(
+    'conversations:createForProject',
+    (
+      _event,
+      projectId: string,
+      options?: { modelProvider?: string; modelId?: string; thinkingLevel?: string },
+    ) => {
     const db = getDb()
     const project = listProjects(db).find((item) => item.id === projectId)
     if (!project) {
@@ -706,6 +746,9 @@ export function registerWorkspaceIpc() {
       id: conversationId,
       projectId,
       title: `Nouveau fil - ${project.name}`,
+      modelProvider: options?.modelProvider ?? null,
+      modelId: options?.modelId ?? null,
+      thinkingLevel: options?.thinkingLevel ?? null,
     })
 
     const conversation = findConversationById(db, conversationId)
@@ -717,7 +760,8 @@ export function registerWorkspaceIpc() {
       ok: true as const,
       conversation: mapConversation(conversation),
     }
-  })
+  },
+  )
 
   ipcMain.handle('conversations:delete', async (_event, conversationId: string) => {
     await piRuntimeManager.stop(conversationId)

@@ -33,15 +33,35 @@ export function listConversations(db: Database.Database): DbConversation[] {
 
 export function insertConversation(
   db: Database.Database,
-  params: { id: string; projectId: string; title: string; isRelevant?: boolean },
+  params: {
+    id: string
+    projectId: string
+    title: string
+    isRelevant?: boolean
+    modelProvider?: string | null
+    modelId?: string | null
+    thinkingLevel?: string | null
+  },
 ) {
   const now = new Date().toISOString()
   db.prepare(
     `INSERT INTO conversations(
       id, project_id, title, status, is_relevant, created_at, updated_at, last_message_at,
       pi_session_file, model_provider, model_id, thinking_level, last_runtime_error
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL)`
-  ).run(params.id, params.projectId, params.title, 'active', params.isRelevant === false ? 0 : 1, now, now, now)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL)`
+  ).run(
+    params.id,
+    params.projectId,
+    params.title,
+    'active',
+    params.isRelevant === false ? 0 : 1,
+    now,
+    now,
+    now,
+    params.modelProvider ?? null,
+    params.modelId ?? null,
+    params.thinkingLevel ?? null,
+  )
 }
 
 export function findConversationById(db: Database.Database, id: string): DbConversation | undefined {

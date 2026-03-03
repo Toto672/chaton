@@ -11,7 +11,10 @@ contextBridge.exposeInMainWorld('dashboard', {
   deleteProject: (projectId: string) => ipcRenderer.invoke('projects:delete', projectId),
   getInitialState: () => ipcRenderer.invoke('workspace:getInitialState'),
   updateSettings: (settings: unknown) => ipcRenderer.invoke('workspace:updateSettings', settings),
-  createConversationForProject: (projectId: string) => ipcRenderer.invoke('conversations:createForProject', projectId),
+  createConversationForProject: (
+    projectId: string,
+    options?: { modelProvider?: string; modelId?: string; thinkingLevel?: string },
+  ) => ipcRenderer.invoke('conversations:createForProject', projectId, options),
   deleteConversation: (conversationId: string) => ipcRenderer.invoke('conversations:delete', conversationId),
   listPiModels: () => ipcRenderer.invoke('models:listPi'),
   syncPiModels: () => ipcRenderer.invoke('models:syncPi'),

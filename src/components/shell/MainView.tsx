@@ -1,4 +1,3 @@
-import { Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -6,6 +5,44 @@ import remarkGfm from 'remark-gfm'
 import { PiSettingsMainPanel } from '@/components/shell/PiSettingsMainPanel'
 import { useWorkspace } from '@/features/workspace/store'
 import type { JsonValue } from '@/features/workspace/rpc'
+
+type ToolBlock =
+  | { kind: 'toolCall'; name: string; arguments: string; toolCallId: string | null }
+  | {
+      kind: 'toolResult'
+      toolName: string
+      text: string
+      isError: boolean
+      truncated: boolean
+      fullOutputPath: string | null
+      toolCallId: string | null
+    }
+
+type AssistantMeta = {
+  provider: string | null
+  model: string | null
+  api: string | null
+  stopReason: string | null
+  usage: { input: number | null; output: number | null; totalTokens: number | null }
+}
+
+function ToolTerminal({ text, isError = false }: { text: string; isError?: boolean }) {
+  const outputRef = useRef<HTMLPreElement | null>(null)
+
+  useEffect(() => {
+    const node = outputRef.current
+    if (!node) return
+    node.scrollTop = node.scrollHeight
+  }, [text])
+
+  return (
+    <div className={`chat-tool-terminal ${isError ? 'chat-tool-terminal-error' : ''}`}>
+      <pre ref={outputRef} className="chat-tool-code">
+        {text}
+      </pre>
+    </div>
+  )
+}
 
 function extractText(value: JsonValue): string {
   if (typeof value === 'string') {
@@ -36,25 +73,105 @@ function extractText(value: JsonValue): string {
   return ''
 }
 
-function getMessageRole(message: JsonValue): 'user' | 'assistant' | 'system' {
+function getToolBlocks(value: JsonValue): ToolBlock[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return []
+  }
+
+  const record = value as Record<string, JsonValue>
+  const content = Array.isArray(record.content) ? record.content : null
+  if (!content) {
+    return []
+  }
+
+  const blocks: ToolBlock[] = []
+  for (const item of content) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue
+    }
+    const part = item as Record<string, JsonValue>
+    const type = part.type
+
+    if (type === 'toolCall') {
+      const name = typeof part.name === 'string' ? part.name : 'tool'
+      const args = part.arguments
+      const argumentsText =
+        args === undefined ? '' : typeof args === 'string' ? args : JSON.stringify(args, null, 2)
+      const toolCallId = typeof part.id === 'string' ? part.id : null
+      blocks.push({ kind: 'toolCall', name, arguments: argumentsText, toolCallId })
+      continue
+    }
+
+    if (type === 'toolResult') {
+      const toolName = typeof part.toolName === 'string' ? part.toolName : 'tool'
+      const text = extractText(part.content) || extractText(part.result)
+      const isError = part.isError === true || part.error === true
+      const details = part.details && typeof part.details === 'object' && !Array.isArray(part.details)
+        ? (part.details as Record<string, JsonValue>)
+        : null
+      const truncation = details?.truncation && typeof details.truncation === 'object' && !Array.isArray(details.truncation)
+        ? (details.truncation as Record<string, JsonValue>)
+        : null
+      const truncated = truncation?.truncated === true
+      const fullOutputPath = typeof details?.fullOutputPath === 'string' ? details.fullOutputPath : null
+      const toolCallId = typeof part.toolCallId === 'string' ? part.toolCallId : null
+      blocks.push({ kind: 'toolResult', toolName, text, isError, truncated, fullOutputPath, toolCallId })
+    }
+  }
+
+  return blocks
+}
+
+function getMessageRole(message: JsonValue): 'user' | 'assistant' | 'system' | 'toolResult' {
   if (!message || typeof message !== 'object' || Array.isArray(message)) {
     return 'system'
   }
 
   const root = message as Record<string, JsonValue>
   const maybeRole = root.role
-  if (maybeRole === 'user' || maybeRole === 'assistant' || maybeRole === 'system') {
+  if (maybeRole === 'user' || maybeRole === 'assistant' || maybeRole === 'system' || maybeRole === 'toolResult') {
     return maybeRole
   }
 
   if (root.message && typeof root.message === 'object' && !Array.isArray(root.message)) {
     const nestedRole = (root.message as Record<string, JsonValue>).role
-    if (nestedRole === 'user' || nestedRole === 'assistant' || nestedRole === 'system') {
+    if (nestedRole === 'user' || nestedRole === 'assistant' || nestedRole === 'system' || nestedRole === 'toolResult') {
       return nestedRole
     }
   }
 
   return 'system'
+}
+
+function getAssistantMeta(message: JsonValue): AssistantMeta | null {
+  if (!message || typeof message !== 'object' || Array.isArray(message)) {
+    return null
+  }
+  const record = message as Record<string, JsonValue>
+  if (record.role !== 'assistant') {
+    return null
+  }
+  const usage = record.usage && typeof record.usage === 'object' && !Array.isArray(record.usage)
+    ? (record.usage as Record<string, JsonValue>)
+    : null
+  return {
+    provider: typeof record.provider === 'string' ? record.provider : null,
+    model: typeof record.model === 'string' ? record.model : null,
+    api: typeof record.api === 'string' ? record.api : null,
+    stopReason: typeof record.stopReason === 'string' ? record.stopReason : null,
+    usage: {
+      input: typeof usage?.input === 'number' ? usage.input : null,
+      output: typeof usage?.output === 'number' ? usage.output : null,
+      totalTokens: typeof usage?.totalTokens === 'number' ? usage.totalTokens : null,
+    },
+  }
+}
+
+function isZeroOrNullUsage(meta: AssistantMeta): boolean {
+  const input = meta.usage.input ?? 0
+  const output = meta.usage.output ?? 0
+  const total = meta.usage.totalTokens ?? 0
+  return input === 0 && output === 0 && total === 0
 }
 
 function getMessageId(message: JsonValue, index: number): string {
@@ -77,6 +194,7 @@ export function MainView() {
 
   const selectedConversation = state.conversations.find((conversation) => conversation.id === state.selectedConversationId)
   const selectedRuntime = selectedConversation ? state.piByConversation[selectedConversation.id] : null
+  const isStreaming = selectedRuntime?.status === 'streaming'
 
   const messages = useMemo(() => {
     if (!selectedRuntime?.messages) {
@@ -123,15 +241,68 @@ export function MainView() {
     >
       <section className="chat-section">
         <div className="chat-timeline">
-          {messages.length === 0 ? <div className="chat-empty">Aucun message pour le moment.</div> : null}
+          {messages.length === 0 && !selectedRuntime?.pendingUserMessage ? (
+            <section className="hero-section">
+              <div className="hero-group">
+                <h1 className="hero-title">Démarrez la conversation</h1>
+                <div className="hero-subtitle">Écrivez votre premier message ci-dessous</div>
+              </div>
+            </section>
+          ) : null}
           {messages.map((message, index) => {
             const id = getMessageId(message, index)
             const role = getMessageRole(message)
             const text = extractText(message)
             const isMarkdown = hasMarkdownSyntax(text)
+            const toolBlocks = getToolBlocks(message)
+            const hasToolBlocks = toolBlocks.length > 0
+            if (!hasToolBlocks && !text) {
+              return null
+            }
+            const assistantMeta = getAssistantMeta(message)
+            const hasAssistantMeta = Boolean(assistantMeta && !isStreaming && !isZeroOrNullUsage(assistantMeta))
             return (
-              <article key={id} className={`chat-message chat-message-${role}`}>
+              <article
+                key={id}
+                className={`chat-message chat-message-${role}${hasAssistantMeta ? ' chat-message-with-meta' : ''}`}
+              >
                 <div className="chat-message-body">
+                  {hasToolBlocks ? (
+                    <div className="chat-tool-blocks">
+                      {toolBlocks.map((block, blockIndex) =>
+                        block.kind === 'toolCall' ? (
+                          <section key={`${id}-toolcall-${blockIndex}`} className="chat-tool-block">
+                            <div className="chat-tool-title chat-tool-title-row">
+                              Appel outil: <strong>{block.name}</strong>
+                              <span className="chat-tool-badge">running</span>
+                            </div>
+                            {block.arguments ? <ToolTerminal text={block.arguments} /> : null}
+                          </section>
+                        ) : (
+                          <section key={`${id}-toolresult-${blockIndex}`} className="chat-tool-block">
+                            <div className="chat-tool-title chat-tool-title-row">
+                              Résultat outil: <strong>{block.toolName}</strong>
+                              <span className={`chat-tool-badge ${block.isError ? 'chat-tool-badge-error' : 'chat-tool-badge-success'}`}>
+                                {block.isError ? 'error' : 'success'}
+                              </span>
+                            </div>
+                            <ToolTerminal text={block.text || '[résultat vide]'} isError={block.isError} />
+                            {block.truncated ? (
+                              <div className="chat-tool-note">
+                                Sortie tronquée.
+                                {block.fullOutputPath ? (
+                                  <>
+                                    {' '}
+                                    Fichier complet: <code>{block.fullOutputPath}</code>
+                                  </>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </section>
+                        ),
+                      )}
+                    </div>
+                  ) : null}
                   {text ? (
                     isMarkdown ? (
                       <div className="chat-markdown">
@@ -140,18 +311,29 @@ export function MainView() {
                     ) : (
                       <pre className="chat-message-text">{text}</pre>
                     )
-                  ) : (
-                    <pre className="chat-message-text">[message non textuel]</pre>
-                  )}
+                  ) : null}
+                  {hasAssistantMeta && assistantMeta ? (
+                    <div className="chat-assistant-meta">
+                      <span>{assistantMeta.provider ?? 'provider?'}</span>
+                      <span>{assistantMeta.model ?? 'model?'}</span>
+                      {assistantMeta.api ? <span>api: {assistantMeta.api}</span> : null}
+                      {assistantMeta.stopReason ? <span>stop: {assistantMeta.stopReason}</span> : null}
+                      {assistantMeta.usage.totalTokens !== null ? (
+                        <span>
+                          tokens: in {assistantMeta.usage.input ?? 0} / out {assistantMeta.usage.output ?? 0} / total {assistantMeta.usage.totalTokens}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </article>
             )
           })}
         </div>
 
-        {selectedRuntime?.status === 'streaming' ? (
+        {isStreaming ? (
           <div className="chat-streaming-indicator" aria-live="polite">
-            <Loader2 className="h-4 w-4 animate-spin" /> Pi répond...
+            Thinking...
           </div>
         ) : null}
       </section>

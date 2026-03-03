@@ -23,7 +23,10 @@ declare global {
       deleteProject: (projectId: string) => Promise<DeleteProjectResult>
       getInitialState: () => Promise<WorkspacePayload>
       updateSettings: (settings: SidebarSettings) => Promise<SidebarSettings>
-      createConversationForProject: (projectId: string) => Promise<CreateConversationResult>
+      createConversationForProject: (
+        projectId: string,
+        options?: { modelProvider?: string; modelId?: string; thinkingLevel?: string },
+      ) => Promise<CreateConversationResult>
       deleteConversation: (conversationId: string) => Promise<DeleteConversationResult>
       getConversationMessageCache: (conversationId: string) => Promise<unknown[]>
       requestConversationAutoTitle: (
@@ -37,11 +40,31 @@ declare global {
           }
       >
       listPiModels: () => Promise<
-        | { ok: true; models: Array<{ id: string; provider: string; scoped: boolean; key: string }> }
+        | {
+            ok: true
+            models: Array<{
+              id: string
+              provider: string
+              scoped: boolean
+              key: string
+              supportsThinking: boolean
+              thinkingLevels: Array<'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'>
+            }>
+          }
         | { ok: false; reason: 'pi_not_available' | 'unknown'; message?: string }
       >
       syncPiModels: () => Promise<
-        | { ok: true; models: Array<{ id: string; provider: string; scoped: boolean; key: string }> }
+        | {
+            ok: true
+            models: Array<{
+              id: string
+              provider: string
+              scoped: boolean
+              key: string
+              supportsThinking: boolean
+              thinkingLevels: Array<'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'>
+            }>
+          }
         | { ok: false; reason: 'pi_not_available' | 'unknown'; message?: string }
       >
       setPiModelScoped: (
@@ -49,7 +72,17 @@ declare global {
         id: string,
         scoped: boolean,
       ) => Promise<
-        | { ok: true; models: Array<{ id: string; provider: string; scoped: boolean; key: string }> }
+        | {
+            ok: true
+            models: Array<{
+              id: string
+              provider: string
+              scoped: boolean
+              key: string
+              supportsThinking: boolean
+              thinkingLevels: Array<'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'>
+            }>
+          }
         | { ok: false; reason: 'pi_not_available' | 'invalid_model' | 'unknown'; message?: string }
       >
       getPiConfigSnapshot: () => Promise<PiConfigSnapshot>

@@ -21,7 +21,14 @@ type ImportProjectResult =
   | { ok: true; duplicate: boolean; project: Project }
   | { ok: false; reason: 'not_git_repo' | 'unknown' }
 
-type PiModel = { id: string; provider: string; scoped: boolean; key: string }
+type PiModel = {
+  id: string
+  provider: string
+  scoped: boolean
+  key: string
+  supportsThinking: boolean
+  thinkingLevels: Array<'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'>
+}
 type ListPiModelsResult =
   | { ok: true; models: PiModel[] }
   | { ok: false; reason: 'pi_not_available' | 'unknown'; message?: string }
@@ -40,8 +47,10 @@ export const workspaceIpc = {
   importProjectFromFolder: (folderPath: string) => getApi().importProjectFromFolder(folderPath),
   deleteProject: (projectId: string): Promise<DeleteProjectResult> => getApi().deleteProject(projectId),
   updateSettings: (settings: SidebarSettings) => getApi().updateSettings(settings),
-  createConversationForProject: (projectId: string): Promise<CreateConversationResult> =>
-    getApi().createConversationForProject(projectId),
+  createConversationForProject: (
+    projectId: string,
+    options?: { modelProvider?: string; modelId?: string; thinkingLevel?: string },
+  ): Promise<CreateConversationResult> => getApi().createConversationForProject(projectId, options),
   deleteConversation: (conversationId: string): Promise<DeleteConversationResult> => getApi().deleteConversation(conversationId),
   getConversationMessageCache: (conversationId: string): Promise<unknown[]> => getApi().getConversationMessageCache(conversationId),
   requestConversationAutoTitle: (
