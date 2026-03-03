@@ -1,4 +1,4 @@
-import { ChevronDown, FolderGit2 } from 'lucide-react'
+import { FolderGit2, PencilLine } from 'lucide-react'
 
 import { ConversationRow } from '@/components/sidebar/ConversationRow'
 import { useWorkspace } from '@/features/workspace/store'
@@ -10,7 +10,7 @@ type ProjectGroupProps = {
 }
 
 export function ProjectGroup({ project }: ProjectGroupProps) {
-  const { state, selectConversation, selectProject, toggleProjectCollapsed } = useWorkspace()
+  const { state, selectConversation, selectProject, startConversationDraft, toggleProjectCollapsed } = useWorkspace()
 
   const conversations = selectConversationsForProject(state.conversations, project.id, state.settings)
   const collapsed = state.settings.collapsedProjectIds.includes(project.id)
@@ -18,21 +18,35 @@ export function ProjectGroup({ project }: ProjectGroupProps) {
 
   return (
     <section className="project-group" aria-labelledby={`project-label-${project.id}`}>
-      <button
-        id={`project-label-${project.id}`}
-        type="button"
-        className={`project-header ${state.selectedProjectId === project.id ? 'project-header-active' : ''}`}
-        onClick={() => {
-          selectProject(project.id)
-          void toggleProjectCollapsed(project.id)
-        }}
-        aria-expanded={!collapsed}
-        aria-controls={sectionId}
-      >
-        <FolderGit2 className="h-4 w-4" />
-        <span className="truncate">{project.name}</span>
-        <ChevronDown className={`ml-auto h-4 w-4 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
-      </button>
+      <div className={`project-header-row ${state.selectedProjectId === project.id ? 'project-header-active' : ''}`}>
+        <button
+          id={`project-label-${project.id}`}
+          type="button"
+          className="project-header"
+          onClick={() => {
+            selectProject(project.id)
+            void toggleProjectCollapsed(project.id)
+          }}
+          aria-expanded={!collapsed}
+          aria-controls={sectionId}
+        >
+          <FolderGit2 className="h-4 w-4" />
+          <span className="project-title truncate">{project.name}</span>
+        </button>
+        <button
+          type="button"
+          className="project-action-button"
+          aria-label={`Créer un fil à partir de ${project.name}`}
+          title="Créer un fil"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            startConversationDraft(project.id)
+          }}
+        >
+          <PencilLine className="h-4 w-4" />
+        </button>
+      </div>
 
       {!collapsed ? (
         <div id={sectionId} role="list" className="sidebar-thread-list">

@@ -44,7 +44,13 @@ body {
   margin: 0;
   min-width: 980px;
   min-height: 100vh;
-  font-family: 'SF Pro Text', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family:
+    "SF Pro Text",
+    "SF Pro Display",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   color: hsl(var(--foreground));
   background: #ececee;
   text-rendering: geometricPrecision;
@@ -71,7 +77,7 @@ body {
 
   .sidebar-panel {
     width: var(--ui-sidebar-width);
-    @apply flex shrink-0 flex-col border-r border-[#dcdddf] bg-[#ececee] pt-6;
+    @apply flex shrink-0 flex-col bg-[#ececee] pt-6;
   }
 
   .main-panel {
@@ -92,8 +98,8 @@ body {
   }
 
   .sidebar-section-title {
-    font-size: var(--ui-font-section);
-    line-height: 1.1;
+    font-size: 18px;
+    line-height: 1.2;
     @apply font-semibold;
   }
 
@@ -117,12 +123,29 @@ body {
     @apply rounded-lg;
   }
 
+  .project-header-row {
+    @apply flex items-center gap-2 rounded-lg pr-2 transition-colors hover:bg-transparent;
+  }
+
   .project-header {
-    @apply flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[#303139] transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+    @apply flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[#303139] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
   }
 
   .project-header-active {
-    @apply bg-white/70;
+    @apply bg-transparent;
+  }
+
+  .project-title {
+    @apply min-w-0 flex-1;
+  }
+
+  .project-action-button {
+    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#696b74] opacity-0 transition-all hover:bg-white/80 hover:text-[#43454d] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+  }
+
+  .project-header-row:hover .project-action-button,
+  .project-header-row:focus-within .project-action-button {
+    @apply opacity-100;
   }
 
   .sidebar-thread-list {
@@ -130,11 +153,11 @@ body {
   }
 
   .thread-row {
-    @apply flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+    @apply flex w-full items-center justify-between rounded-md bg-transparent px-2.5 py-2 text-left transition-colors hover:bg-[#eeeeef] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
   }
 
   .thread-row-active {
-    @apply bg-white;
+    @apply bg-[#e3e3e3];
   }
 
   .thread-row-title {
@@ -180,17 +203,15 @@ body {
     @apply relative w-2 shrink-0 cursor-col-resize bg-[#ececee] transition-colors;
   }
 
-  .sidebar-resize-handle::before {
-    content: '';
-    @apply absolute inset-y-0 left-1/2 w-[1px] -translate-x-1/2 bg-[#d8d9de];
-  }
-
-  .sidebar-resize-handle:hover::before {
-    @apply bg-[#b9bac1];
-  }
-
   .topbar {
+    -webkit-app-region: drag;
     @apply flex h-14 items-center justify-between border-b border-[#e2e3e6] px-6;
+  }
+
+  .topbar button,
+  .topbar input,
+  .topbar a {
+    -webkit-app-region: no-drag;
   }
 
   .topbar-title {
@@ -240,6 +261,27 @@ body {
     @apply mt-2 text-lg text-[#80828a];
   }
 
+  .hero-subtitle-wrap {
+    @apply relative mt-2;
+  }
+
+  .hero-subtitle-button {
+    @apply inline-flex items-center gap-1 rounded-md px-2 py-1 text-lg text-[#676973] transition-colors hover:bg-[#eeeff2] hover:text-[#4d4e56] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+  }
+
+  .hero-project-menu {
+    min-width: 260px;
+    @apply absolute left-1/2 z-20 mt-1 -translate-x-1/2 rounded-xl border border-[#dddfe3] bg-white p-1 shadow-[0_10px_28px_rgba(24,25,30,0.14)];
+  }
+
+  .hero-project-menu-item {
+    @apply flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-[#3f4149] transition-colors hover:bg-[#f1f2f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+  }
+
+  .hero-project-menu-item-active {
+    @apply bg-[#f3f4f7] text-[#1f2128];
+  }
+
   .content-wrap {
     max-width: var(--ui-content-max);
     @apply mx-auto w-full;
@@ -260,7 +302,7 @@ body {
 
   .composer-input {
     font-size: var(--ui-font-input);
-    @apply h-10 border-0 bg-transparent px-0 text-[#2a2b30] shadow-none placeholder:text-[#a1a2a9] focus-visible:ring-0;
+    @apply block w-full resize-none overflow-y-auto rounded-none border-0 border-transparent bg-transparent px-0 text-[#2a2b30] shadow-none outline-none ring-0 placeholder:text-[#a1a2a9] focus:border-0 focus:border-transparent focus:shadow-none focus:ring-0 focus-visible:border-0 focus-visible:border-transparent focus-visible:shadow-none focus-visible:ring-0;
   }
 
   .composer-meta {

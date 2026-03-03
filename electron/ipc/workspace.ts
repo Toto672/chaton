@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { getDb } from '../db/index.js'
-import { listConversations } from '../db/repos/conversations.js'
+import { findConversationById, insertConversation, listConversations } from '../db/repos/conversations.js'
 import { findProjectByRepoPath, insertProject, listProjects } from '../db/repos/projects.js'
 import { getSidebarSettings, saveSidebarSettings, type DbSidebarSettings } from '../db/repos/settings.js'
 
@@ -85,6 +85,40 @@ export function registerWorkspaceIpc() {
     const db = getDb()
     saveSidebarSettings(db, settings)
     return settings
+  })
+
+  ipcMain.handle('conversations:createForProject', (_event, projectId: string) => {
+    const db = getDb()
+    const project = listProjects(db).find((item) => item.id === projectId)
+    if (!project) {
+      return { ok: false as const, reason: 'project_not_found' as const }
+    }
+
+    const conversationId = crypto.randomUUID()
+    insertConversation(db, {
+      id: conversationId,
+      projectId,
+      title: `Nouveau fil - ${project.name}`,
+    })
+
+    const conversation = findConversationById(db, conversationId)
+    if (!conversation) {
+      return { ok: false as const, reason: 'unknown' as const }
+    }
+
+    return {
+      ok: true as const,
+      conversation: {
+        id: conversation.id,
+        projectId: conversation.project_id,
+        title: conversation.title,
+        status: conversation.status,
+        isRelevant: Boolean(conversation.is_relevant),
+        createdAt: conversation.created_at,
+        updatedAt: conversation.updated_at,
+        lastMessageAt: conversation.last_message_at,
+      },
+    }
   })
 
   ipcMain.handle('projects:importFromFolder', (_event, folderPath: string) => {

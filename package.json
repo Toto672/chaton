@@ -11,7 +11,8 @@
     "dev:desktop": "npm run build:electron && wait-on tcp:5173 && VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
     "build": "npm run build:renderer && npm run build:electron",
     "build:renderer": "tsc -b && vite build",
-    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:electron": "tsc -p tsconfig.electron.json && npm run copy:electron-assets",
+    "copy:electron-assets": "mkdir -p dist-electron/db/migrations && cp -R electron/db/migrations/. dist-electron/db/migrations/",
     "lint": "eslint .",
     "preview": "vite preview",
     "dist": "npm run build && electron-builder --mac dmg"

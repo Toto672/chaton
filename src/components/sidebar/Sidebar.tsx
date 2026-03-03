@@ -6,13 +6,13 @@ import { useWorkspace } from '@/features/workspace/store'
 import { selectVisibleConversations } from '@/features/workspace/selectors'
 
 export function Sidebar({ width }: { width: number }) {
-  const { state, setSearchQuery } = useWorkspace()
+  const { state, selectConversation, setSearchQuery } = useWorkspace()
 
   const visibleConversations = selectVisibleConversations(state.conversations, state.settings)
 
   return (
     <aside className="sidebar-panel" style={{ width: `${width}px` }}>
-      <nav className="sidebar-nav" aria-label="Navigation principale">
+      <nav className="sidebar-nav pt-4" aria-label="Navigation principale">
         <button type="button" className="sidebar-item">
           <Gauge className="h-4 w-4 text-[#66676f]" />
           Automatisations
@@ -50,7 +50,13 @@ export function Sidebar({ width }: { width: number }) {
         {state.settings.organizeBy === 'chronological' ? (
           <section aria-label="Liste chronologique" role="list" className="sidebar-thread-list">
             {visibleConversations.map((conversation) => (
-              <button key={conversation.id} type="button" className="thread-row">
+              <button
+                key={conversation.id}
+                type="button"
+                className={`thread-row ${state.selectedConversationId === conversation.id ? 'thread-row-active' : ''}`}
+                onClick={() => selectConversation(conversation.id)}
+                aria-current={state.selectedConversationId === conversation.id ? 'true' : undefined}
+              >
                 <span className="thread-row-title">{conversation.title}</span>
               </button>
             ))}

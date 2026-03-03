@@ -1,9 +1,12 @@
 import Database from 'better-sqlite3'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { app } from 'electron'
 
 let dbInstance: Database.Database | null = null
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 function runMigrations(db: Database.Database) {
   const migrationsDir = path.join(__dirname, 'migrations')

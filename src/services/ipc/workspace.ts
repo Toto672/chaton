@@ -1,4 +1,4 @@
-import type { Project, SidebarSettings, WorkspacePayload } from '@/features/workspace/types'
+import type { CreateConversationResult, Project, SidebarSettings, WorkspacePayload } from '@/features/workspace/types'
 
 type ImportProjectResult =
   | { ok: true; duplicate: boolean; project: Project }
@@ -13,6 +13,8 @@ export const workspaceIpc = {
   pickProjectFolder: () => getApi().pickProjectFolder(),
   importProjectFromFolder: (folderPath: string) => getApi().importProjectFromFolder(folderPath),
   updateSettings: (settings: SidebarSettings) => getApi().updateSettings(settings),
+  createConversationForProject: (projectId: string): Promise<CreateConversationResult> =>
+    getApi().createConversationForProject(projectId),
 }
 
 export type { ImportProjectResult, WorkspacePayload }

@@ -10,4 +10,5 @@ contextBridge.exposeInMainWorld('dashboard', {
   importProjectFromFolder: (folderPath: string) => ipcRenderer.invoke('projects:importFromFolder', folderPath),
   getInitialState: () => ipcRenderer.invoke('workspace:getInitialState'),
   updateSettings: (settings: unknown) => ipcRenderer.invoke('workspace:updateSettings', settings),
+  createConversationForProject: (projectId: string) => ipcRenderer.invoke('conversations:createForProject', projectId),
 })

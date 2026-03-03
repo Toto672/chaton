@@ -21,6 +21,10 @@ export type Conversation = {
   lastMessageAt: string
 }
 
+export type CreateConversationResult =
+  | { ok: true; conversation: Conversation }
+  | { ok: false; reason: 'project_not_found' | 'unknown' }
+
 export type SidebarSettings = {
   organizeBy: 'project' | 'chronological'
   sortBy: 'created' | 'updated'
