@@ -71,6 +71,14 @@ export function ConversationRow({ conversation, isActive, onSelect, onDelete }: 
         <button
           type="button"
           className={`thread-delete-button ${confirmDelete ? 'thread-delete-button-confirm' : ''}`}
+          onMouseDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+          onPointerDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
           onClick={(event) => {
             void onDeleteClick(event)
           }}

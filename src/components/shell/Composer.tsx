@@ -34,7 +34,7 @@ export function Composer() {
     stopPi,
     setNotice,
   } = useWorkspace();
-  const [message, setMessage] = useState("");
+  const [draftsByKey, setDraftsByKey] = useState<Record<string, string>>({});
   const [modelsMenuOpen, setModelsMenuOpen] = useState(false);
   const [showAllModels, setShowAllModels] = useState(false);
   const [thinkingMenuOpen, setThinkingMenuOpen] = useState(false);
@@ -54,6 +54,7 @@ export function Composer() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const modelsMenuRef = useRef<HTMLDivElement | null>(null);
   const modelsMenuListRef = useRef<HTMLDivElement | null>(null);
+  const modelsMenuListContentRef = useRef<HTMLDivElement | null>(null);
   const [modelsMenuListHeight, setModelsMenuListHeight] = useState(0);
   const selectedConversation = state.conversations.find(
     (conversation) => conversation.id === state.selectedConversationId,
@@ -63,10 +64,31 @@ export function Composer() {
     : null;
   const isDraftConversation =
     state.selectedProjectId !== null && !selectedConversation;
+  const composerKey = selectedConversation?.id ?? (state.selectedProjectId ? `draft:${state.selectedProjectId}` : "global");
+  const message = draftsByKey[composerKey] ?? "";
+
+  const setMessage = (next: string) => {
+    setDraftsByKey((previous) => {
+      if (next.length === 0) {
+        if (!(composerKey in previous)) {
+          return previous;
+        }
+        const updated = { ...previous };
+        delete updated[composerKey];
+        return updated;
+      }
+
+      return {
+        ...previous,
+        [composerKey]: next,
+      };
+    });
+  };
 
   const handleSendMessage = async () => {
     const nextMessage = message.trim();
-    if (!nextMessage || isSubmitting) {
+    const isPiGettingReady = selectedRuntime?.status === "starting";
+    if (!nextMessage || isSubmitting || isPiGettingReady) {
       return;
     }
 
@@ -90,7 +112,17 @@ export function Composer() {
       }
 
       await sendPiPrompt({ conversationId, message: nextMessage });
-      setMessage("");
+      if (!selectedConversation) {
+        void workspaceIpc.requestConversationAutoTitle(conversationId, nextMessage);
+      }
+      setDraftsByKey((previous) => {
+        if (!(composerKey in previous)) {
+          return previous;
+        }
+        const updated = { ...previous };
+        delete updated[composerKey];
+        return updated;
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -280,17 +312,19 @@ export function Composer() {
     if (!modelsMenuOpen) {
       return;
     }
-    const list = modelsMenuListRef.current;
-    if (!list) {
+    const content = modelsMenuListContentRef.current;
+    if (!content) {
       return;
     }
-    setModelsMenuListHeight(Math.min(list.scrollHeight, 260));
+    setModelsMenuListHeight(Math.min(content.scrollHeight, 260));
   }, [modelsMenuOpen, showAllModels, visibleModels.length, isLoadingModels]);
 
   const isStreaming = Boolean(
     selectedRuntime?.state?.isStreaming ||
     selectedRuntime?.status === "streaming",
   );
+  const isPiGettingReady = selectedRuntime?.status === "starting";
+  const isSendDisabled = isSubmitting || isPiGettingReady;
 
   if (state.sidebarMode === "settings") {
     return null;
@@ -358,51 +392,53 @@ export function Composer() {
                       className="models-menu-list"
                       style={{ height: `${modelsMenuListHeight}px` }}
                     >
-                      {isLoadingModels ? (
-                        <div className="models-menu-empty">
-                          Chargement des modèles...
-                        </div>
-                      ) : visibleModels.length === 0 ? (
-                        <div className="models-menu-empty">
-                          {showAllModels
-                            ? "Aucun modèle disponible."
-                            : "Aucun modèle scoped. Cliquez sur more."}
-                        </div>
-                      ) : (
-                        visibleModels.map((model) => (
-                          <div key={model.key} className="models-menu-row">
-                            <button
-                              type="button"
-                              className={`models-menu-item ${selectedModelKey === model.key ? "models-menu-item-active" : ""}`}
-                              onClick={() => void handleApplyModel(model.key)}
-                            >
-                              <span>{model.id}</span>
-                              <span className="models-menu-provider">
-                                {model.provider}
-                              </span>
-                            </button>
-                            {showAllModels ? (
+                      <div ref={modelsMenuListContentRef} className="models-menu-list-content">
+                        {isLoadingModels ? (
+                          <div className="models-menu-empty">
+                            Chargement des modèles...
+                          </div>
+                        ) : visibleModels.length === 0 ? (
+                          <div className="models-menu-empty">
+                            {showAllModels
+                              ? "Aucun modèle disponible."
+                              : "Aucun modèle scoped. Cliquez sur more."}
+                          </div>
+                        ) : (
+                          visibleModels.map((model) => (
+                            <div key={model.key} className="models-menu-row">
                               <button
                                 type="button"
-                                className="models-scope-button"
-                                aria-label={
-                                  model.scoped
-                                    ? "Retirer du scope"
-                                    : "Ajouter au scope"
-                                }
-                                onClick={() =>
-                                  void handleToggleModelScoped(model)
-                                }
-                                disabled={isUpdatingScope}
+                                className={`models-menu-item ${selectedModelKey === model.key ? "models-menu-item-active" : ""}`}
+                                onClick={() => void handleApplyModel(model.key)}
                               >
-                                <Star
-                                  className={`h-4 w-4 ${model.scoped ? "fill-current" : ""}`}
-                                />
+                                <span>{model.id}</span>
+                                <span className="models-menu-provider">
+                                  {model.provider}
+                                </span>
                               </button>
-                            ) : null}
-                          </div>
-                        ))
-                      )}
+                              {showAllModels ? (
+                                <button
+                                  type="button"
+                                  className="models-scope-button"
+                                  aria-label={
+                                    model.scoped
+                                      ? "Retirer du scope"
+                                      : "Ajouter au scope"
+                                  }
+                                  onClick={() =>
+                                    void handleToggleModelScoped(model)
+                                  }
+                                  disabled={isUpdatingScope}
+                                >
+                                  <Star
+                                    className={`h-4 w-4 ${model.scoped ? "fill-current" : ""}`}
+                                  />
+                                </button>
+                              ) : null}
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
 
                     <div className="models-menu-header">
@@ -458,20 +494,25 @@ export function Composer() {
                   variant="secondary"
                   onClick={() => void stopPi(selectedConversation.id)}
                 >
-                  <Square className="h-4 w-4" />
+                  <Square className="send-button-icon" />
                 </Button>
               ) : null}
 
               <Button
                 type="button"
-                className="send-button"
+                className={`send-button ${isPiGettingReady ? "send-button-getting-ready" : ""}`}
                 onClick={() => void handleSendMessage()}
-                disabled={isSubmitting}
+                disabled={isSendDisabled}
               >
-                {isSubmitting ? (
-                  <Loader2 className="h-10 w-10 animate-spin" />
+                {isPiGettingReady ? (
+                  <>
+                    <Loader2 className="send-button-spinner animate-spin" />
+                    <span className="send-button-status-text">Pi getting ready</span>
+                  </>
+                ) : isSubmitting ? (
+                  <Loader2 className="send-button-spinner animate-spin" />
                 ) : (
-                  <ArrowUp className="h-10 w-10" />
+                  <ArrowUp className="send-button-icon" />
                 )}
               </Button>
             </div>

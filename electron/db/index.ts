@@ -27,38 +27,6 @@ function runMigrations(db: Database.Database) {
   }
 }
 
-function seedIfEmpty(db: Database.Database) {
-  const hasProjects = db.prepare('SELECT COUNT(*) as count FROM projects').get() as { count: number }
-  if (hasProjects.count > 0) {
-    return
-  }
-
-  const now = new Date().toISOString()
-  const projectId = crypto.randomUUID()
-  const conversationId = crypto.randomUUID()
-  db.prepare(
-    'INSERT INTO projects(id, name, repo_path, repo_name, is_archived, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)'
-  ).run(projectId, 'Projet exemple', path.join(app.getPath('home'), 'example-repo'), 'example-repo', now, now)
-
-  db.prepare(
-    'INSERT INTO conversations(id, project_id, title, status, is_relevant, created_at, updated_at, last_message_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(conversationId, projectId, 'Initialiser le dashboard', 'active', 1, now, now, now)
-
-  const defaultSettings = {
-    organizeBy: 'project',
-    sortBy: 'updated',
-    show: 'all',
-    searchQuery: '',
-    collapsedProjectIds: [],
-  }
-
-  db.prepare('INSERT INTO app_settings(key, value, updated_at) VALUES (?, ?, ?)').run(
-    'sidebar',
-    JSON.stringify(defaultSettings),
-    now,
-  )
-}
-
 export function getDb() {
   if (dbInstance) {
     return dbInstance
@@ -68,6 +36,5 @@ export function getDb() {
   dbInstance = new Database(dbPath)
   dbInstance.pragma('foreign_keys = ON')
   runMigrations(dbInstance)
-  seedIfEmpty(dbInstance)
   return dbInstance
 }

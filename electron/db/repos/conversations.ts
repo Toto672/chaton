@@ -48,8 +48,24 @@ export function findConversationById(db: Database.Database, id: string): DbConve
   return db.prepare('SELECT * FROM conversations WHERE id = ?').get(id) as DbConversation | undefined
 }
 
+export function listConversationsByProjectId(db: Database.Database, projectId: string): DbConversation[] {
+  return db.prepare('SELECT * FROM conversations WHERE project_id = ? ORDER BY updated_at DESC').all(projectId) as DbConversation[]
+}
+
 export function deleteConversationById(db: Database.Database, id: string): boolean {
   const result = db.prepare('DELETE FROM conversations WHERE id = ?').run(id)
+  return result.changes > 0
+}
+
+export function updateConversationTitle(db: Database.Database, id: string, title: string): boolean {
+  const now = new Date().toISOString()
+  const result = db
+    .prepare(
+      `UPDATE conversations
+       SET title = ?, updated_at = ?
+       WHERE id = ?`,
+    )
+    .run(title, now, id)
   return result.changes > 0
 }
 

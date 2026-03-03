@@ -14,6 +14,7 @@ import { workspaceIpc } from '@/services/ipc/workspace'
 import type {
   Conversation,
   DeleteConversationResult,
+  DeleteProjectResult,
   PiCommandAction,
   PiCommandResult,
   PiConfigSnapshot,
@@ -49,6 +50,7 @@ type Action =
   | { type: 'addProject'; payload: { project: Project } }
   | { type: 'addConversation'; payload: { conversation: Conversation } }
   | { type: 'removeConversation'; payload: { conversationId: string } }
+  | { type: 'removeProject'; payload: { projectId: string } }
   | { type: 'setNotice'; payload: { notice: string | null } }
   | { type: 'setSidebarMode'; payload: { mode: 'default' | 'settings' } }
   | { type: 'setPiRuntime'; payload: { conversationId: string; runtime: Partial<PiConversationRuntime> } }
@@ -56,6 +58,7 @@ type Action =
   | { type: 'pushPiExtensionRequest'; payload: { conversationId: string; request: { id: string; method: string; payload: Record<string, JsonValue | undefined> } } }
   | { type: 'popPiExtensionRequest'; payload: { conversationId: string; id: string } }
   | { type: 'updateConversationModel'; payload: { conversationId: string; provider: string; modelId: string } }
+  | { type: 'updateConversationTitle'; payload: { conversationId: string; title: string; updatedAt?: string } }
 
 const defaultSettings: SidebarSettings = {
   organizeBy: 'project',
@@ -219,6 +222,48 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         piByConversation: nextPiByConversation,
       }
     }
+    case 'removeProject': {
+      const nextProjects = state.projects.filter((project) => project.id !== action.payload.projectId)
+      const removedConversationIds = new Set(
+        state.conversations.filter((conversation) => conversation.projectId === action.payload.projectId).map((conversation) => conversation.id),
+      )
+      const nextConversations = state.conversations.filter((conversation) => conversation.projectId !== action.payload.projectId)
+
+      let selectedConversationId = state.selectedConversationId
+      if (selectedConversationId && removedConversationIds.has(selectedConversationId)) {
+        selectedConversationId = null
+      }
+
+      let selectedProjectId = state.selectedProjectId
+      if (selectedProjectId === action.payload.projectId) {
+        selectedProjectId = null
+      }
+
+      const selectedConversationStillExists =
+        selectedConversationId !== null && nextConversations.some((conversation) => conversation.id === selectedConversationId)
+      const fallbackConversation = selectedConversationStillExists
+        ? nextConversations.find((conversation) => conversation.id === selectedConversationId) ?? null
+        : nextConversations[0] ?? null
+      const fallbackProjectId = selectedProjectId ?? fallbackConversation?.projectId ?? nextProjects[0]?.id ?? null
+
+      const nextPiByConversation = { ...state.piByConversation }
+      for (const conversationId of removedConversationIds) {
+        delete nextPiByConversation[conversationId]
+      }
+
+      return {
+        ...state,
+        projects: nextProjects,
+        conversations: nextConversations,
+        selectedConversationId: fallbackConversation?.id ?? null,
+        selectedProjectId: fallbackProjectId,
+        piByConversation: nextPiByConversation,
+        settings: {
+          ...state.settings,
+          collapsedProjectIds: state.settings.collapsedProjectIds.filter((id) => id !== action.payload.projectId),
+        },
+      }
+    }
     case 'setPiRuntime': {
       const piByConversation = ensureRuntimeMap(state, action.payload.conversationId)
       const current = piByConversation[action.payload.conversationId]
@@ -285,6 +330,20 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         ),
       }
     }
+    case 'updateConversationTitle': {
+      return {
+        ...state,
+        conversations: state.conversations.map((conversation) =>
+          conversation.id === action.payload.conversationId
+            ? {
+                ...conversation,
+                title: action.payload.title,
+                updatedAt: action.payload.updatedAt ?? conversation.updatedAt,
+              }
+            : conversation,
+        ),
+      }
+    }
     case 'setNotice': {
       return {
         ...state,
@@ -308,6 +367,7 @@ type WorkspaceContextValue = {
   importProject: () => Promise<void>
   createConversationForProject: (projectId: string) => Promise<Conversation | null>
   deleteConversation: (conversationId: string) => Promise<DeleteConversationResult>
+  deleteProject: (projectId: string) => Promise<DeleteProjectResult>
   updateSettings: (settings: SidebarSettings) => Promise<void>
   setSearchQuery: (query: string) => Promise<void>
   sendPiPrompt: (args: { conversationId: string; message: string; steer?: boolean }) => Promise<void>
@@ -502,6 +562,25 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [])
 
+  useEffect(() => {
+    const unsubscribe = workspaceIpc.onConversationUpdated((payload) => {
+      if (!payload?.conversationId || !payload?.title) {
+        return
+      }
+      dispatch({
+        type: 'updateConversationTitle',
+        payload: {
+          conversationId: payload.conversationId,
+          title: payload.title,
+          updatedAt: payload.updatedAt,
+        },
+      })
+    })
+    return () => {
+      unsubscribe()
+    }
+  }, [])
+
   const persistSettings = useCallback(async (settings: SidebarSettings) => {
     const saved = await workspaceIpc.updateSettings(settings)
     dispatch({ type: 'updateSettings', payload: saved })
@@ -567,6 +646,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     mergeSnapshot(dispatch, conversationId, snapshot)
   }, [])
 
+  const hydrateConversationCache = useCallback(async (conversationId: string) => {
+    const cached = await workspaceIpc.getConversationMessageCache(conversationId)
+    if (cached.length > 0) {
+      dispatch({ type: 'setPiMessages', payload: { conversationId, messages: cached as JsonValue[] } })
+    }
+  }, [])
+
   const createConversationForProject = useCallback(
     async (projectId: string) => {
       const result = await workspaceIpc.createConversationForProject(projectId)
@@ -588,21 +674,77 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     [hydrateConversationRuntime],
   )
 
-  const deleteConversation = useCallback(async (conversationId: string) => {
-    await workspaceIpc.piStopSession(conversationId)
-    const result = await workspaceIpc.deleteConversation(conversationId)
-    if (!result.ok) {
-      dispatch({
-        type: 'setNotice',
-        payload: { notice: 'Impossible de supprimer ce fil.' },
-      })
-      return result
-    }
+  const deleteConversation = useCallback(
+    async (conversationId: string) => {
+      const exists = state.conversations.some((conversation) => conversation.id === conversationId)
+      if (!exists) {
+        return { ok: false as const, reason: 'conversation_not_found' as const }
+      }
 
-    dispatch({ type: 'removeConversation', payload: { conversationId } })
-    dispatch({ type: 'setNotice', payload: { notice: null } })
-    return result
-  }, [])
+      // Optimistic UI: hide row immediately, persist deletion in background.
+      dispatch({ type: 'removeConversation', payload: { conversationId } })
+
+      await workspaceIpc.piStopSession(conversationId)
+      const result = await workspaceIpc.deleteConversation(conversationId)
+      if (!result.ok) {
+        const snapshot = await workspaceIpc.getInitialState()
+        dispatch({
+          type: 'hydrate',
+          payload: {
+            projects: snapshot.projects,
+            conversations: snapshot.conversations,
+            settings: snapshot.settings,
+          },
+        })
+        dispatch({
+          type: 'setNotice',
+          payload: { notice: 'Impossible de supprimer ce fil.' },
+        })
+        return result
+      }
+
+      dispatch({ type: 'setNotice', payload: { notice: null } })
+      return result
+    },
+    [state.conversations],
+  )
+
+  const deleteProject = useCallback(
+    async (projectId: string) => {
+      const exists = state.projects.some((project) => project.id === projectId)
+      if (!exists) {
+        return { ok: false as const, reason: 'project_not_found' as const }
+      }
+
+      const conversationIds = state.conversations.filter((conversation) => conversation.projectId === projectId).map((conversation) => conversation.id)
+
+      // Optimistic UI: hide project and related threads immediately.
+      dispatch({ type: 'removeProject', payload: { projectId } })
+
+      await Promise.all(conversationIds.map((conversationId) => workspaceIpc.piStopSession(conversationId)))
+      const result = await workspaceIpc.deleteProject(projectId)
+      if (!result.ok) {
+        const snapshot = await workspaceIpc.getInitialState()
+        dispatch({
+          type: 'hydrate',
+          payload: {
+            projects: snapshot.projects,
+            conversations: snapshot.conversations,
+            settings: snapshot.settings,
+          },
+        })
+        dispatch({
+          type: 'setNotice',
+          payload: { notice: 'Impossible de supprimer ce projet.' },
+        })
+        return result
+      }
+
+      dispatch({ type: 'setNotice', payload: { notice: null } })
+      return result
+    },
+    [state.conversations, state.projects],
+  )
 
   const sendPiCommand = useCallback(
     async (conversationId: string, command: RpcCommand) => {
@@ -711,6 +853,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     void hydrateConversationRuntime(conversationId)
   }, [hydrateConversationRuntime, state.piByConversation, state.selectedConversationId])
 
+  useEffect(() => {
+    if (state.conversations.length === 0) {
+      return
+    }
+    void Promise.all(state.conversations.map((conversation) => hydrateConversationCache(conversation.id)))
+  }, [hydrateConversationCache, state.conversations])
+
   const value = useMemo(
     () => ({
       state,
@@ -721,10 +870,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       selectConversation: async (conversationId: string) => {
         dispatch({ type: 'setSidebarMode', payload: { mode: 'default' } })
         dispatch({ type: 'selectConversation', payload: { conversationId } })
-        const cached = await workspaceIpc.getConversationMessageCache(conversationId)
-        if (cached.length > 0) {
-          dispatch({ type: 'setPiMessages', payload: { conversationId, messages: cached as JsonValue[] } })
-        }
+        await hydrateConversationCache(conversationId)
         await hydrateConversationRuntime(conversationId)
       },
       startConversationDraft: (projectId: string) => dispatch({ type: 'startConversationDraft', payload: { projectId } }),
@@ -732,6 +878,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       importProject,
       createConversationForProject,
       deleteConversation,
+      deleteProject,
       updateSettings: persistSettings,
       setSearchQuery: async (query: string) => {
         await persistSettings({ ...state.settings, searchQuery: query })
@@ -754,6 +901,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     [
       createConversationForProject,
       deleteConversation,
+      deleteProject,
+      hydrateConversationCache,
       hydrateConversationRuntime,
       importProject,
       isLoading,

@@ -1,4 +1,5 @@
-import { FolderGit2, PencilLine } from 'lucide-react'
+import { FolderGit2, PencilLine, Trash2 } from 'lucide-react'
+import { type MouseEvent, useEffect, useRef, useState } from 'react'
 
 import { ConversationRow } from '@/components/sidebar/ConversationRow'
 import { useWorkspace } from '@/features/workspace/store'
@@ -10,8 +11,46 @@ type ProjectGroupProps = {
 }
 
 export function ProjectGroup({ project }: ProjectGroupProps) {
-  const { state, selectConversation, selectProject, createConversationForProject, toggleProjectCollapsed, deleteConversation } =
+  const { state, selectConversation, selectProject, createConversationForProject, toggleProjectCollapsed, deleteConversation, deleteProject } =
     useWorkspace()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const resetTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current)
+      }
+    }
+  }, [])
+
+  const scheduleReset = () => {
+    if (resetTimerRef.current !== null) {
+      window.clearTimeout(resetTimerRef.current)
+    }
+    resetTimerRef.current = window.setTimeout(() => {
+      setConfirmDelete(false)
+      resetTimerRef.current = null
+    }, 2000)
+  }
+
+  const onDeleteClick = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      scheduleReset()
+      return
+    }
+
+    if (resetTimerRef.current !== null) {
+      window.clearTimeout(resetTimerRef.current)
+      resetTimerRef.current = null
+    }
+    setConfirmDelete(false)
+    await deleteProject(project.id)
+  }
 
   const conversations = selectConversationsForProject(state.conversations, project.id, state.settings)
   const collapsed = state.settings.collapsedProjectIds.includes(project.id)
@@ -46,6 +85,17 @@ export function ProjectGroup({ project }: ProjectGroupProps) {
           }}
         >
           <PencilLine className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          className={`project-action-button ${confirmDelete ? 'project-action-button-confirm' : ''}`}
+          aria-label={confirmDelete ? `Confirmer la suppression de ${project.name}` : `Supprimer ${project.name}`}
+          title={confirmDelete ? 'Cliquer à nouveau pour supprimer' : 'Supprimer le projet'}
+          onClick={(event) => {
+            void onDeleteClick(event)
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
         </button>
       </div>
 

@@ -31,7 +31,7 @@
 
   --ui-control-icon: 32px;
   --ui-control-pill: 40px;
-  --ui-control-send: 36px;
+  --ui-control-send: 44px;
   --ui-radius-composer: 24px;
   --ui-radius-card: 20px;
 }
@@ -45,11 +45,11 @@ body {
   min-width: 980px;
   min-height: 100vh;
   font-family:
-    'SF Pro Text',
-    'SF Pro Display',
+    "SF Pro Text",
+    "SF Pro Display",
     -apple-system,
     BlinkMacSystemFont,
-    'Segoe UI',
+    "Segoe UI",
     sans-serif;
   color: hsl(var(--foreground));
   background: #ececee;
@@ -105,6 +105,18 @@ body {
     opacity: 0.9;
     box-shadow: 0 0 0 6px rgba(120, 164, 255, 0.18);
     filter: hue-rotate(180deg);
+  }
+}
+
+@keyframes send-button-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(80, 81, 89, 0.35);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(80, 81, 89, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(80, 81, 89, 0);
   }
 }
 
@@ -194,6 +206,14 @@ body {
     @apply opacity-100;
   }
 
+  .project-action-button-confirm {
+    @apply bg-[#ffe9e3] text-[#b9412d] opacity-100;
+  }
+
+  .project-action-button-confirm:hover {
+    @apply bg-[#ffe9e3] text-[#b9412d];
+  }
+
   .sidebar-thread-list {
     @apply space-y-1 pl-2;
   }
@@ -222,6 +242,10 @@ body {
 
   .thread-delete-button-confirm {
     @apply bg-[#ffe9e3] text-[#b9412d] opacity-100;
+  }
+
+  .thread-delete-button-confirm:hover {
+    @apply bg-[#ffe9e3] text-[#b9412d];
   }
 
   .thread-row:hover .thread-delete-button,
@@ -265,7 +289,15 @@ body {
 
   .top-pill-chime {
     animation: top-pill-chime 1.3s ease-in-out infinite;
-    background-image: linear-gradient(120deg, #f8d2d2, #f8e9c9, #d8efce, #cde6fb, #e3d6fb, #f7d4ea);
+    background-image: linear-gradient(
+      120deg,
+      #f8d2d2,
+      #f8e9c9,
+      #d8efce,
+      #cde6fb,
+      #e3d6fb,
+      #f7d4ea
+    );
     background-size: 220% 220%;
     border-color: #d6d8e0;
   }
@@ -337,6 +369,7 @@ body {
 
   .chat-message-text {
     white-space: pre-wrap;
+    font-family: inherit;
     @apply max-h-[560px] overflow-auto bg-transparent p-0 text-[15px] leading-7 text-[#232731];
   }
 
@@ -417,7 +450,7 @@ body {
   }
 
   .chat-streaming-indicator::after {
-    content: '';
+    content: "";
     @apply ml-1 inline-block h-2 w-2 rounded-full bg-[#22579a];
     animation: pulse-dot 900ms ease-in-out infinite;
   }
@@ -462,7 +495,7 @@ body {
   }
 
   .composer-footer {
-    @apply border-t border-[#e2e3e6] bg-[#f3f3f5] px-10 pb-4 pt-3;
+    @apply bg-[#f3f3f5] px-10 pb-4 pt-3;
   }
 
   .app-notice {
@@ -506,8 +539,12 @@ body {
 
   .models-menu-list {
     max-height: 260px;
-    @apply space-y-1 overflow-auto;
+    @apply overflow-auto;
     transition: height 180ms ease;
+  }
+
+  .models-menu-list-content {
+    @apply space-y-1;
   }
 
   .models-menu-row {
@@ -551,6 +588,30 @@ body {
     width: var(--ui-control-send);
     height: var(--ui-control-send);
     @apply rounded-full bg-[#8d8e95] text-white hover:bg-[#7f8088];
+  }
+
+  .send-button-getting-ready {
+    width: auto;
+    min-width: var(--ui-control-send);
+    padding-left: 12px;
+    padding-right: 12px;
+    @apply gap-2 bg-[#6f7078] hover:bg-[#6f7078];
+    animation: send-button-pulse 1.4s ease-out infinite;
+  }
+
+  .send-button-status-text {
+    @apply text-xs font-medium tracking-[0.01em];
+    white-space: nowrap;
+  }
+
+  .send-button-icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .send-button-spinner {
+    width: 20px;
+    height: 20px;
   }
 
   .settings-sidebar {

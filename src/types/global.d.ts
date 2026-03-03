@@ -1,6 +1,7 @@
 import type {
   CreateConversationResult,
   DeleteConversationResult,
+  DeleteProjectResult,
   PiCommandAction,
   PiCommandResult,
   PiConfigSnapshot,
@@ -19,11 +20,22 @@ declare global {
       importProjectFromFolder: (
         folderPath: string,
       ) => Promise<{ ok: true; duplicate: boolean; project: Project } | { ok: false; reason: 'not_git_repo' | 'unknown' }>
+      deleteProject: (projectId: string) => Promise<DeleteProjectResult>
       getInitialState: () => Promise<WorkspacePayload>
       updateSettings: (settings: SidebarSettings) => Promise<SidebarSettings>
       createConversationForProject: (projectId: string) => Promise<CreateConversationResult>
       deleteConversation: (conversationId: string) => Promise<DeleteConversationResult>
       getConversationMessageCache: (conversationId: string) => Promise<unknown[]>
+      requestConversationAutoTitle: (
+        conversationId: string,
+        firstMessage: string,
+      ) => Promise<
+        | { ok: true; skipped?: boolean; title?: string }
+        | {
+            ok: false
+            reason: 'empty_message' | 'conversation_not_found' | 'project_not_found' | 'title_generation_failed'
+          }
+      >
       listPiModels: () => Promise<
         | { ok: true; models: Array<{ id: string; provider: string; scoped: boolean; key: string }> }
         | { ok: false; reason: 'pi_not_available' | 'unknown'; message?: string }
@@ -56,6 +68,9 @@ declare global {
         response: RpcExtensionUiResponse,
       ) => Promise<{ ok: true } | { ok: false; reason: string }>
       onPiEvent: (listener: (event: PiRendererEvent) => void) => () => void
+      onConversationUpdated: (
+        listener: (payload: { conversationId: string; title: string; updatedAt: string }) => void,
+      ) => () => void
     }
   }
 }

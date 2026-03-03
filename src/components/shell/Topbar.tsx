@@ -19,13 +19,14 @@ export function Topbar() {
   const selectedConversation = state.conversations.find((conversation) => conversation.id === state.selectedConversationId)
   const runtime = selectedConversation ? state.piByConversation[selectedConversation.id] : null
   const shouldShowRuntimePills = Boolean(runtime && (runtime.status !== 'stopped' || runtime.pendingCommands > 0 || runtime.lastError))
+  const shouldShowStatusPill = Boolean(runtime && runtime.status !== 'stopped' && runtime.status !== 'starting')
 
   return (
     <header className="topbar">
       <div className="topbar-title">{selectedConversation?.title ?? 'Nouveau fil'}</div>
 
       <div className="flex items-center gap-2">
-        {shouldShowRuntimePills ? <TopPill label={`Pi ${runtime?.status}`} chime={runtime?.status === 'starting'} /> : null}
+        {shouldShowStatusPill ? <TopPill label={`Pi ${runtime?.status}`} /> : null}
         {shouldShowRuntimePills ? <TopPill label={`Queue ${runtime?.pendingCommands ?? 0}`} /> : null}
       </div>
     </header>

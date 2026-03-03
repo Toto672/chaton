@@ -1,6 +1,7 @@
 import type {
   CreateConversationResult,
   DeleteConversationResult,
+  DeleteProjectResult,
   PiCommandAction,
   PiCommandResult,
   PiConfigSnapshot,
@@ -37,11 +38,22 @@ export const workspaceIpc = {
   getInitialState: () => getApi().getInitialState(),
   pickProjectFolder: () => getApi().pickProjectFolder(),
   importProjectFromFolder: (folderPath: string) => getApi().importProjectFromFolder(folderPath),
+  deleteProject: (projectId: string): Promise<DeleteProjectResult> => getApi().deleteProject(projectId),
   updateSettings: (settings: SidebarSettings) => getApi().updateSettings(settings),
   createConversationForProject: (projectId: string): Promise<CreateConversationResult> =>
     getApi().createConversationForProject(projectId),
   deleteConversation: (conversationId: string): Promise<DeleteConversationResult> => getApi().deleteConversation(conversationId),
   getConversationMessageCache: (conversationId: string): Promise<unknown[]> => getApi().getConversationMessageCache(conversationId),
+  requestConversationAutoTitle: (
+    conversationId: string,
+    firstMessage: string,
+  ): Promise<
+    | { ok: true; skipped?: boolean; title?: string }
+    | {
+        ok: false
+        reason: 'empty_message' | 'conversation_not_found' | 'project_not_found' | 'title_generation_failed'
+      }
+  > => getApi().requestConversationAutoTitle(conversationId, firstMessage),
   listPiModels: (): Promise<ListPiModelsResult> => getApi().listPiModels(),
   syncPiModels: (): Promise<ListPiModelsResult> => getApi().syncPiModels(),
   setPiModelScoped: (provider: string, id: string, scoped: boolean): Promise<SetPiModelScopedResult> =>
@@ -68,6 +80,9 @@ export const workspaceIpc = {
     response: RpcExtensionUiResponse,
   ): Promise<{ ok: true } | { ok: false; reason: string }> => getApi().piRespondExtensionUi(conversationId, response),
   onPiEvent: (listener: (event: PiRendererEvent) => void): (() => void) => getApi().onPiEvent(listener),
+  onConversationUpdated: (
+    listener: (payload: { conversationId: string; title: string; updatedAt: string }) => void,
+  ): (() => void) => getApi().onConversationUpdated(listener),
 }
 
 export type { ImportProjectResult, WorkspacePayload }

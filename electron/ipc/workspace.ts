@@ -11,12 +11,14 @@ import {
   findConversationById,
   insertConversation,
   listConversations,
+  listConversationsByProjectId,
   listConversationMessagesCache,
   replaceConversationMessagesCache,
+  updateConversationTitle,
   type DbConversation,
 } from '../db/repos/conversations.js'
 import { listPiModelsCache, replacePiModelsCache } from '../db/repos/pi-models-cache.js'
-import { findProjectByRepoPath, insertProject, listProjects } from '../db/repos/projects.js'
+import { deleteProjectById, findProjectByRepoPath, insertProject, listProjects } from '../db/repos/projects.js'
 import { getSidebarSettings, saveSidebarSettings, type DbSidebarSettings } from '../db/repos/settings.js'
 import {
   PiSessionRuntimeManager,
@@ -226,7 +228,7 @@ function sanitizePiSettings(next: Record<string, unknown>): { ok: true; value: R
   return { ok: true, value: sanitized }
 }
 
-function runPiExec(args: string[], timeout = 20_000): Promise<PiCommandResult> {
+function runPiExec(args: string[], timeout = 20_000, cwd?: string): Promise<PiCommandResult> {
   const piPath = getPiBinaryPath()
   if (!piPath || !fs.existsSync(piPath)) {
     return Promise.resolve({
@@ -245,6 +247,7 @@ function runPiExec(args: string[], timeout = 20_000): Promise<PiCommandResult> {
       piPath,
       args,
       {
+        cwd,
         timeout,
         maxBuffer: 2 * 1024 * 1024,
         env: { ...process.env, TERM: 'dumb' },
@@ -524,6 +527,50 @@ function cacheMessagesFromSnapshot(conversationId: string, snapshot: { messages:
   replaceConversationMessagesCache(db, conversationId, messages)
 }
 
+function sanitizeGeneratedTitle(raw: string): string | null {
+  const oneLine = raw.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim()
+  const trimmedQuotes = oneLine.replace(/^["'`]+|["'`]+$/g, '').trim()
+  if (trimmedQuotes.length === 0) {
+    return null
+  }
+  const truncated = trimmedQuotes.slice(0, 80).trim()
+  return truncated.length > 0 ? truncated : null
+}
+
+function generateConversationTitlePrompt(firstMessage: string): string {
+  return [
+    'Tu génères un titre de fil de discussion.',
+    'Contraintes strictes:',
+    '- Répondre avec UN seul titre, sans guillemets.',
+    '- 3 à 7 mots.',
+    '- Maximum 60 caractères.',
+    '- En français.',
+    '',
+    'Premier message utilisateur:',
+    firstMessage,
+  ].join('\n')
+}
+
+async function generateConversationTitleFromPi(params: {
+  provider: string
+  modelId: string
+  repoPath: string
+  firstMessage: string
+}): Promise<string | null> {
+  const piPath = getPiBinaryPath()
+  if (!piPath || !fs.existsSync(piPath)) {
+    return null
+  }
+
+  const prompt = generateConversationTitlePrompt(params.firstMessage)
+  const result = await runPiExec(['-m', `${params.provider}/${params.modelId}`, '-p', prompt], 20_000, params.repoPath)
+  if (!result.ok) {
+    return null
+  }
+
+  return sanitizeGeneratedTitle(result.stdout)
+}
+
 export function registerWorkspaceIpc() {
   piRuntimeManager.subscribe((event: PiRendererEvent) => {
     if (event.event.type === 'agent_end') {
@@ -684,6 +731,24 @@ export function registerWorkspaceIpc() {
     return { ok: true as const }
   })
 
+  ipcMain.handle('projects:delete', async (_event, projectId: string) => {
+    const db = getDb()
+    const project = listProjects(db).find((item) => item.id === projectId)
+    if (!project) {
+      return { ok: false as const, reason: 'project_not_found' as const }
+    }
+
+    const projectConversations = listConversationsByProjectId(db, projectId)
+    await Promise.all(projectConversations.map((conversation) => piRuntimeManager.stop(conversation.id)))
+
+    const deleted = deleteProjectById(db, projectId)
+    if (!deleted) {
+      return { ok: false as const, reason: 'unknown' as const }
+    }
+
+    return { ok: true as const }
+  })
+
   ipcMain.handle('conversations:getMessageCache', (_event, conversationId: string) => {
     const db = getDb()
     const rows = listConversationMessagesCache(db, conversationId)
@@ -694,6 +759,58 @@ export function registerWorkspaceIpc() {
         return null
       }
     }).filter((item) => item !== null)
+  })
+
+  ipcMain.handle('conversations:requestAutoTitle', async (_event, conversationId: string, firstMessage: string) => {
+    const safeMessage = typeof firstMessage === 'string' ? firstMessage.trim() : ''
+    if (!safeMessage) {
+      return { ok: false as const, reason: 'empty_message' as const }
+    }
+
+    const db = getDb()
+    const conversation = findConversationById(db, conversationId)
+    if (!conversation) {
+      return { ok: false as const, reason: 'conversation_not_found' as const }
+    }
+
+    const startsWithDefault = conversation.title.startsWith('Nouveau fil - ')
+    if (!startsWithDefault) {
+      return { ok: true as const, skipped: true as const }
+    }
+
+    const project = listProjects(db).find((item) => item.id === conversation.project_id)
+    if (!project) {
+      return { ok: false as const, reason: 'project_not_found' as const }
+    }
+
+    const provider = conversation.model_provider ?? 'openai-codex'
+    const modelId = conversation.model_id ?? 'gpt-5.3-codex'
+    const generatedTitle = await generateConversationTitleFromPi({
+      provider,
+      modelId,
+      repoPath: project.repo_path,
+      firstMessage: safeMessage,
+    })
+
+    if (!generatedTitle) {
+      return { ok: false as const, reason: 'title_generation_failed' as const }
+    }
+
+    const updated = updateConversationTitle(db, conversationId, generatedTitle)
+    if (!updated) {
+      return { ok: false as const, reason: 'conversation_not_found' as const }
+    }
+
+    const payload = {
+      conversationId,
+      title: generatedTitle,
+      updatedAt: new Date().toISOString(),
+    }
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('workspace:conversationUpdated', payload)
+    }
+
+    return { ok: true as const, title: generatedTitle }
   })
 
   ipcMain.handle('pi:startSession', (_event, conversationId: string) => piRuntimeManager.start(conversationId))

@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('dashboard', {
   platform: process.platform,
   pickProjectFolder: () => ipcRenderer.invoke('dialog:pickProjectFolder') as Promise<string | null>,
   importProjectFromFolder: (folderPath: string) => ipcRenderer.invoke('projects:importFromFolder', folderPath),
+  deleteProject: (projectId: string) => ipcRenderer.invoke('projects:delete', projectId),
   getInitialState: () => ipcRenderer.invoke('workspace:getInitialState'),
   updateSettings: (settings: unknown) => ipcRenderer.invoke('workspace:updateSettings', settings),
   createConversationForProject: (projectId: string) => ipcRenderer.invoke('conversations:createForProject', projectId),
@@ -25,6 +26,8 @@ contextBridge.exposeInMainWorld('dashboard', {
   exportPiSessionHtml: (sessionFile: unknown, outputFile: unknown) =>
     ipcRenderer.invoke('pi:exportSessionHtml', sessionFile, outputFile),
   getConversationMessageCache: (conversationId: string) => ipcRenderer.invoke('conversations:getMessageCache', conversationId),
+  requestConversationAutoTitle: (conversationId: string, firstMessage: string) =>
+    ipcRenderer.invoke('conversations:requestAutoTitle', conversationId, firstMessage),
   piStartSession: (conversationId: string) => ipcRenderer.invoke('pi:startSession', conversationId),
   piStopSession: (conversationId: string) => ipcRenderer.invoke('pi:stopSession', conversationId),
   piSendCommand: (conversationId: string, command: unknown) => ipcRenderer.invoke('pi:sendCommand', conversationId, command),
@@ -36,6 +39,13 @@ contextBridge.exposeInMainWorld('dashboard', {
     ipcRenderer.on('pi:event', wrapped)
     return () => {
       ipcRenderer.removeListener('pi:event', wrapped)
+    }
+  },
+  onConversationUpdated: (listener: (payload: unknown) => void) => {
+    const wrapped = (_event: unknown, payload: unknown) => listener(payload)
+    ipcRenderer.on('workspace:conversationUpdated', wrapped)
+    return () => {
+      ipcRenderer.removeListener('workspace:conversationUpdated', wrapped)
     }
   },
 })

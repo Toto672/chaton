@@ -28,3 +28,8 @@ export function insertProject(db: Database.Database, params: { id: string; name:
     'INSERT INTO projects(id, name, repo_path, repo_name, is_archived, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)'
   ).run(params.id, params.name, params.repoPath, params.repoName, now, now)
 }
+
+export function deleteProjectById(db: Database.Database, id: string): boolean {
+  const result = db.prepare('DELETE FROM projects WHERE id = ?').run(id)
+  return result.changes > 0
+}
