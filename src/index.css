@@ -20,18 +20,18 @@
 
   /* Desktop UI scale tokens */
   --ui-sidebar-width: 320px;
-  --ui-content-max: 1000px;
+  --ui-content-max: 1020px;
 
   --ui-font-micro: 10px;
   --ui-font-meta: 12px;
   --ui-font-caption: 13px;
   --ui-font-control: 14px;
-  --ui-font-body: 15px;
-  --ui-font-input: 17px;
+  --ui-font-body: 14px;
+  --ui-font-input: 16px;
   --ui-font-title: 20px;
-  --ui-font-section: 30px;
-  --ui-font-hero: 60px;
-  --ui-font-hero-sub: 48px;
+  --ui-font-section: 24px;
+  --ui-font-hero: 64px;
+  --ui-font-hero-sub: 44px;
 
   --ui-control-icon: 32px;
   --ui-control-pill: 40px;
@@ -47,7 +47,7 @@
 
 body {
   margin: 0;
-  min-width: 1200px;
+  min-width: 980px;
   min-height: 100vh;
   font-family: 'SF Pro Text', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   color: hsl(var(--foreground));
@@ -66,62 +66,65 @@ body {
     @apply h-screen w-screen overflow-hidden bg-[#ececee] text-[#1f2026];
   }
 
+  .app-shell.is-resizing {
+    @apply cursor-col-resize;
+  }
+
   .app-layout {
     @apply flex h-full w-full;
   }
 
   .sidebar-panel {
     width: var(--ui-sidebar-width);
-    @apply flex shrink-0 flex-col border-r border-[#dcdddf] bg-[#ececee];
+    @apply flex shrink-0 flex-col border-r border-[#dcdddf] bg-[#ececee] pt-8;
   }
 
   .main-panel {
     @apply flex min-w-0 flex-1 flex-col bg-[#f3f3f5];
   }
-
-  .window-controls-wrap {
-    @apply h-12 px-10 pt-3;
-  }
-
-  .window-controls {
-    @apply flex items-center gap-3 text-[#b8b8bd];
-  }
-
-  .window-control-key {
-    font-size: var(--ui-font-micro);
-    @apply ml-7 rounded-md border border-[#c2c3c7] px-1.5 py-0.5 text-[#909199];
-  }
-
   .sidebar-nav {
     @apply space-y-1 px-3 pb-3 pt-1;
   }
 
   .sidebar-item {
     font-size: var(--ui-font-body);
-    @apply flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-[#46474d] hover:bg-white/70;
+    @apply flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-[#46474d] transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
   }
 
   .sidebar-section-head {
-    @apply flex items-center justify-between px-4 py-2.5 text-[#8d8e95];
+    @apply flex items-center justify-between px-4 py-2 text-[#8d8e95];
   }
 
   .sidebar-section-title {
     font-size: var(--ui-font-section);
-    line-height: 1;
+    line-height: 1.1;
+    @apply font-semibold;
+  }
+
+  .sidebar-icon-button {
+    @apply inline-flex h-7 w-7 items-center justify-center rounded-md text-[#7d7e86] transition-colors hover:bg-white/70 hover:text-[#5a5b62] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+  }
+
+  .sidebar-scroll {
+    @apply min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-2;
   }
 
   .folder-row {
     font-size: var(--ui-font-body);
-    @apply flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-[#44454b] hover:bg-white/60;
+    @apply flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-[#44454b] transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+  }
+
+  .sidebar-thread-list {
+    @apply space-y-1;
   }
 
   .thread-row {
-    @apply flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left hover:bg-white/60;
+    @apply flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
   }
 
   .thread-row-title {
     font-size: var(--ui-font-body);
-    @apply truncate pr-2 text-[#202127];
+    @apply truncate pr-2 text-[#202127] leading-5;
   }
 
   .thread-row-meta {
@@ -131,7 +134,32 @@ body {
 
   .show-more-row {
     font-size: var(--ui-font-caption);
-    @apply w-full px-2 py-1.5 text-left text-[#777880] hover:text-[#61636b];
+    @apply w-full rounded-md px-2.5 py-2 text-left text-[#777880] transition-colors hover:bg-white/50 hover:text-[#61636b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+  }
+
+  .sidebar-resize-handle {
+    @apply relative w-2 shrink-0 cursor-col-resize bg-[#ececee] transition-colors;
+  }
+
+  .sidebar-resize-handle::before {
+    content: '';
+    @apply absolute inset-y-0 left-1/2 w-[1px] -translate-x-1/2 bg-[#d8d9de];
+  }
+
+  .sidebar-resize-handle:hover::before {
+    @apply bg-[#b9bac1];
+  }
+
+  .sidebar-resize-handle:focus-visible {
+    @apply outline-none;
+  }
+
+  .sidebar-resize-handle:focus-visible::before {
+    @apply bg-[#989aa3];
+  }
+
+  .topbar {
+    @apply flex h-14 items-center justify-between border-b border-[#e2e3e6] px-6;
   }
 
   .topbar-title {
@@ -159,8 +187,17 @@ body {
     @apply rounded-md text-[#6c6d75] hover:bg-[#eaeaee];
   }
 
+  .main-scroll {
+    @apply min-h-0 flex-1 overflow-y-auto px-10 pb-3 pt-2;
+  }
+
+  .hero-section {
+    min-height: clamp(280px, 45vh, 420px);
+    @apply flex items-center justify-center;
+  }
+
   .hero-group {
-    @apply -mt-10 flex flex-col items-center text-center;
+    @apply -mt-8 flex flex-col items-center text-center;
   }
 
   .hero-icon-wrap {
@@ -174,7 +211,7 @@ body {
 
   .hero-subtitle {
     font-size: var(--ui-font-hero-sub);
-    @apply mt-1.5 flex items-center gap-1.5 font-normal leading-tight text-[#80828a] hover:text-[#6c6f79];
+    @apply mt-1 flex items-center gap-1.5 font-normal leading-tight text-[#80828a] transition-colors hover:text-[#6c6f79];
   }
 
   .content-wrap {
@@ -182,20 +219,32 @@ body {
     @apply mx-auto w-full;
   }
 
+  .suggestion-section {
+    @apply pb-3;
+  }
+
   .explore-label {
     font-size: var(--ui-font-caption);
     @apply mb-2 text-center text-[#8a8b92];
   }
 
+  .suggestions-grid {
+    @apply grid grid-cols-3 gap-3;
+  }
+
   .suggestion-card {
     min-height: 124px;
     border-radius: var(--ui-radius-card);
-    @apply border border-[#dbdcdf] bg-[#f5f5f7] p-5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.8)];
+    @apply border border-[#dbdcdf] bg-[#f5f5f7] p-5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] transition-colors hover:bg-[#f0f1f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
   }
 
   .suggestion-copy {
     font-size: var(--ui-font-input);
-    @apply leading-7 text-[#24252b];
+    @apply leading-6 text-[#24252b];
+  }
+
+  .composer-footer {
+    @apply border-t border-[#e2e3e6] bg-[#f3f3f5] px-10 pb-4 pt-3;
   }
 
   .composer-shell {
@@ -205,7 +254,7 @@ body {
 
   .composer-input {
     font-size: var(--ui-font-input);
-    @apply h-10 border-0 bg-transparent px-0 text-[#a1a2a9] shadow-none focus-visible:ring-0;
+    @apply h-10 border-0 bg-transparent px-0 text-[#2a2b30] shadow-none placeholder:text-[#a1a2a9] focus-visible:ring-0;
   }
 
   .composer-meta {
@@ -225,6 +274,42 @@ body {
 
   .status-row {
     font-size: var(--ui-font-caption);
-    @apply mt-2.5 flex items-center justify-between px-2 text-[#73747c];
+    @apply mt-2.5 flex items-center justify-between gap-2 px-2 text-[#73747c];
+  }
+
+  .status-button {
+    @apply inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[#73747c] transition-colors hover:bg-[#e9eaed] hover:text-[#5f6169] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+  }
+
+  .status-button-warning {
+    @apply text-[#d66f26] hover:text-[#b85d1f];
+  }
+}
+
+@media (max-width: 1320px) {
+  :root {
+    --ui-font-hero: 56px;
+    --ui-font-hero-sub: 38px;
+  }
+
+  .main-scroll,
+  .composer-footer {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  .suggestions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  :root {
+    --ui-font-hero: 46px;
+    --ui-font-hero-sub: 32px;
+  }
+
+  .suggestions-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
   }
 }

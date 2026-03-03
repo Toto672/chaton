@@ -1,6 +1,5 @@
 import {
   ChevronDown,
-  Circle,
   CircleDashed,
   Command,
   Folder,
@@ -16,7 +15,14 @@ import {
   SquarePen,
   Workflow,
 } from 'lucide-react'
-import type { ComponentType } from 'react'
+import {
+  type ComponentType,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -43,20 +49,76 @@ const suggestions = [
   { icon: '✏️', text: 'Create a plan to...' },
 ]
 
-function App() {
-  return (
-    <div className="app-shell">
-      <div className="app-layout">
-        <aside className="sidebar-panel">
-          <div className="window-controls-wrap">
-            <div className="window-controls">
-              <Circle className="h-4 w-4 fill-current" />
-              <Circle className="h-4 w-4 fill-current" />
-              <Circle className="h-4 w-4 fill-current" />
-              <div className="window-control-key">⌃</div>
-            </div>
-          </div>
+const SIDEBAR_MIN_WIDTH = 260
+const SIDEBAR_MAX_WIDTH = 460
+const SIDEBAR_DEFAULT_WIDTH = 320
+const SIDEBAR_RESIZE_STEP = 16
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function App() {
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeStartXRef = useRef(0)
+  const resizeStartWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH)
+
+  useEffect(() => {
+    if (!isResizing) {
+      return
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const delta = event.clientX - resizeStartXRef.current
+      const nextWidth = clamp(
+        resizeStartWidthRef.current + delta,
+        SIDEBAR_MIN_WIDTH,
+        SIDEBAR_MAX_WIDTH,
+      )
+      setSidebarWidth(nextWidth)
+    }
+
+    const handlePointerUp = () => {
+      setIsResizing(false)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+    }
+  }, [isResizing])
+
+  const handleSidebarResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    resizeStartXRef.current = event.clientX
+    resizeStartWidthRef.current = sidebarWidth
+    setIsResizing(true)
+  }
+
+  const handleSidebarResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      setSidebarWidth((width) => clamp(width - SIDEBAR_RESIZE_STEP, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH))
+    }
+
+    if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      setSidebarWidth((width) => clamp(width + SIDEBAR_RESIZE_STEP, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH))
+    }
+  }
+
+  return (
+    <div className={`app-shell ${isResizing ? 'is-resizing' : ''}`}>
+      <div className="app-layout">
+        <aside className="sidebar-panel" style={{ width: `${sidebarWidth}px` }}>
           <div className="sidebar-nav">
             <SidebarItem icon={SquarePen} label="Nouveau fil" />
             <SidebarItem icon={Gauge} label="Automatisations" />
@@ -66,39 +128,51 @@ function App() {
           <div className="sidebar-section-head">
             <span className="sidebar-section-title">Fils</span>
             <div className="flex items-center gap-3">
-              <FolderPlus className="h-4 w-4" />
-              <Minus className="h-4 w-4" />
+              <SidebarIconButton icon={FolderPlus} label="Ajouter un dossier" />
+              <SidebarIconButton icon={Minus} label="Replier la section" />
             </div>
           </div>
 
-          <div className="space-y-0.5 px-2">
-            {folders.map((folder) => (
-              <button key={folder} className="folder-row">
-                <Folder className="h-4 w-4 text-[#6f7076]" />
-                <span className="truncate">{folder}</span>
-              </button>
-            ))}
-          </div>
+          <div className="sidebar-scroll">
+            <div className="space-y-0.5">
+              {folders.map((folder) => (
+                <button key={folder} type="button" className="folder-row">
+                  <Folder className="h-4 w-4 text-[#6f7076]" />
+                  <span className="truncate">{folder}</span>
+                </button>
+              ))}
+            </div>
 
-          <div className="mt-2 flex-1 overflow-hidden px-2">
-            <div className="space-y-1 pr-1">
+            <div className="sidebar-thread-list">
               {threads.map((thread) => (
                 <ThreadRow key={thread} title={thread} />
               ))}
-              <button className="show-more-row">Afficher plus</button>
+              <button type="button" className="show-more-row">
+                Afficher plus
+              </button>
             </div>
           </div>
 
           <div className="border-t border-[#dcdddf] px-3 py-3">
-            <button className="sidebar-item text-[#45464d]">
+            <button type="button" className="sidebar-item text-[#45464d]">
               <Settings className="h-4 w-4" />
               Paramètres
             </button>
           </div>
         </aside>
 
+        <div
+          className="sidebar-resize-handle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Redimensionner la barre latérale"
+          tabIndex={0}
+          onPointerDown={handleSidebarResizeStart}
+          onKeyDown={handleSidebarResizeKeyDown}
+        />
+
         <main className="main-panel">
-          <header className="flex h-14 items-center justify-between px-6">
+          <header className="topbar">
             <div className="topbar-title">Nouveau fil</div>
 
             <div className="flex items-center gap-2">
@@ -110,42 +184,43 @@ function App() {
             </div>
           </header>
 
-          <div className="flex min-h-0 flex-1 flex-col px-10 pb-4 pt-2">
-            <section className="flex flex-1 items-center justify-center">
+          <div className="main-scroll">
+            <section className="hero-section">
               <div className="hero-group">
                 <div className="hero-icon-wrap">
                   <Sparkles className="h-5 w-5 text-[#17181d]" />
                 </div>
                 <h1 className="hero-title">Créons ensemble</h1>
-                <button className="hero-subtitle">
+                <button type="button" className="hero-subtitle">
                   pixatwin <ChevronDown className="h-5 w-5" />
                 </button>
               </div>
             </section>
 
-            <section className="content-wrap">
+            <section className="content-wrap suggestion-section">
               <div className="explore-label">Explore more</div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="suggestions-grid">
                 {suggestions.map((suggestion) => (
-                  <article key={suggestion.text} className="suggestion-card">
+                  <button key={suggestion.text} type="button" className="suggestion-card">
                     <div className="mb-2.5 text-lg">{suggestion.icon}</div>
                     <p className="suggestion-copy">{suggestion.text}</p>
-                  </article>
+                  </button>
                 ))}
               </div>
             </section>
+          </div>
 
-            <footer className="content-wrap mt-4">
+          <footer className="composer-footer">
+            <div className="content-wrap">
               <div className="composer-shell">
                 <Input
-                  readOnly
-                  value="Demandez n’importe quoi à Codex, utilisez @ pour ajouter des fichiers, / pour les commandes"
+                  placeholder="Demandez n’importe quoi à Codex, utilisez @ pour ajouter des fichiers, / pour les commandes"
                   className="composer-input"
                 />
 
                 <div className="composer-meta">
                   <div className="flex items-center gap-1.5">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-[#696b73]">
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full text-[#696b73]">
                       <Plus className="h-4 w-4" />
                     </Button>
                     <Badge variant="secondary" className="meta-chip">
@@ -156,32 +231,45 @@ function App() {
                     </Badge>
                   </div>
 
-                  <Button size="icon" className="send-button">
+                  <Button type="button" size="icon" className="send-button">
                     <ChevronDown className="h-4 w-4 rotate-180" />
                   </Button>
                 </div>
               </div>
 
               <div className="status-row">
-                <div className="flex items-center gap-1.5">
-                  <span>▭ Local</span>
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </div>
-                <div className="flex items-center gap-1 text-[#e46b1f]">
-                  <span>◌</span>
-                  <span>Accès complet</span>
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span>⌘ main</span>
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </div>
+                <StatusButton label="▭ Local" />
+                <StatusButton label="◌ Accès complet" warning />
+                <StatusButton label="⌘ main" />
               </div>
-            </footer>
-          </div>
+            </div>
+          </footer>
         </main>
       </div>
     </div>
+  )
+}
+
+function SidebarIconButton({
+  icon: Icon,
+  label,
+}: {
+  icon: ComponentType<{ className?: string }>
+  label: string
+}) {
+  return (
+    <button type="button" className="sidebar-icon-button" aria-label={label}>
+      <Icon className="h-4 w-4" />
+    </button>
+  )
+}
+
+function StatusButton({ label, warning = false }: { label: string; warning?: boolean }) {
+  return (
+    <button type="button" className={`status-button ${warning ? 'status-button-warning' : ''}`}>
+      <span>{label}</span>
+      <ChevronDown className="h-3.5 w-3.5" />
+    </button>
   )
 }
 
@@ -193,7 +281,7 @@ function SidebarItem({
   label: string
 }) {
   return (
-    <button className="sidebar-item">
+    <button type="button" className="sidebar-item">
       <Icon className="h-4 w-4 text-[#66676f]" />
       {label}
     </button>
@@ -202,7 +290,7 @@ function SidebarItem({
 
 function ThreadRow({ title }: { title: string }) {
   return (
-    <button className="thread-row">
+    <button type="button" className="thread-row">
       <span className="thread-row-title">{title}</span>
       <span className="thread-row-meta">1 h</span>
     </button>
@@ -220,6 +308,7 @@ function TopPill({
 }) {
   return (
     <Button
+      type="button"
       variant="outline"
       className={`top-pill ${muted ? 'top-pill-muted' : 'top-pill-default'}`}
     >
@@ -232,7 +321,7 @@ function TopPill({
 
 function IconBtn({ icon: Icon }: { icon: ComponentType<{ className?: string }> }) {
   return (
-    <Button variant="ghost" size="icon" className="icon-button">
+    <Button type="button" variant="ghost" size="icon" className="icon-button">
       <Icon className="h-4 w-4" />
     </Button>
   )
