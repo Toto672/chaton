@@ -73,6 +73,7 @@ export type PiConversationRuntime = {
   state: RpcSessionState | null
   messages: JsonValue[]
   activeStreamTurn: number | null
+  activeStreamEventSeq: number
   pendingUserMessage: boolean
   pendingUserMessageText: string | null
   pendingCommands: number

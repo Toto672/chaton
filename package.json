@@ -15,11 +15,12 @@
     "copy:electron-assets": "mkdir -p dist-electron/db/migrations dist-electron/build/icons && cp -R electron/db/migrations/. dist-electron/db/migrations/ && cp -R build/icons/. dist-electron/build/icons/",
     "lint": "eslint .",
     "preview": "vite preview",
-    "dist": "npm run build && electron-builder --mac dmg"
+    "dist": "npm run build && electron-builder --mac dmg",
+    "package:prod:dmg": "npm run build && electron-builder --mac dmg --publish never"
   },
   "build": {
     "appId": "com.thibaut.chaton",
-    "productName": "Chaton Native",
+    "productName": "Chaton",
     "icon": "build/icons/icon",
     "files": [
       "dist/**/*",

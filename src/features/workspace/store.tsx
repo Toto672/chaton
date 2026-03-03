@@ -77,6 +77,7 @@ const makePiRuntime = (): PiConversationRuntime => ({
   state: null,
   messages: [],
   activeStreamTurn: null,
+  activeStreamEventSeq: 0,
   pendingUserMessage: false,
   pendingUserMessageText: null,
   pendingCommands: 0,
@@ -157,34 +158,38 @@ function mergeMessageToolBlocks(existing: JsonValue, incoming: JsonValue): JsonV
     return raw.length > 160 ? raw.slice(0, 160) : raw
   }
 
-  const getToolKey = (part: JsonValue, fallbackIndex: number): string | null => {
+  const existingSeq = typeof existingRecord.__streamSeq === 'number' ? existingRecord.__streamSeq : null
+  const incomingSeq = typeof incomingRecord.__streamSeq === 'number' ? incomingRecord.__streamSeq : null
+
+  const getToolKey = (part: JsonValue, fallbackIndex: number, sourceSeq: number | null): string | null => {
     if (!part || typeof part !== 'object' || Array.isArray(part)) return null
     const value = part as Record<string, JsonValue>
+    const seqPrefix = sourceSeq !== null ? `seq:${sourceSeq}:` : ''
     if (value.type === 'toolCall') {
       const callId = typeof value.id === 'string' ? value.id : null
       const name = typeof value.name === 'string' ? value.name : 'tool'
       const argsSig = compactSignature(value.arguments ?? null)
-      return `toolCall:${callId ?? `${name}:${argsSig}:${fallbackIndex}`}`
+      return `toolCall:${callId ?? `${seqPrefix}${name}:${argsSig}:${fallbackIndex}`}`
     }
     if (value.type === 'toolResult') {
       const callId = typeof value.toolCallId === 'string' ? value.toolCallId : null
       const name = typeof value.toolName === 'string' ? value.toolName : 'tool'
       const resultSig = compactSignature(value.result ?? value.content ?? null)
-      return `toolResult:${callId ?? `${name}:${resultSig}:${fallbackIndex}`}`
+      return `toolResult:${callId ?? `${seqPrefix}${name}:${resultSig}:${fallbackIndex}`}`
     }
     return null
   }
 
   const incomingKeys = new Set<string>()
   for (let i = 0; i < incomingContent.length; i += 1) {
-    const key = getToolKey(incomingContent[i], i)
+    const key = getToolKey(incomingContent[i], i, incomingSeq)
     if (key) incomingKeys.add(key)
   }
 
   const mergedContent = [...incomingContent]
   for (let i = 0; i < existingContent.length; i += 1) {
     const part = existingContent[i]
-    const key = getToolKey(part, i)
+    const key = getToolKey(part, i, existingSeq)
     if (key && !incomingKeys.has(key)) {
       mergedContent.push(part)
     }
@@ -205,13 +210,14 @@ function getMessageStreamTurn(message: JsonValue): number | null {
   return typeof turn === 'number' ? turn : null
 }
 
-function withMessageStreamTurn(message: JsonValue, streamTurn: number): JsonValue {
+function withMessageStreamMeta(message: JsonValue, streamTurn: number, streamSeq: number): JsonValue {
   if (!message || typeof message !== 'object' || Array.isArray(message)) {
     return message
   }
   return {
     ...(message as Record<string, JsonValue>),
     __streamTurn: streamTurn,
+    __streamSeq: streamSeq,
   } as JsonValue
 }
 
@@ -413,16 +419,16 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
       const incomingId = getPiMessageId(incoming)
       const incomingRole = getPiMessageRole(incoming)
       const streamTurn = current.activeStreamTurn
-      const messageWithStreamTurn =
-        current.status === 'streaming' && streamTurn !== null ? withMessageStreamTurn(incoming, streamTurn) : incoming
+      const isStreamingMessage = current.status === 'streaming' && streamTurn !== null
+      const nextStreamEventSeq = isStreamingMessage ? current.activeStreamEventSeq + 1 : current.activeStreamEventSeq
+      const messageWithStreamTurn = isStreamingMessage ? withMessageStreamMeta(incoming, streamTurn, nextStreamEventSeq) : incoming
 
       const nextMessages =
         incomingId === null
           ? (() => {
               // Some streaming events don't carry stable ids. In that case, replace the
-              // latest streaming assistant/tool message instead of appending duplicates.
-              const shouldCoalesce =
-                current.status === 'streaming' && (incomingRole === 'assistant' || incomingRole === 'toolResult')
+              // latest streaming assistant message instead of appending duplicates.
+              const shouldCoalesce = current.status === 'streaming' && incomingRole === 'assistant'
               if (!shouldCoalesce || current.messages.length === 0) {
                 return [...current.messages, messageWithStreamTurn]
               }
@@ -447,6 +453,9 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
               if (index === -1) {
                 return [...current.messages, messageWithStreamTurn]
               }
+              if (current.status === 'streaming' && incomingRole === 'toolResult') {
+                return [...current.messages, messageWithStreamTurn]
+              }
               const existing = current.messages[index]
               const existingStreamTurn = getMessageStreamTurn(existing)
               const shouldAppendInsteadOfReplace = current.status === 'streaming' && streamTurn !== null && existingStreamTurn !== streamTurn
@@ -466,6 +475,7 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
           [action.payload.conversationId]: {
             ...current,
             messages: nextMessages,
+            activeStreamEventSeq: nextStreamEventSeq,
           },
         },
       }
@@ -595,7 +605,9 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
         conversationId,
         runtime: {
           status: nextStatus,
-          ...(nextStatus === 'ready' || nextStatus === 'error' || nextStatus === 'stopped' ? { activeStreamTurn: null } : {}),
+          ...(nextStatus === 'ready' || nextStatus === 'error' || nextStatus === 'stopped'
+            ? { activeStreamTurn: null, activeStreamEventSeq: 0 }
+            : {}),
           ...(nextStatus === 'streaming' ? { pendingUserMessage: false, pendingUserMessageText: null } : {}),
           lastError: nextStatus === 'error' ? nextMessage : null,
         },
@@ -1016,7 +1028,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         type: 'setPiRuntime',
         payload: {
           conversationId,
-          runtime: { pendingUserMessage: true, pendingUserMessageText: message, activeStreamTurn: Date.now() },
+          runtime: { pendingUserMessage: true, pendingUserMessageText: message, activeStreamTurn: Date.now(), activeStreamEventSeq: 0 },
         },
       })
 

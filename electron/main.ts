@@ -13,6 +13,9 @@ import path from "node:path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Set the app name before readiness so macOS menu uses Chaton instead of Electron.
+app.setName("Chaton");
+
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 const appIconPath = path.join(__dirname, "../build/icons/icon.png");
 
@@ -89,8 +92,6 @@ function createWindow() {
     }
   });
 }
-
-app.setName("Chaton Native");
 
 app.whenReady().then(() => {
   if (process.platform === "darwin" && app.dock) {
