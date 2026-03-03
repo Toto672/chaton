@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useTranslation } from 'react-i18next'
 
 import { PiSettingsMainPanel } from '@/components/shell/PiSettingsMainPanel'
 import { useWorkspace } from '@/features/workspace/store'
@@ -46,11 +47,24 @@ function ToolTerminal({ text, isError = false }: { text: string; isError?: boole
     node.scrollTop = node.scrollHeight
   }, [sanitizedText])
 
+  // Detect if text contains code blocks
+  const hasCodeBlock = useMemo(() => {
+    return /```[\s\S]*?```/.test(sanitizedText)
+  }, [sanitizedText])
+
   return (
     <div className={`chat-tool-terminal ${isError ? 'chat-tool-terminal-error' : ''}`}>
-      <pre ref={outputRef} className="chat-tool-code">
-        {sanitizedText}
-      </pre>
+      {hasCodeBlock ? (
+        <div className="chat-tool-markdown">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {sanitizedText}
+          </ReactMarkdown>
+        </div>
+      ) : (
+        <pre ref={outputRef} className="chat-tool-code">
+          {sanitizedText}
+        </pre>
+      )}
     </div>
   )
 }
@@ -60,13 +74,18 @@ function CollapsibleToolBlock({
   badge,
   startExpanded,
   children,
+  maxHeight = 200,
 }: {
   title: ReactNode
   badge: ReactNode
   startExpanded: boolean
   children: ReactNode
+  maxHeight?: number
 }) {
+  const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState(startExpanded)
+  const [showFullContent, setShowFullContent] = useState(false)
+  const contentRef = useRef<HTMLDivElement | null>(null)
   const prevStartExpandedRef = useRef(startExpanded)
 
   useEffect(() => {
@@ -80,6 +99,18 @@ function CollapsibleToolBlock({
     prevStartExpandedRef.current = startExpanded
   }, [startExpanded])
 
+  useEffect(() => {
+    if (isOpen && contentRef.current) {
+      const contentHeight = contentRef.current.scrollHeight
+      // Auto-expand if content is small, otherwise show toggle
+      if (contentHeight <= maxHeight) {
+        setShowFullContent(true)
+      } else {
+        setShowFullContent(false)
+      }
+    }
+  }, [isOpen, maxHeight])
+
   return (
     <section className="chat-tool-block">
       <details className="chat-tool-details" open={isOpen} onToggle={(event) => setIsOpen(event.currentTarget.open)}>
@@ -87,7 +118,25 @@ function CollapsibleToolBlock({
           <span>{title}</span>
           {badge}
         </summary>
-        <div className="chat-tool-content">{children}</div>
+        <div
+          ref={contentRef}
+          className="chat-tool-content"
+          style={{
+            maxHeight: showFullContent ? 'none' : `${maxHeight}px`,
+            overflowY: showFullContent ? 'visible' : 'auto',
+          }}
+        >
+          {children}
+        </div>
+        {!showFullContent && (
+          <button
+            type="button"
+            className="chat-tool-expand"
+            onClick={() => setShowFullContent(true)}
+          >
+            {t('Voir plus')}
+          </button>
+        )}
       </details>
     </section>
   )
@@ -253,16 +302,28 @@ export function MainView() {
   }, [selectedRuntime?.messages])
 
   const toolResultStatusByCallId = useMemo(() => {
-    const statusByCallId = new Map<string, 'success' | 'error'>()
+    const statusByCallId = new Map<string, 'success' | 'error' | 'running'>()
+    
+    // First pass: mark all toolCalls as running
     for (const message of messages) {
       const blocks = getToolBlocks(message)
       for (const block of blocks) {
-        if (block.kind !== 'toolResult' || !block.toolCallId) {
-          continue
+        if (block.kind === 'toolCall' && block.toolCallId) {
+          statusByCallId.set(block.toolCallId, 'running')
         }
-        statusByCallId.set(block.toolCallId, block.isError ? 'error' : 'success')
       }
     }
+    
+    // Second pass: update status based on toolResults
+    for (const message of messages) {
+      const blocks = getToolBlocks(message)
+      for (const block of blocks) {
+        if (block.kind === 'toolResult' && block.toolCallId) {
+          statusByCallId.set(block.toolCallId, block.isError ? 'error' : 'success')
+        }
+      }
+    }
+    
     return statusByCallId
   }, [messages])
 
@@ -319,6 +380,10 @@ export function MainView() {
             const isMarkdown = hasMarkdownSyntax(text)
             const toolBlocks = getToolBlocks(message)
             const hasToolBlocks = toolBlocks.length > 0
+            // Skip rendering toolResult messages as standalone messages
+            if (role === 'toolResult') {
+              return null
+            }
             if (!hasToolBlocks && !text) {
               return null
             }
@@ -334,8 +399,8 @@ export function MainView() {
                     <div className="chat-tool-blocks">
                       {toolBlocks.map((block, blockIndex) => {
                         if (block.kind === 'toolCall') {
-                          const callStatus = block.toolCallId ? toolResultStatusByCallId.get(block.toolCallId) : null
-                          const isRunning = !callStatus
+                          const callStatus = block.toolCallId ? toolResultStatusByCallId.get(block.toolCallId) : 'running'
+                          const isRunning = callStatus === 'running'
                           const badge =
                             callStatus === 'error' ? (
                               <span className="chat-tool-badge chat-tool-badge-error">error</span>
@@ -375,6 +440,7 @@ export function MainView() {
                               </span>
                             }
                             startExpanded={false}
+                            maxHeight={100}
                           >
                             <ToolTerminal text={block.text || '[résultat vide]'} isError={block.isError} />
                             {block.truncated ? (

@@ -1,4 +1,5 @@
 import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Sidebar } from '@/components/sidebar/Sidebar'
 import { Composer } from '@/components/shell/Composer'
@@ -17,6 +18,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function AppShell() {
+  const { t } = useTranslation()
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
   const [isResizing, setIsResizing] = useState(false)
   const resizeStartXRef = useRef(0)
@@ -78,7 +80,7 @@ function AppShell() {
           className="sidebar-resize-handle"
           role="separator"
           aria-orientation="vertical"
-          aria-label="Redimensionner la barre latérale"
+          aria-label={t('Redimensionner la barre latérale')}
           tabIndex={0}
           onPointerDown={handleSidebarResizeStart}
           onKeyDown={handleSidebarResizeKeyDown}

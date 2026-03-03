@@ -867,6 +867,16 @@ export function registerWorkspaceIpc() {
     piRuntimeManager.respondExtensionUi(conversationId, response),
   )
 
+  ipcMain.handle('settings:getLanguagePreference', () => {
+    const db = getDb()
+    return getLanguagePreference(db)
+  })
+
+  ipcMain.handle('settings:updateLanguagePreference', (_event, language: string) => {
+    const db = getDb()
+    saveLanguagePreference(db, language)
+  })
+
   ipcMain.handle('projects:importFromFolder', (_event, folderPath: string) => {
     const db = getDb()
 

@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { useWorkspace } from '@/features/workspace/store'
 
@@ -45,9 +46,11 @@ export function Topbar() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [isQueueDialogOpen])
 
+  const { t } = useTranslation()
+
   return (
     <header className="topbar">
-      <div className="topbar-title">{selectedConversation?.title ?? 'Nouveau fil'}</div>
+      <div className="topbar-title">{selectedConversation?.title ?? t('Nouveau fil')}</div>
 
       <div className="flex items-center gap-2">
         {shouldShowStatusPill ? <TopPill label={`Pi ${runtime?.status}`} /> : null}
@@ -58,7 +61,7 @@ export function Topbar() {
             className="top-pill top-pill-default"
             onClick={() => setIsQueueDialogOpen(true)}
           >
-            <span>{`Queue ${runtime?.pendingCommands ?? 0}`}</span>
+            <span>{`${t('Queue')} ${runtime?.pendingCommands ?? 0}`}</span>
           </Button>
         ) : null}
       </div>
@@ -66,23 +69,23 @@ export function Topbar() {
       {isQueueDialogOpen && runtime ? (
         <div className="extension-modal-backdrop" onClick={() => setIsQueueDialogOpen(false)}>
           <div className="extension-modal max-w-[560px]" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-            <div className="extension-modal-title">Queue Pi</div>
+            <div className="extension-modal-title">{t('Queue Pi')}</div>
             <div className="mt-3 space-y-2 text-sm text-[#2c3140]">
               <div className="flex items-center justify-between rounded-lg bg-[#f5f7fb] px-3 py-2">
-                <span>Commandes en attente</span>
+                <span>{t('Commandes en attente')}</span>
                 <strong>{runtime.pendingCommands}</strong>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-[#f5f7fb] px-3 py-2">
-                <span>Message utilisateur en attente</span>
-                <strong>{runtime.pendingUserMessage ? 'Oui' : 'Non'}</strong>
+                <span>{t('Message utilisateur en attente')}</span>
+                <strong>{runtime.pendingUserMessage ? t('Oui') : t('Non')}</strong>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-[#f5f7fb] px-3 py-2">
-                <span>État runtime</span>
+                <span>{t('État runtime')}</span>
                 <strong>{runtime.status}</strong>
               </div>
               {runtime.state ? (
                 <div className="flex items-center justify-between rounded-lg bg-[#f5f7fb] px-3 py-2">
-                  <span>Messages en attente (session Pi)</span>
+                  <span>{t('Messages en attente (session Pi)')}</span>
                   <strong>{runtime.state.pendingMessageCount}</strong>
                 </div>
               ) : null}
@@ -92,7 +95,7 @@ export function Topbar() {
             </div>
             <div className="extension-modal-actions">
               <button type="button" className="extension-modal-btn extension-modal-btn-primary" onClick={() => setIsQueueDialogOpen(false)}>
-                Fermer
+                {t('Fermer')}
               </button>
             </div>
           </div>

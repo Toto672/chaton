@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_at TEXT NOT NULL
 );
 
+INSERT OR IGNORE INTO app_settings(key, value, updated_at) VALUES ('language', 'fr', datetime('now'));
+
 CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at);
 CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(name);
 CREATE INDEX IF NOT EXISTS idx_conversations_project_id ON conversations(project_id);

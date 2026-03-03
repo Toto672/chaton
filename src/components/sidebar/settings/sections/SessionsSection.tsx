@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 export function SessionsSection({
   sessionDir,
   openSessions,
@@ -7,17 +9,19 @@ export function SessionsSection({
   openSessions: () => void
   exportSession: (session: string, output?: string) => void
 }) {
+  const { t } = useTranslation()
+  
   return (
     <section className="settings-card">
-      <div className="settings-card-note">Session dir: <span className="settings-mono">{sessionDir || '~/.pi/agent/sessions'}</span></div>
+      <div className="settings-card-note">{t('Session dir')}: <span className="settings-mono">{sessionDir || '~/.pi/agent/sessions'}</span></div>
       <div className="settings-actions-row">
-        <button type="button" className="settings-action" onClick={openSessions}>Ouvrir dossier sessions</button>
+        <button type="button" className="settings-action" onClick={openSessions}>{t('Ouvrir dossier sessions')}</button>
         <button
           type="button"
           className="settings-action"
           onClick={() => exportSession(`${sessionDir || '~/.pi/agent/sessions'}/dashboard/session.jsonl`)}
         >
-          Export HTML (exemple)
+          {t('Export HTML (exemple)')}
         </button>
       </div>
     </section>

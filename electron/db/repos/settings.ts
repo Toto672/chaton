@@ -67,3 +67,16 @@ export function saveWindowBounds(db: Database.Database, bounds: DbWindowBounds) 
      ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`
   ).run('window_bounds', JSON.stringify(bounds), now)
 }
+
+export function getLanguagePreference(db: Database.Database): string {
+  const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get('language') as { value: string } | undefined
+  return row?.value ?? 'fr'
+}
+
+export function saveLanguagePreference(db: Database.Database, language: string) {
+  const now = new Date().toISOString()
+  db.prepare(
+    `INSERT INTO app_settings(key, value, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`
+  ).run('language', language, now)
+}

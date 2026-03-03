@@ -10,7 +10,7 @@ import type {
   PiSettingsJson,
 } from './types'
 
-type SettingsSection = 'general' | 'models' | 'providers' | 'packages' | 'tools' | 'sessions' | 'commands' | 'diagnostics'
+type SettingsSection = 'general' | 'language' | 'models' | 'providers' | 'packages' | 'tools' | 'sessions' | 'commands' | 'diagnostics'
 
 type PiSettingsContextValue = {
   activeSection: SettingsSection

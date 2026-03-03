@@ -1,5 +1,6 @@
 import { FolderGit2, PencilLine, Trash2 } from 'lucide-react'
 import { type MouseEvent, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { ConversationRow } from '@/components/sidebar/ConversationRow'
 import { useWorkspace } from '@/features/workspace/store'
@@ -11,6 +12,7 @@ type ProjectGroupProps = {
 }
 
 export function ProjectGroup({ project }: ProjectGroupProps) {
+  const { t } = useTranslation()
   const { state, selectConversation, selectProject, createConversationForProject, toggleProjectCollapsed, deleteConversation, deleteProject } =
     useWorkspace()
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -89,8 +91,8 @@ export function ProjectGroup({ project }: ProjectGroupProps) {
         <button
           type="button"
           className={`project-action-button ${confirmDelete ? 'project-action-button-confirm' : ''}`}
-          aria-label={confirmDelete ? `Confirmer la suppression de ${project.name}` : `Supprimer ${project.name}`}
-          title={confirmDelete ? 'Cliquer à nouveau pour supprimer' : 'Supprimer le projet'}
+          aria-label={confirmDelete ? t('Confirmer la suppression de {{name}}', { name: project.name }) : t('Supprimer {{name}}', { name: project.name })}
+          title={confirmDelete ? t('Cliquer à nouveau pour supprimer') : t('Supprimer le projet')}
           onClick={(event) => {
             void onDeleteClick(event)
           }}

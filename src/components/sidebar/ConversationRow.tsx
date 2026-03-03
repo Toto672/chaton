@@ -1,5 +1,6 @@
 import { Trash2 } from 'lucide-react'
 import { type MouseEvent, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type { Conversation } from '@/features/workspace/types'
 
@@ -13,6 +14,7 @@ type ConversationRowProps = {
 const CONFIRM_WINDOW_MS = 2000
 
 export function ConversationRow({ conversation, isActive, onSelect, onDelete }: ConversationRowProps) {
+  const { t } = useTranslation()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const resetTimerRef = useRef<number | null>(null)
 
@@ -82,8 +84,8 @@ export function ConversationRow({ conversation, isActive, onSelect, onDelete }: 
           onClick={(event) => {
             void onDeleteClick(event)
           }}
-          aria-label={confirmDelete ? `Confirmer la suppression de ${conversation.title}` : `Supprimer ${conversation.title}`}
-          title={confirmDelete ? 'Cliquer à nouveau pour supprimer' : 'Supprimer le fil'}
+          aria-label={confirmDelete ? t('Confirmer la suppression de {{title}}', { title: conversation.title }) : t('Supprimer {{title}}', { title: conversation.title })}
+          title={confirmDelete ? t('Cliquer à nouveau pour supprimer') : t('Supprimer le fil')}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>

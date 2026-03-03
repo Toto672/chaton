@@ -1,4 +1,5 @@
 import type { PiSettingsJson } from '@/features/workspace/types'
+import { useTranslation } from 'react-i18next'
 
 export function PackagesSection({
   settings,
@@ -9,6 +10,7 @@ export function PackagesSection({
   setSettings: (next: PiSettingsJson) => void
   onSave: () => void
 }) {
+  const { t } = useTranslation()
   const packages = Array.isArray(settings.packages) ? settings.packages : []
   return (
     <section className="settings-card">
@@ -24,7 +26,7 @@ export function PackagesSection({
                 setSettings({ ...settings, packages: next })
               }}
             >
-              Supprimer
+              {t('Supprimer')}
             </button>
           </div>
         ))}

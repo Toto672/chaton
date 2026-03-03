@@ -17,6 +17,10 @@ import type {
   RpcResponse,
 } from '@/features/workspace/rpc'
 
+function getApi() {
+  return window.dashboard
+}
+
 type ImportProjectResult =
   | { ok: true; duplicate: boolean; project: Project }
   | { ok: false; reason: 'not_git_repo' | 'unknown' }
@@ -92,6 +96,8 @@ export const workspaceIpc = {
   onConversationUpdated: (
     listener: (payload: { conversationId: string; title: string; updatedAt: string }) => void,
   ): (() => void) => getApi().onConversationUpdated(listener),
+  getLanguagePreference: (): Promise<string> => getApi().getLanguagePreference(),
+  updateLanguagePreference: (language: string): Promise<void> => getApi().updateLanguagePreference(language),
 }
 
 export type { ImportProjectResult, WorkspacePayload }

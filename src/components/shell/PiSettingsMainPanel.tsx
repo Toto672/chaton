@@ -1,8 +1,10 @@
 import { useMemo } from 'react'
+import i18n from '@/lib/i18n'
 
 import { CommandsSection } from '@/components/sidebar/settings/sections/CommandsSection'
 import { DiagnosticsSection } from '@/components/sidebar/settings/sections/DiagnosticsSection'
 import { GeneralSection } from '@/components/sidebar/settings/sections/GeneralSection'
+import { LanguageSection } from '@/components/sidebar/settings/sections/LanguageSection'
 import { ModelsSection } from '@/components/sidebar/settings/sections/ModelsSection'
 import { PackagesSection } from '@/components/sidebar/settings/sections/PackagesSection'
 import { ProvidersSection } from '@/components/sidebar/settings/sections/ProvidersSection'
@@ -53,11 +55,22 @@ export function PiSettingsMainPanel() {
     await refresh()
   }
 
+  const handleLanguageChange = async (language: string) => {
+    await i18n.changeLanguage(language)
+    await workspaceIpc.updateLanguagePreference(language)
+  }
+
   return (
     <div className="main-scroll">
       <section className="chat-section settings-main-wrap">
         {activeSection === 'general' ? (
           <GeneralSection settings={settingsJson} models={models} setSettings={setSettingsJson} onSave={handleSaveSettings} />
+        ) : null}
+        {activeSection === 'language' ? (
+          <LanguageSection 
+            currentLanguage={i18n.language}
+            setLanguage={handleLanguageChange}
+          />
         ) : null}
         {activeSection === 'models' ? (
           <ModelsSection

@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { getDb } from './db/index.js'
-import { getWindowBounds, saveWindowBounds } from './db/repos/settings.js'
+import { getWindowBounds, saveWindowBounds, getLanguagePreference } from './db/repos/settings.js'
 import { registerWorkspaceIpc, stopPiRuntimes } from './ipc/workspace.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -14,6 +14,7 @@ const isDev = Boolean(process.env.VITE_DEV_SERVER_URL)
 function createWindow() {
   const db = getDb()
   const initialBounds = getWindowBounds(db)
+  const languagePreference = getLanguagePreference(db)
 
   const win = new BrowserWindow({
     x: initialBounds.x,
@@ -36,10 +37,10 @@ function createWindow() {
   })
 
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
-    win.loadURL(process.env.VITE_DEV_SERVER_URL)
+    win.loadURL(`${process.env.VITE_DEV_SERVER_URL}?language=${languagePreference}`)
     win.webContents.openDevTools({ mode: 'detach' })
   } else {
-    win.loadFile(path.join(__dirname, '../dist/index.html'))
+    win.loadFile(path.join(__dirname, '../dist/index.html'), { query: { language: languagePreference } })
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {

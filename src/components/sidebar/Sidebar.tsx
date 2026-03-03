@@ -6,8 +6,10 @@ import { SidebarHeaderActions } from '@/components/sidebar/SidebarHeaderActions'
 import { ProjectGroup } from '@/components/sidebar/ProjectGroup'
 import { useWorkspace } from '@/features/workspace/store'
 import { selectVisibleConversations } from '@/features/workspace/selectors'
+import { useTranslation } from 'react-i18next'
 
 export function Sidebar({ width }: { width: number }) {
+  const { t } = useTranslation()
   const { state, selectConversation, setSearchQuery, deleteConversation, openSettings } = useWorkspace()
 
   const visibleConversations = selectVisibleConversations(state.conversations, state.settings)
@@ -22,25 +24,25 @@ export function Sidebar({ width }: { width: number }) {
 
   return (
     <aside className="sidebar-panel" style={{ width: `${width}px` }}>
-      <nav className="sidebar-nav pt-4" aria-label="Navigation principale">
+      <nav className="sidebar-nav pt-4" aria-label={t('Navigation principale')}>
         <button type="button" className="sidebar-item">
           <Gauge className="h-4 w-4 text-[#66676f]" />
-          Automatisations
+          {t('Automatisations')}
         </button>
         <button type="button" className="sidebar-item">
           <Workflow className="h-4 w-4 text-[#66676f]" />
-          Compétences
+          {t('Compétences')}
         </button>
       </nav>
 
       <div className="sidebar-section-head">
-        <span className="sidebar-section-title">Fils</span>
+        <span className="sidebar-section-title">{t('Fils')}</span>
         <SidebarHeaderActions />
       </div>
 
       <div className="px-3 pb-2">
         <label htmlFor="sidebar-search" className="sr-only">
-          Rechercher un fil
+          {t('Rechercher un fil')}
         </label>
         <div className="sidebar-search-wrap">
           <Search className="h-4 w-4 text-[#8d8e95]" />
@@ -51,14 +53,14 @@ export function Sidebar({ width }: { width: number }) {
             onChange={(event) => {
               void setSearchQuery(event.target.value)
             }}
-            placeholder="Filtrer les fils"
+            placeholder={t('Filtrer les fils')}
           />
         </div>
       </div>
 
       <div className="sidebar-scroll">
         {state.settings.organizeBy === 'chronological' ? (
-          <section aria-label="Liste chronologique" role="list" className="sidebar-thread-list">
+          <section aria-label={t('Liste chronologique')} role="list" className="sidebar-thread-list">
             {visibleConversations.map((conversation) => (
               <ConversationRow
                 key={conversation.id}
@@ -77,7 +79,7 @@ export function Sidebar({ width }: { width: number }) {
       <div className="border-t border-[#dcdddf] px-3 py-3">
         <button type="button" className="sidebar-item text-[#45464d]" onClick={openSettings}>
           <Settings className="h-4 w-4" />
-          Paramètres
+          {t('Paramètres')}
         </button>
       </div>
     </aside>
