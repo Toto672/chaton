@@ -331,7 +331,7 @@ function computeThreadDeltaFiles(
   baselineByPath: ModifiedFileStatByPath | null,
 ): ModifiedFileStat[] {
   if (!baselineByPath) {
-    return [];
+    return currentFiles.sort((a, b) => a.path.localeCompare(b.path));
   }
 
   const currentByPath = toStatByPath(currentFiles);

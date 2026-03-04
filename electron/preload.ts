@@ -13,6 +13,13 @@ contextBridge.exposeInMainWorld('chaton', {
   getGitDiffSummary: (conversationId: string) => ipcRenderer.invoke('workspace:getGitDiffSummary', conversationId),
   getGitFileDiff: (conversationId: string, filePath: string) =>
     ipcRenderer.invoke('workspace:getGitFileDiff', conversationId, filePath),
+  getWorktreeGitInfo: (conversationId: string) => ipcRenderer.invoke('workspace:getWorktreeGitInfo', conversationId),
+  generateWorktreeCommitMessage: (conversationId: string) =>
+    ipcRenderer.invoke('workspace:generateWorktreeCommitMessage', conversationId),
+  commitWorktree: (conversationId: string, message: string) =>
+    ipcRenderer.invoke('workspace:commitWorktree', conversationId, message),
+  mergeWorktreeIntoMain: (conversationId: string) => ipcRenderer.invoke('workspace:mergeWorktreeIntoMain', conversationId),
+  pushWorktreeBranch: (conversationId: string) => ipcRenderer.invoke('workspace:pushWorktreeBranch', conversationId),
   updateSettings: (settings: unknown) => ipcRenderer.invoke('workspace:updateSettings', settings),
   createConversationForProject: (
     projectId: string,

@@ -564,6 +564,49 @@ type WorkspaceContextValue = {
   getPiDiagnostics: () => Promise<PiDiagnostics>
   openPiPath: (target: 'settings' | 'models' | 'sessions') => Promise<{ ok: boolean; message?: string }>
   exportPiSessionHtml: (sessionFile: string, outputFile?: string) => Promise<PiCommandResult>
+  getWorktreeGitInfo: (
+    conversationId: string,
+  ) => Promise<
+    | {
+        ok: true
+        worktreePath: string
+        branch: string
+        baseBranch: string
+        hasChanges: boolean
+        hasStagedChanges: boolean
+        hasUncommittedChanges: boolean
+        ahead: number
+        behind: number
+        isMergedIntoBase: boolean
+        isPushedToUpstream: boolean
+      }
+    | { ok: false; reason: 'conversation_not_found' | 'worktree_not_found' | 'git_not_available' | 'unknown'; message?: string }
+  >
+  generateWorktreeCommitMessage: (
+    conversationId: string,
+  ) => Promise<
+    | { ok: true; message: string }
+    | { ok: false; reason: 'conversation_not_found' | 'worktree_not_found' | 'no_changes' | 'git_not_available' | 'unknown'; message?: string }
+  >
+  commitWorktree: (
+    conversationId: string,
+    message: string,
+  ) => Promise<
+    | { ok: true; commit: string; message: string }
+    | { ok: false; reason: 'conversation_not_found' | 'worktree_not_found' | 'empty_message' | 'no_changes' | 'git_not_available' | 'unknown'; message?: string }
+  >
+  mergeWorktreeIntoMain: (
+    conversationId: string,
+  ) => Promise<
+    | { ok: true; merged: boolean; message: string }
+    | { ok: false; reason: 'conversation_not_found' | 'project_not_found' | 'worktree_not_found' | 'already_merged' | 'git_not_available' | 'unknown'; message?: string }
+  >
+  pushWorktreeBranch: (
+    conversationId: string,
+  ) => Promise<
+    | { ok: true; branch: string; remote: string }
+    | { ok: false; reason: 'conversation_not_found' | 'worktree_not_found' | 'git_not_available' | 'unknown'; message?: string }
+  >
   setNotice: (notice: string | null) => void
 }
 
@@ -1311,6 +1354,11 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       getPiDiagnostics: () => workspaceIpc.getPiDiagnostics(),
       openPiPath: (target: 'settings' | 'models' | 'sessions') => workspaceIpc.openPath(target),
       exportPiSessionHtml: (sessionFile: string, outputFile?: string) => workspaceIpc.exportPiSessionHtml(sessionFile, outputFile),
+      getWorktreeGitInfo: (conversationId: string) => workspaceIpc.getWorktreeGitInfo(conversationId),
+      generateWorktreeCommitMessage: (conversationId: string) => workspaceIpc.generateWorktreeCommitMessage(conversationId),
+      commitWorktree: (conversationId: string, message: string) => workspaceIpc.commitWorktree(conversationId, message),
+      mergeWorktreeIntoMain: (conversationId: string) => workspaceIpc.mergeWorktreeIntoMain(conversationId),
+      pushWorktreeBranch: (conversationId: string) => workspaceIpc.pushWorktreeBranch(conversationId),
       setNotice: (notice: string | null) => dispatch({ type: 'setNotice', payload: { notice } }),
     }),
     [

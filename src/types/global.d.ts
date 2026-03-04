@@ -44,6 +44,81 @@ declare global {
             message?: string
           }
       >
+      getWorktreeGitInfo: (
+        conversationId: string,
+      ) => Promise<
+        | {
+            ok: true
+            worktreePath: string
+            branch: string
+            baseBranch: string
+            hasChanges: boolean
+            hasStagedChanges: boolean
+            hasUncommittedChanges: boolean
+            ahead: number
+            behind: number
+            isMergedIntoBase: boolean
+            isPushedToUpstream: boolean
+          }
+        | {
+            ok: false
+            reason: 'conversation_not_found' | 'worktree_not_found' | 'git_not_available' | 'unknown'
+            message?: string
+          }
+      >
+      generateWorktreeCommitMessage: (
+        conversationId: string,
+      ) => Promise<
+        | { ok: true; message: string }
+        | {
+            ok: false
+            reason: 'conversation_not_found' | 'worktree_not_found' | 'no_changes' | 'git_not_available' | 'unknown'
+            message?: string
+          }
+      >
+      commitWorktree: (
+        conversationId: string,
+        message: string,
+      ) => Promise<
+        | { ok: true; commit: string; message: string }
+        | {
+            ok: false
+            reason:
+              | 'conversation_not_found'
+              | 'worktree_not_found'
+              | 'empty_message'
+              | 'no_changes'
+              | 'git_not_available'
+              | 'unknown'
+            message?: string
+          }
+      >
+      mergeWorktreeIntoMain: (
+        conversationId: string,
+      ) => Promise<
+        | { ok: true; merged: boolean; message: string }
+        | {
+            ok: false
+            reason:
+              | 'conversation_not_found'
+              | 'project_not_found'
+              | 'worktree_not_found'
+              | 'already_merged'
+              | 'git_not_available'
+              | 'unknown'
+            message?: string
+          }
+      >
+      pushWorktreeBranch: (
+        conversationId: string,
+      ) => Promise<
+        | { ok: true; branch: string; remote: string }
+        | {
+            ok: false
+            reason: 'conversation_not_found' | 'worktree_not_found' | 'git_not_available' | 'unknown'
+            message?: string
+          }
+      >
       updateSettings: (settings: SidebarSettings) => Promise<SidebarSettings>
       createConversationForProject: (
         projectId: string,

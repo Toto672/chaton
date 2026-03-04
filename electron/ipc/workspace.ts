@@ -83,6 +83,7 @@ type WorkspacePayload = {
     modelId: string | null
     thinkingLevel: string | null
     lastRuntimeError: string | null
+    worktreePath: string | null
   }>
   settings: DbSidebarSettings
 }
@@ -155,8 +156,41 @@ function mapConversation(c: DbConversation) {
     modelId: c.model_id,
     thinkingLevel: c.thinking_level,
     lastRuntimeError: c.last_runtime_error,
+    worktreePath: c.worktree_path,
   }
 }
+
+type WorktreeGitInfoResult =
+  | {
+      ok: true
+      worktreePath: string
+      branch: string
+      baseBranch: string
+      hasChanges: boolean
+      hasStagedChanges: boolean
+      hasUncommittedChanges: boolean
+      ahead: number
+      behind: number
+      isMergedIntoBase: boolean
+      isPushedToUpstream: boolean
+    }
+  | { ok: false; reason: 'conversation_not_found' | 'worktree_not_found' | 'git_not_available' | 'unknown'; message?: string }
+
+type WorktreeGenerateCommitMessageResult =
+  | { ok: true; message: string }
+  | { ok: false; reason: 'conversation_not_found' | 'worktree_not_found' | 'no_changes' | 'git_not_available' | 'unknown'; message?: string }
+
+type WorktreeCommitResult =
+  | { ok: true; commit: string; message: string }
+  | { ok: false; reason: 'conversation_not_found' | 'worktree_not_found' | 'empty_message' | 'no_changes' | 'git_not_available' | 'unknown'; message?: string }
+
+type WorktreeMergeResult =
+  | { ok: true; merged: boolean; message: string }
+  | { ok: false; reason: 'conversation_not_found' | 'project_not_found' | 'worktree_not_found' | 'already_merged' | 'git_not_available' | 'unknown'; message?: string }
+
+type WorktreePushResult =
+  | { ok: true; branch: string; remote: string }
+  | { ok: false; reason: 'conversation_not_found' | 'worktree_not_found' | 'git_not_available' | 'unknown'; message?: string }
 
 function toWorkspacePayload(): WorkspacePayload {
   const db = getDb()
@@ -269,6 +303,329 @@ function resolveConversationRepoPath(conversationId: string): { ok: true; repoPa
     return { ok: false, reason: 'not_git_repo' }
   }
   return { ok: true, repoPath: project.repo_path }
+}
+
+function getConversationAndProject(conversationId: string): {
+  conversation: DbConversation | null
+  projectRepoPath: string | null
+} {
+  const db = getDb()
+  const conversation = findConversationById(db, conversationId) ?? null
+  if (!conversation) {
+    return { conversation: null, projectRepoPath: null }
+  }
+  const project = listProjects(db).find((item) => item.id === conversation.project_id)
+  return {
+    conversation,
+    projectRepoPath: project?.repo_path ?? null,
+  }
+}
+
+async function getCurrentBranch(repoPath: string): Promise<string> {
+  const { stdout } = await execFileAsync('git', ['-C', repoPath, 'rev-parse', '--abbrev-ref', 'HEAD'], {
+    timeout: 10_000,
+    maxBuffer: 512 * 1024,
+    env: buildPiEnv(),
+  })
+  return (stdout ?? '').trim()
+}
+
+async function hasWorkingTreeChanges(repoPath: string): Promise<boolean> {
+  try {
+    await execFileAsync('git', ['-C', repoPath, 'diff', '--quiet'], {
+      timeout: 10_000,
+      maxBuffer: 512 * 1024,
+      env: buildPiEnv(),
+    })
+    await execFileAsync('git', ['-C', repoPath, 'diff', '--cached', '--quiet'], {
+      timeout: 10_000,
+      maxBuffer: 512 * 1024,
+      env: buildPiEnv(),
+    })
+    const { stdout } = await execFileAsync('git', ['-C', repoPath, 'status', '--porcelain', '--untracked-files=all'], {
+      timeout: 10_000,
+      maxBuffer: 512 * 1024,
+      env: buildPiEnv(),
+    })
+    return (stdout ?? '').trim().length > 0
+  } catch {
+    return true
+  }
+}
+
+async function hasStagedChanges(repoPath: string): Promise<boolean> {
+  try {
+    await execFileAsync('git', ['-C', repoPath, 'diff', '--cached', '--quiet'], {
+      timeout: 10_000,
+      maxBuffer: 512 * 1024,
+      env: buildPiEnv(),
+    })
+    return false
+  } catch {
+    return true
+  }
+}
+
+async function getAheadBehind(repoPath: string, baseRef: string, headRef: string): Promise<{ ahead: number; behind: number }> {
+  const { stdout } = await execFileAsync('git', ['-C', repoPath, 'rev-list', '--left-right', '--count', `${baseRef}...${headRef}`], {
+    timeout: 10_000,
+    maxBuffer: 512 * 1024,
+    env: buildPiEnv(),
+  })
+  const [behindRaw, aheadRaw] = (stdout ?? '').trim().split(/\s+/)
+  const behind = Number.parseInt(behindRaw ?? '0', 10)
+  const ahead = Number.parseInt(aheadRaw ?? '0', 10)
+  return {
+    ahead: Number.isFinite(ahead) ? ahead : 0,
+    behind: Number.isFinite(behind) ? behind : 0,
+  }
+}
+
+async function isMerged(baseRepoPath: string, sourceRef: string, targetRef: string): Promise<boolean> {
+  try {
+    await execFileAsync('git', ['-C', baseRepoPath, 'merge-base', '--is-ancestor', sourceRef, targetRef], {
+      timeout: 10_000,
+      maxBuffer: 512 * 1024,
+      env: buildPiEnv(),
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function getUpstreamBranch(repoPath: string, branch: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync('git', ['-C', repoPath, 'rev-parse', '--abbrev-ref', `${branch}@{upstream}`], {
+      timeout: 10_000,
+      maxBuffer: 512 * 1024,
+      env: buildPiEnv(),
+    })
+    const value = (stdout ?? '').trim()
+    return value.length > 0 ? value : null
+  } catch {
+    return null
+  }
+}
+
+async function getWorktreeGitInfo(conversationId: string): Promise<WorktreeGitInfoResult> {
+  const { conversation, projectRepoPath } = getConversationAndProject(conversationId)
+  if (!conversation) {
+    return { ok: false, reason: 'conversation_not_found' }
+  }
+  if (!conversation.worktree_path || !isGitRepo(conversation.worktree_path)) {
+    return { ok: false, reason: 'worktree_not_found' }
+  }
+
+  const worktreePath = conversation.worktree_path
+  const baseRepoPath = projectRepoPath ?? worktreePath
+  const baseBranch = 'main'
+  try {
+    await execFileAsync('git', ['-C', worktreePath, 'fetch', 'origin', baseBranch], {
+      timeout: 20_000,
+      maxBuffer: 1024 * 1024,
+      env: buildPiEnv(),
+    }).catch(() => undefined)
+    const branch = await getCurrentBranch(worktreePath)
+    const hasChanges = await hasWorkingTreeChanges(worktreePath)
+    const hasStaged = await hasStagedChanges(worktreePath)
+    const aheadBehind = await getAheadBehind(worktreePath, `origin/${baseBranch}`, 'HEAD').catch(() => ({ ahead: 0, behind: 0 }))
+    const merged = await isMerged(baseRepoPath, 'HEAD', `origin/${baseBranch}`)
+    const upstream = await getUpstreamBranch(worktreePath, branch)
+    const pushed = upstream ? await isMerged(worktreePath, 'HEAD', upstream) : false
+
+    return {
+      ok: true,
+      worktreePath,
+      branch,
+      baseBranch,
+      hasChanges,
+      hasStagedChanges: hasStaged,
+      hasUncommittedChanges: hasChanges,
+      ahead: aheadBehind.ahead,
+      behind: aheadBehind.behind,
+      isMergedIntoBase: merged,
+      isPushedToUpstream: pushed,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.toLowerCase().includes('enoent')) {
+      return { ok: false, reason: 'git_not_available', message }
+    }
+    return { ok: false, reason: 'unknown', message }
+  }
+}
+
+function summarizeGitDiffForCommit(diffText: string): string {
+  const lines = (diffText ?? '').split('\n').filter((line) => line.trim().length > 0)
+  const fileNames = lines
+    .map((line) => {
+      const parts = line.split('\t')
+      return parts[2]?.trim() ?? ''
+    })
+    .filter((file) => file.length > 0)
+  if (fileNames.length === 0) {
+    return 'chore: update thread changes'
+  }
+  const first = fileNames[0]
+  if (fileNames.length === 1) {
+    return `chore: update ${first}`
+  }
+  return `chore: update ${first} and ${fileNames.length - 1} other file${fileNames.length - 1 > 1 ? 's' : ''}`
+}
+
+async function generateWorktreeCommitMessage(conversationId: string): Promise<WorktreeGenerateCommitMessageResult> {
+  const { conversation } = getConversationAndProject(conversationId)
+  if (!conversation) {
+    return { ok: false, reason: 'conversation_not_found' }
+  }
+  if (!conversation.worktree_path || !isGitRepo(conversation.worktree_path)) {
+    return { ok: false, reason: 'worktree_not_found' }
+  }
+  try {
+    const { stdout } = await execFileAsync('git', ['-C', conversation.worktree_path, 'diff', '--numstat', '--'], {
+      timeout: 10_000,
+      maxBuffer: 1024 * 1024,
+      env: buildPiEnv(),
+    })
+    const { stdout: statusStdout } = await execFileAsync('git', ['-C', conversation.worktree_path, 'status', '--porcelain', '--untracked-files=all'], {
+      timeout: 10_000,
+      maxBuffer: 1024 * 1024,
+      env: buildPiEnv(),
+    })
+    if (!(stdout ?? '').trim() && !(statusStdout ?? '').trim()) {
+      return { ok: false, reason: 'no_changes' }
+    }
+    return { ok: true, message: summarizeGitDiffForCommit(stdout ?? '') }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.toLowerCase().includes('enoent')) {
+      return { ok: false, reason: 'git_not_available', message }
+    }
+    return { ok: false, reason: 'unknown', message }
+  }
+}
+
+async function commitWorktree(conversationId: string, message: string): Promise<WorktreeCommitResult> {
+  const trimmedMessage = (message ?? '').trim()
+  if (!trimmedMessage) {
+    return { ok: false, reason: 'empty_message' }
+  }
+  const { conversation } = getConversationAndProject(conversationId)
+  if (!conversation) {
+    return { ok: false, reason: 'conversation_not_found' }
+  }
+  if (!conversation.worktree_path || !isGitRepo(conversation.worktree_path)) {
+    return { ok: false, reason: 'worktree_not_found' }
+  }
+  const worktreePath = conversation.worktree_path
+  try {
+    const { stdout } = await execFileAsync('git', ['-C', worktreePath, 'status', '--porcelain', '--untracked-files=all'], {
+      timeout: 10_000,
+      maxBuffer: 1024 * 1024,
+      env: buildPiEnv(),
+    })
+    if (!(stdout ?? '').trim()) {
+      return { ok: false, reason: 'no_changes' }
+    }
+    await execFileAsync('git', ['-C', worktreePath, 'add', '-A'], {
+      timeout: 20_000,
+      maxBuffer: 1024 * 1024,
+      env: buildPiEnv(),
+    })
+    await execFileAsync('git', ['-C', worktreePath, 'commit', '-m', trimmedMessage], {
+      timeout: 20_000,
+      maxBuffer: 2 * 1024 * 1024,
+      env: buildPiEnv(),
+    })
+    const { stdout: hashStdout } = await execFileAsync('git', ['-C', worktreePath, 'rev-parse', '--short', 'HEAD'], {
+      timeout: 10_000,
+      maxBuffer: 512 * 1024,
+      env: buildPiEnv(),
+    })
+    return { ok: true, commit: (hashStdout ?? '').trim(), message: trimmedMessage }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    if (msg.toLowerCase().includes('nothing to commit')) {
+      return { ok: false, reason: 'no_changes' }
+    }
+    if (msg.toLowerCase().includes('enoent')) {
+      return { ok: false, reason: 'git_not_available', message: msg }
+    }
+    return { ok: false, reason: 'unknown', message: msg }
+  }
+}
+
+async function mergeWorktreeIntoMain(conversationId: string): Promise<WorktreeMergeResult> {
+  const { conversation, projectRepoPath } = getConversationAndProject(conversationId)
+  if (!conversation) {
+    return { ok: false, reason: 'conversation_not_found' }
+  }
+  if (!projectRepoPath || !isGitRepo(projectRepoPath)) {
+    return { ok: false, reason: 'project_not_found' }
+  }
+  if (!conversation.worktree_path || !isGitRepo(conversation.worktree_path)) {
+    return { ok: false, reason: 'worktree_not_found' }
+  }
+  const baseBranch = 'main'
+  const sourceBranch = await getCurrentBranch(conversation.worktree_path).catch(() => 'HEAD')
+  const alreadyMerged = await isMerged(projectRepoPath, sourceBranch, `origin/${baseBranch}`).catch(() => false)
+  if (alreadyMerged) {
+    return { ok: false, reason: 'already_merged' }
+  }
+  try {
+    await execFileAsync('git', ['-C', projectRepoPath, 'fetch', 'origin', baseBranch], {
+      timeout: 20_000,
+      maxBuffer: 1024 * 1024,
+      env: buildPiEnv(),
+    }).catch(() => undefined)
+    await execFileAsync('git', ['-C', projectRepoPath, 'checkout', baseBranch], {
+      timeout: 20_000,
+      maxBuffer: 1024 * 1024,
+      env: buildPiEnv(),
+    })
+    await execFileAsync('git', ['-C', projectRepoPath, 'merge', '--no-ff', sourceBranch], {
+      timeout: 30_000,
+      maxBuffer: 4 * 1024 * 1024,
+      env: buildPiEnv(),
+    })
+    return { ok: true, merged: true, message: `Branche ${sourceBranch} fusionnée dans ${baseBranch}.` }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.toLowerCase().includes('already up to date')) {
+      return { ok: true, merged: false, message: 'Déjà à jour.' }
+    }
+    if (message.toLowerCase().includes('enoent')) {
+      return { ok: false, reason: 'git_not_available', message }
+    }
+    return { ok: false, reason: 'unknown', message }
+  }
+}
+
+async function pushWorktreeBranch(conversationId: string): Promise<WorktreePushResult> {
+  const { conversation } = getConversationAndProject(conversationId)
+  if (!conversation) {
+    return { ok: false, reason: 'conversation_not_found' }
+  }
+  if (!conversation.worktree_path || !isGitRepo(conversation.worktree_path)) {
+    return { ok: false, reason: 'worktree_not_found' }
+  }
+  const branch = await getCurrentBranch(conversation.worktree_path).catch(() => 'HEAD')
+  const remote = 'origin'
+  try {
+    await execFileAsync('git', ['-C', conversation.worktree_path, 'push', '-u', remote, branch], {
+      timeout: 45_000,
+      maxBuffer: 4 * 1024 * 1024,
+      env: buildPiEnv(),
+    })
+    return { ok: true, branch, remote }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.toLowerCase().includes('enoent')) {
+      return { ok: false, reason: 'git_not_available', message }
+    }
+    return { ok: false, reason: 'unknown', message }
+  }
 }
 
 function parseEnabledScopedModels(): Set<string> {
@@ -1028,6 +1385,15 @@ export function registerWorkspaceIpc() {
   ipcMain.handle('workspace:getGitFileDiff', (_event, conversationId: string, filePath: string) =>
     getGitFileDiffForConversation(conversationId, filePath),
   )
+  ipcMain.handle('workspace:getWorktreeGitInfo', (_event, conversationId: string) => getWorktreeGitInfo(conversationId))
+  ipcMain.handle('workspace:generateWorktreeCommitMessage', (_event, conversationId: string) =>
+    generateWorktreeCommitMessage(conversationId),
+  )
+  ipcMain.handle('workspace:commitWorktree', (_event, conversationId: string, message: string) =>
+    commitWorktree(conversationId, message),
+  )
+  ipcMain.handle('workspace:mergeWorktreeIntoMain', (_event, conversationId: string) => mergeWorktreeIntoMain(conversationId))
+  ipcMain.handle('workspace:pushWorktreeBranch', (_event, conversationId: string) => pushWorktreeBranch(conversationId))
 
   ipcMain.handle('workspace:updateSettings', (_event, settings: DbSidebarSettings) => {
     const db = getDb()

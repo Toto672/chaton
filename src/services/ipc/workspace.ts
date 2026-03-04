@@ -41,12 +41,57 @@ type SetPiModelScopedResult =
   | { ok: true; models: PiModel[] }
   | { ok: false; reason: 'pi_not_available' | 'invalid_model' | 'unknown'; message?: string }
 type PiCommandParams = { search?: string; source?: string; local?: boolean }
+type WorktreeGitInfoResult =
+  | {
+      ok: true
+      worktreePath: string
+      branch: string
+      baseBranch: string
+      hasChanges: boolean
+      hasStagedChanges: boolean
+      hasUncommittedChanges: boolean
+      ahead: number
+      behind: number
+      isMergedIntoBase: boolean
+      isPushedToUpstream: boolean
+    }
+  | {
+      ok: false
+      reason: 'conversation_not_found' | 'worktree_not_found' | 'git_not_available' | 'unknown'
+      message?: string
+    }
 
 
 export const workspaceIpc = {
   getInitialState: () => window.chaton.getInitialState(),
   getGitDiffSummary: (conversationId: string) => getApi().getGitDiffSummary(conversationId),
   getGitFileDiff: (conversationId: string, filePath: string) => getApi().getGitFileDiff(conversationId, filePath),
+  getWorktreeGitInfo: (conversationId: string): Promise<WorktreeGitInfoResult> => getApi().getWorktreeGitInfo(conversationId),
+  generateWorktreeCommitMessage: (
+    conversationId: string,
+  ): Promise<
+    | { ok: true; message: string }
+    | { ok: false; reason: 'conversation_not_found' | 'worktree_not_found' | 'no_changes' | 'git_not_available' | 'unknown'; message?: string }
+  > => getApi().generateWorktreeCommitMessage(conversationId),
+  commitWorktree: (
+    conversationId: string,
+    message: string,
+  ): Promise<
+    | { ok: true; commit: string; message: string }
+    | { ok: false; reason: 'conversation_not_found' | 'worktree_not_found' | 'empty_message' | 'no_changes' | 'git_not_available' | 'unknown'; message?: string }
+  > => getApi().commitWorktree(conversationId, message),
+  mergeWorktreeIntoMain: (
+    conversationId: string,
+  ): Promise<
+    | { ok: true; merged: boolean; message: string }
+    | { ok: false; reason: 'conversation_not_found' | 'project_not_found' | 'worktree_not_found' | 'already_merged' | 'git_not_available' | 'unknown'; message?: string }
+  > => getApi().mergeWorktreeIntoMain(conversationId),
+  pushWorktreeBranch: (
+    conversationId: string,
+  ): Promise<
+    | { ok: true; branch: string; remote: string }
+    | { ok: false; reason: 'conversation_not_found' | 'worktree_not_found' | 'git_not_available' | 'unknown'; message?: string }
+  > => getApi().pushWorktreeBranch(conversationId),
   pickProjectFolder: () => getApi().pickProjectFolder(),
   importProjectFromFolder: (folderPath: string) => getApi().importProjectFromFolder(folderPath),
   deleteProject: (projectId: string): Promise<DeleteProjectResult> => getApi().deleteProject(projectId),

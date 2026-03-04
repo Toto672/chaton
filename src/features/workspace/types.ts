@@ -25,6 +25,7 @@ export type Conversation = {
   modelId: string | null
   thinkingLevel: string | null
   lastRuntimeError: string | null
+  worktreePath: string | null
 }
 
 export type CreateConversationResult =
