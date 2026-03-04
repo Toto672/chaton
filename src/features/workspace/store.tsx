@@ -179,6 +179,44 @@ function extractPiMessageText(value: JsonValue): string {
   return ''
 }
 
+const UPSTREAM_NO_OUTPUT_RETRY_TEXT = '[upstream returned no assistant output; please retry]'
+const UPSTREAM_NO_OUTPUT_MAX_RETRIES = 5
+
+function isUpstreamNoOutputRetryMessage(message: JsonValue): boolean {
+  if (getPiMessageRole(message) !== 'assistant') {
+    return false
+  }
+  return extractPiMessageText(message).trim().toLowerCase() === UPSTREAM_NO_OUTPUT_RETRY_TEXT
+}
+
+function isPlainRecord(value: JsonValue | undefined): value is Record<string, JsonValue> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isEmptyRecord(value: JsonValue | undefined): boolean {
+  return isPlainRecord(value) && Object.keys(value).length === 0
+}
+
+function mergeToolCallArgs(existing: JsonValue, incoming: JsonValue): JsonValue {
+  if (!isPlainRecord(existing) || !isPlainRecord(incoming)) return incoming
+  const existingContent = existing.content
+  const incomingContent = incoming.content
+  if (!Array.isArray(existingContent) || !Array.isArray(incomingContent) || incomingContent.length === 0) {
+    return incoming
+  }
+  const existingPart = existingContent[0]
+  const incomingPart = incomingContent[0]
+  if (!isPlainRecord(existingPart) || !isPlainRecord(incomingPart)) return incoming
+  if (existingPart.type !== 'toolCall' || incomingPart.type !== 'toolCall') return incoming
+  if (!('arguments' in existingPart) || !('arguments' in incomingPart)) return incoming
+  if (!isEmptyRecord(incomingPart.arguments) || isEmptyRecord(existingPart.arguments)) return incoming
+
+  const mergedPart = { ...incomingPart, arguments: existingPart.arguments }
+  const mergedContent = [...incomingContent]
+  mergedContent[0] = mergedPart
+  return { ...incoming, content: mergedContent }
+}
+
 function reducer(state: WorkspaceState, action: Action): WorkspaceState {
   switch (action.type) {
     case 'hydrate': {
@@ -398,7 +436,8 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
               const index = current.messages.findIndex((message) => getPiMessageId(message) === incomingId)
               if (index === -1) return [...current.messages, incoming]
               const updated = [...current.messages]
-              updated[index] = incoming
+              const existing = updated[index]
+              updated[index] = mergeToolCallArgs(existing, incoming)
               return updated
             })()
       const reconciledMessages =
@@ -544,7 +583,7 @@ function mergeSnapshot(dispatch: React.Dispatch<Action>, conversationId: string,
   dispatch({ type: 'setPiMessages', payload: { conversationId, messages: (snapshot.messages as JsonValue[]) ?? [] } })
 }
 
-function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) {
+function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent): { shouldAutoRetry: boolean } {
   const conversationId = event.conversationId
   const payload = event.event
 
@@ -565,7 +604,7 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
         },
       },
     })
-    return
+    return { shouldAutoRetry: false }
   }
 
   if (payload.type === 'runtime_error') {
@@ -580,7 +619,7 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
         },
       },
     })
-    return
+    return { shouldAutoRetry: false }
   }
 
   if (payload.type === 'response') {
@@ -635,11 +674,14 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
         },
       })
     }
-    return
+    return { shouldAutoRetry: false }
   }
 
   if (payload.type === 'message_update') {
     const message = payload.message as JsonValue
+    if (isUpstreamNoOutputRetryMessage(message)) {
+      return { shouldAutoRetry: true }
+    }
     const role = getPiMessageRole(message)
     if (role === 'user') {
       dispatch({
@@ -663,6 +705,7 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
         },
       })
     }
+    return { shouldAutoRetry: false }
   }
 
   if (payload.type === 'tool_execution_start') {
@@ -694,14 +737,8 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
   if (payload.type === 'tool_execution_end') {
     const toolCallId = typeof payload.toolCallId === 'string' ? payload.toolCallId : null
     const toolName = typeof payload.toolName === 'string' && payload.toolName.trim() ? payload.toolName : 'tool'
-    const args: JsonValue = {}
-    const messageId = toolCallId ? `tool-exec:${toolCallId}` : `tool-exec:${Date.now()}:${toolName}`
-    const toolCallPart = {
-      type: 'toolCall',
-      ...(toolCallId ? { id: toolCallId } : {}),
-      name: toolName,
-      arguments: args,
-    } satisfies Record<string, JsonValue>
+    // Keep the start toolCall message intact; append a separate end message.
+    const messageId = toolCallId ? `tool-exec-result:${toolCallId}` : `tool-exec-result:${Date.now()}:${toolName}`
     const toolResultPart = {
       type: 'toolResult',
       ...(toolCallId ? { toolCallId } : {}),
@@ -713,7 +750,7 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
       id: messageId,
       role: 'assistant',
       timestamp: Date.now(),
-      content: [toolCallPart, toolResultPart],
+      content: [toolResultPart],
     } satisfies Record<string, JsonValue>
     dispatch({
       type: 'upsertPiMessage',
@@ -760,12 +797,23 @@ function applyPiEvent(dispatch: React.Dispatch<Action>, event: PiRendererEvent) 
       },
     })
   }
+
+  return { shouldAutoRetry: false }
 }
 
 export function WorkspaceProvider({ children }: PropsWithChildren) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [isLoading, setIsLoading] = useState(true)
   const hydratingRuntimeIdsRef = useRef(new Set<string>())
+  const stateRef = useRef(state)
+  const lastSentPromptRef = useRef<
+    Record<string, { message: string; images: ImageContent[]; at: number; steer: boolean }>
+  >({})
+  const retryAttemptsByPromptRef = useRef<Record<string, number>>({})
+
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
 
   useEffect(() => {
     let mounted = true
@@ -791,7 +839,76 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const unsubscribe = workspaceIpc.onPiEvent((event) => {
-      applyPiEvent(dispatch, event)
+      const result = applyPiEvent(dispatch, event)
+      if (!result.shouldAutoRetry) {
+        return
+      }
+
+      const lastPrompt = lastSentPromptRef.current[event.conversationId]
+      if (!lastPrompt) {
+        return
+      }
+      const retryKey = `${event.conversationId}:${lastPrompt.at}`
+      const attempts = retryAttemptsByPromptRef.current[retryKey] ?? 0
+      if (attempts >= UPSTREAM_NO_OUTPUT_MAX_RETRIES) {
+        dispatch({
+          type: 'setPiRuntime',
+          payload: {
+            conversationId: event.conversationId,
+            runtime: {
+              lastError:
+                "L'assistant n'a retourné aucune réponse après 5 tentatives automatiques. Veuillez réessayer dans un instant.",
+            },
+          },
+        })
+        return
+      }
+      retryAttemptsByPromptRef.current[retryKey] = attempts + 1
+
+      const runtime = stateRef.current.piByConversation[event.conversationId]
+      const isStreaming = runtime?.status === 'streaming' || runtime?.state?.isStreaming
+      const retryCommand: RpcCommand =
+        isStreaming || lastPrompt.steer
+          ? { type: 'follow_up', message: lastPrompt.message, images: lastPrompt.images }
+          : { type: 'prompt', message: lastPrompt.message, images: lastPrompt.images }
+
+      dispatch({
+        type: 'setPiRuntime',
+        payload: {
+          conversationId: event.conversationId,
+          runtime: {
+            pendingCommands: (runtime?.pendingCommands ?? 0) + 1,
+          },
+        },
+      })
+
+      void workspaceIpc
+        .piSendCommand(event.conversationId, retryCommand)
+        .then((response) => {
+          if (!response.success) {
+            dispatch({
+              type: 'setPiRuntime',
+              payload: {
+                conversationId: event.conversationId,
+                runtime: {
+                  lastError: response.error ?? `Commande ${response.command} échouée`,
+                },
+              },
+            })
+          }
+        })
+        .finally(() => {
+          const currentRuntime = stateRef.current.piByConversation[event.conversationId]
+          dispatch({
+            type: 'setPiRuntime',
+            payload: {
+              conversationId: event.conversationId,
+              runtime: {
+                pendingCommands: Math.max((currentRuntime?.pendingCommands ?? 1) - 1, 0),
+              },
+            },
+          })
+        })
     })
 
     return () => {
@@ -1047,6 +1164,15 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       steer?: boolean
       images?: ImageContent[]
     }) => {
+      lastSentPromptRef.current[conversationId] = {
+        message,
+        images,
+        steer,
+        at: Date.now(),
+      }
+      retryAttemptsByPromptRef.current = Object.fromEntries(
+        Object.entries(retryAttemptsByPromptRef.current).filter(([key]) => !key.startsWith(`${conversationId}:`)),
+      )
       dispatch({
         type: 'setPiRuntime',
         payload: {

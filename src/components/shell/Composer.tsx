@@ -12,7 +12,6 @@ import {
 import {
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -22,7 +21,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { ImageContent, JsonValue } from "@/features/workspace/rpc";
+import type { ImageContent } from "@/features/workspace/rpc";
 import { useWorkspace } from "@/features/workspace/store";
 import type { Conversation } from "@/features/workspace/types";
 import { workspaceIpc } from "@/services/ipc/workspace";
@@ -224,74 +223,12 @@ type ModifiedFileStat = {
   removed: number;
 };
 
-function extractText(value: JsonValue): string {
-  if (typeof value === "string") return value;
-  if (!value || typeof value !== "object") return "";
-  if (Array.isArray(value)) return value.map((item) => extractText(item)).filter(Boolean).join("\n");
-  const record = value as Record<string, JsonValue>;
-  if (typeof record.text === "string") return record.text;
-  if (record.content) return extractText(record.content);
-  if (record.message) return extractText(record.message);
-  return "";
-}
-
-function parseUnifiedDiff(text: string): ModifiedFileStat[] {
-  if (!text.includes("diff --git") && !text.includes("@@")) return [];
-  const files = new Map<string, ModifiedFileStat>();
-  const lines = text.split("\n");
-  let currentPath: string | null = null;
-  for (const line of lines) {
-    if (line.startsWith("diff --git ")) {
-      const match = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
-      currentPath = match?.[2] ?? match?.[1] ?? null;
-      if (currentPath && !files.has(currentPath)) {
-        files.set(currentPath, { path: currentPath, added: 0, removed: 0 });
-      }
-      continue;
-    }
-    if (line.startsWith("+++ b/")) {
-      currentPath = line.slice("+++ b/".length).trim() || currentPath;
-      if (currentPath && !files.has(currentPath)) {
-        files.set(currentPath, { path: currentPath, added: 0, removed: 0 });
-      }
-      continue;
-    }
-    if (!currentPath) continue;
-    const stat = files.get(currentPath);
-    if (!stat) continue;
-    if (line.startsWith("+") && !line.startsWith("+++")) stat.added += 1;
-    if (line.startsWith("-") && !line.startsWith("---")) stat.removed += 1;
-  }
-  return Array.from(files.values());
-}
-
-function collectToolResultTexts(messages: JsonValue[]): string[] {
-  const texts: string[] = [];
-  for (const message of messages) {
-    if (!message || typeof message !== "object" || Array.isArray(message)) continue;
-    const root = message as Record<string, JsonValue>;
-    const nested =
-      root.message && typeof root.message === "object" && !Array.isArray(root.message)
-        ? (root.message as Record<string, JsonValue>)
-        : null;
-    const source = nested ?? root;
-    if (source.role === "toolResult") {
-      const text = extractText(source.content) || extractText(source.result);
-      if (text) texts.push(text);
-      continue;
-    }
-    const content = Array.isArray(source.content) ? source.content : null;
-    if (!content) continue;
-    for (const item of content) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-      const part = item as Record<string, JsonValue>;
-      if (part.type !== "toolResult") continue;
-      const text = extractText(part.content) || extractText(part.result);
-      if (text) texts.push(text);
-    }
-  }
-  return texts;
-}
+type FileDiffDetails = {
+  path: string;
+  lines: string[];
+  firstChangedLine: number | null;
+  isBinary: boolean;
+};
 
 export function Composer() {
   const {
@@ -337,6 +274,10 @@ export function Composer() {
     added: 0,
     removed: 0,
   });
+  const [openDiffPath, setOpenDiffPath] = useState<string | null>(null);
+  const [diffByPath, setDiffByPath] = useState<Record<string, FileDiffDetails>>({});
+  const [diffLoadingByPath, setDiffLoadingByPath] = useState<Record<string, boolean>>({});
+  const [diffErrorByPath, setDiffErrorByPath] = useState<Record<string, string | null>>({});
   const [pendingAttachmentsByKey, setPendingAttachmentsByKey] = useState<
     Record<string, PendingAttachment[]>
   >({});
@@ -385,6 +326,7 @@ export function Composer() {
   );
   const showModificationsPanel = gitModifiedFiles.length > 0;
   const showModificationsList = isWorkingOnChanges || isModificationsExpanded;
+  const diffFirstChangeRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     const previousKey = previousComposerKeyRef.current;
@@ -412,6 +354,10 @@ export function Composer() {
     if (!projectId) {
       setGitModifiedFiles([]);
       setGitModificationTotals({ files: 0, added: 0, removed: 0 });
+      setOpenDiffPath(null);
+      setDiffByPath({});
+      setDiffLoadingByPath({});
+      setDiffErrorByPath({});
       return;
     }
 
@@ -421,10 +367,44 @@ export function Composer() {
       if (!result.ok) {
         setGitModifiedFiles([]);
         setGitModificationTotals({ files: 0, added: 0, removed: 0 });
+        setOpenDiffPath(null);
+        setDiffByPath({});
+        setDiffLoadingByPath({});
+        setDiffErrorByPath({});
         return;
       }
       setGitModifiedFiles(result.files);
       setGitModificationTotals(result.totals);
+      setDiffByPath((previous) => {
+        const next: Record<string, FileDiffDetails> = {};
+        for (const file of result.files) {
+          if (previous[file.path]) {
+            next[file.path] = previous[file.path];
+          }
+        }
+        return next;
+      });
+      setDiffLoadingByPath((previous) => {
+        const next: Record<string, boolean> = {};
+        for (const file of result.files) {
+          if (previous[file.path]) {
+            next[file.path] = previous[file.path];
+          }
+        }
+        return next;
+      });
+      setDiffErrorByPath((previous) => {
+        const next: Record<string, string | null> = {};
+        for (const file of result.files) {
+          if (previous[file.path]) {
+            next[file.path] = previous[file.path];
+          }
+        }
+        return next;
+      });
+      setOpenDiffPath((current) =>
+        current && result.files.some((item) => item.path === current) ? current : null,
+      );
     };
 
     void refresh();
@@ -437,6 +417,51 @@ export function Composer() {
       window.clearInterval(timer);
     };
   }, [isWorkingOnChanges, selectedConversation?.projectId, state.selectedProjectId]);
+
+  useEffect(() => {
+    if (!openDiffPath) return;
+    const element = diffFirstChangeRefs.current[openDiffPath];
+    if (!element) return;
+    element.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [openDiffPath, diffByPath]);
+
+  const loadDiffForFile = async (path: string) => {
+    const projectId = selectedConversation?.projectId ?? state.selectedProjectId;
+    if (!projectId) {
+      return;
+    }
+    setDiffLoadingByPath((previous) => ({ ...previous, [path]: true }));
+    setDiffErrorByPath((previous) => ({ ...previous, [path]: null }));
+    const result = await workspaceIpc.getGitFileDiff(projectId, path);
+    if (!result.ok) {
+      setDiffLoadingByPath((previous) => ({ ...previous, [path]: false }));
+      setDiffErrorByPath((previous) => ({
+        ...previous,
+        [path]: result.message ?? "Impossible de charger le diff pour ce fichier.",
+      }));
+      return;
+    }
+    const normalizedLines = result.diff.replace(/\r\n/g, "\n").split("\n");
+    setDiffByPath((previous) => ({
+      ...previous,
+      [path]: {
+        path: result.path,
+        lines: normalizedLines,
+        firstChangedLine: result.firstChangedLine,
+        isBinary: result.isBinary,
+      },
+    }));
+    setDiffLoadingByPath((previous) => ({ ...previous, [path]: false }));
+  };
+
+  const handleToggleDiffForFile = (path: string) => {
+    setOpenDiffPath((current) => (current === path ? null : path));
+    const existing = diffByPath[path];
+    const isLoading = diffLoadingByPath[path];
+    if (!existing && !isLoading) {
+      void loadDiffForFile(path);
+    }
+  };
 
   const setMessage = (next: string) => {
     setDraftsByKey((previous) => {
@@ -996,7 +1021,11 @@ export function Composer() {
         ) : null}
 
         {showModificationsPanel ? (
-          <div className="composer-mods-panel" role="status" aria-live="polite">
+          <div
+            className={`composer-mods-panel ${showModificationsList ? "composer-mods-panel-open" : "composer-mods-panel-closed"}`}
+            role="status"
+            aria-live="polite"
+          >
             <div className="composer-mods-header">
               <div className="composer-mods-title">
                 {gitModificationTotals.files} {gitModificationTotals.files > 1 ? "fichiers modifies" : "fichier modifie"}{" "}
@@ -1015,26 +1044,92 @@ export function Composer() {
               ) : (
                 <button
                   type="button"
-                  className="composer-mods-action"
+                  className={`composer-mods-action composer-mods-toggle ${showModificationsList ? "is-open" : "is-closed"}`}
                   onClick={() => setIsModificationsExpanded((current) => !current)}
+                  aria-label={showModificationsList ? "Masquer les modifications" : "Afficher les modifications"}
+                  title={showModificationsList ? "Masquer les modifications" : "Afficher les modifications"}
                 >
-                  Verifier modifications
+                  <ChevronDown className="h-4 w-4" />
                 </button>
               )}
             </div>
-            {showModificationsList ? (
-              <div className="composer-mods-list">
-                {gitModifiedFiles.slice(0, 12).map((file) => (
-                  <div key={file.path} className="composer-mods-row">
-                    <span className="composer-mods-path">{file.path}</span>
-                    <span className="composer-mods-counts">
-                      <span className="chat-inline-diff-plus">+{file.added}</span>
-                      <span className="chat-inline-diff-minus">-{file.removed}</span>
-                    </span>
+            <div className={`composer-mods-list ${showModificationsList ? "is-open" : "is-closed"}`}>
+              {gitModifiedFiles.slice(0, 12).map((file) => {
+                const isOpen = openDiffPath === file.path;
+                const isLoading = diffLoadingByPath[file.path] ?? false;
+                const error = diffErrorByPath[file.path];
+                const details = diffByPath[file.path];
+                return (
+                  <div key={file.path} className={`composer-mods-row-wrap ${isOpen ? "is-open" : ""}`}>
+                    <div className="composer-mods-row">
+                      <button
+                        type="button"
+                        className="composer-mods-path"
+                        onClick={() => handleToggleDiffForFile(file.path)}
+                        title="Ouvrir le diff inline"
+                      >
+                        {file.path}
+                      </button>
+                      <span className="composer-mods-counts">
+                        <span className="chat-inline-diff-plus">+{file.added}</span>
+                        <span className="chat-inline-diff-minus">-{file.removed}</span>
+                      </span>
+                    </div>
+                    {isOpen ? (
+                      <div className="composer-mods-inline">
+                        {isLoading ? <div className="composer-mods-inline-note">Chargement du diff…</div> : null}
+                        {!isLoading && error ? (
+                          <div className="composer-mods-inline-error">{error}</div>
+                        ) : null}
+                        {!isLoading && !error && details ? (
+                          <div className="chat-diff-file">
+                            <div className="chat-diff-file-header">
+                              <code>{details.path}</code>
+                              {details.firstChangedLine ? (
+                                <span className="chat-diff-more">
+                                  premier changement: L{details.firstChangedLine}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="chat-diff-lines">
+                              {details.isBinary ? (
+                                <div className="chat-diff-line-neutral">Fichier binaire: aperçu texte indisponible.</div>
+                              ) : (
+                                details.lines.map((line, index) => {
+                                  let className = "chat-diff-line-neutral";
+                                  if (line.startsWith("+") && !line.startsWith("+++")) {
+                                    className = "chat-diff-line-plus";
+                                  } else if (line.startsWith("-") && !line.startsWith("---")) {
+                                    className = "chat-diff-line-minus";
+                                  }
+                                  const isFirstChangeLine =
+                                    details.firstChangedLine !== null &&
+                                    line.startsWith("@@") &&
+                                    line.includes(`+${details.firstChangedLine}`);
+                                  return (
+                                    <div
+                                      key={`${details.path}:${index}`}
+                                      className={className}
+                                      ref={(element) => {
+                                        if (isFirstChangeLine) {
+                                          diffFirstChangeRefs.current[file.path] = element;
+                                        }
+                                      }}
+                                    >
+                                      {line.length > 0 ? line : " "}
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
-                ))}
-              </div>
-            ) : null}
+                );
+              })}
+            </div>
           </div>
         ) : null}
 

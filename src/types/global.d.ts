@@ -33,6 +33,17 @@ declare global {
           }
         | { ok: false; reason: 'project_not_found' | 'not_git_repo' | 'git_not_available' | 'unknown'; message?: string }
       >
+      getGitFileDiff: (
+        projectId: string,
+        filePath: string,
+      ) => Promise<
+        | { ok: true; path: string; diff: string; isBinary: boolean; firstChangedLine: number | null }
+        | {
+            ok: false
+            reason: 'project_not_found' | 'not_git_repo' | 'git_not_available' | 'file_not_found' | 'unknown'
+            message?: string
+          }
+      >
       updateSettings: (settings: SidebarSettings) => Promise<SidebarSettings>
       createConversationForProject: (
         projectId: string,

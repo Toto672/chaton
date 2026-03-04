@@ -47,6 +47,8 @@ i18n.use(initReactI18next).init({
         "Supprimer {{name}}": "Delete {{name}}",
         "Supprimer le projet": "Delete project",
         Supprimer: "Delete",
+        "Masquer les fils": "Hide threads",
+        "Plus de fils": "More threads",
         Langue: "Language",
         "Sélectionnez la langue": "Select language",
       },

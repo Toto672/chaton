@@ -82,7 +82,7 @@ function LiveToolTrace({
   isRunning: boolean
   isError?: boolean
 }) {
-  const [phase, setPhase] = useState<'hidden' | 'enter' | 'exit'>('hidden')
+  const [phase, setPhase] = useState<'hidden' | 'enter' | 'exit'>(isRunning ? 'enter' : 'hidden')
 
   useEffect(() => {
     if (isRunning) {
@@ -96,10 +96,17 @@ function LiveToolTrace({
     }
   }, [isRunning, phase])
 
-  if (phase === 'hidden') return null
+  if (!isRunning && phase === 'hidden') {
+    return (
+      <ToolTerminal
+        text={`bash\n${command} $\n\n${output || '(commande terminée sans sortie)'}`}
+        isError={isError}
+      />
+    )
+  }
 
   return (
-    <div className={`chat-live-trace ${phase === 'enter' ? 'chat-live-trace-enter' : 'chat-live-trace-exit'}`}>
+    <div className={`chat-live-trace ${phase === 'exit' ? 'chat-live-trace-exit' : 'chat-live-trace-enter'}`}>
       <ToolTerminal
         text={`bash\n${command} $\n\n${output || '(en attente de sortie...)'}`}
         isError={isError}
@@ -123,18 +130,30 @@ function CollapsibleToolBlock({
 }) {
   const [isOpen, setIsOpen] = useState(startExpanded)
   const prevStartExpandedRef = useRef(startExpanded)
+  const manualOpenRef = useRef(false)
 
   useEffect(() => {
     const wasExpanded = prevStartExpandedRef.current
     if (startExpanded !== wasExpanded) {
-      setIsOpen(startExpanded)
+      // Auto-open while running, but do not auto-close on completion.
+      if (startExpanded) {
+        setIsOpen(startExpanded)
+      }
     }
     prevStartExpandedRef.current = startExpanded
   }, [startExpanded])
 
   return (
     <section className="chat-tool-block">
-      <details className="chat-tool-details" open={isOpen} onToggle={(event) => setIsOpen(event.currentTarget.open)}>
+      <details
+        className="chat-tool-details"
+        open={isOpen}
+        onToggle={(event) => {
+          const nextOpen = event.currentTarget.open
+          setIsOpen(nextOpen)
+          manualOpenRef.current = nextOpen
+        }}
+      >
         <summary className="chat-tool-title chat-tool-title-row chat-tool-summary">
           <span>{title}</span>
           {badge}
@@ -446,6 +465,11 @@ function getMessageToolTitleKey(message: JsonValue): string | null {
   if (blocks.length === 0) return null
   const first = blocks[0]
   if (first.kind !== 'toolCall') return null
+  if (first.toolCallId) {
+    // Streaming updates for the same tool call can temporarily carry weaker args (e.g. "{}").
+    // Keying by toolCallId keeps only the latest representation for that call.
+    return `toolCallId:${first.toolCallId}`
+  }
   const rawSummary = summarizeToolCall(first.name, first.arguments)
   const callSummary = compactCommandLabel(rawSummary)
   return `toolCall:${callSummary}`
@@ -465,6 +489,68 @@ function isLikelySameToolTitle(previousTitle: string, nextTitle: string): boolea
 function hasMarkdownSyntax(text: string): boolean {
   if (!text) return false
   return /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+\.\s|>\s|```)|`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|__[^_]+__/.test(text)
+}
+
+function dedupeToolCalls(blocks: ToolBlock[]): Array<Extract<ToolBlock, { kind: 'toolCall' }>> {
+  const seen = new Set<string>()
+  const unique: Array<Extract<ToolBlock, { kind: 'toolCall' }>> = []
+
+  for (const block of blocks) {
+    if (block.kind !== 'toolCall') continue
+    const key = block.toolCallId ? `id:${block.toolCallId}` : `sig:${block.name}:${block.arguments.trim()}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(block)
+  }
+  return unique
+}
+
+function getToolCallSignature(block: Extract<ToolBlock, { kind: 'toolCall' }>): string {
+  return `sig:${block.name}:${block.arguments.trim()}`
+}
+
+function dedupeToolCallMessages(messages: JsonValue[]): JsonValue[] {
+  const deduped: JsonValue[] = []
+  const seenByKey = new Map<string, number>()
+
+  for (const message of messages) {
+    const blocks = dedupeToolCalls(getToolBlocks(message))
+    const toolCalls = blocks.filter((block): block is Extract<ToolBlock, { kind: 'toolCall' }> => block.kind === 'toolCall')
+    const text = extractText(message).trim()
+    const isToolOnly = text.length === 0 && toolCalls.length > 0
+
+    if (!isToolOnly) {
+      deduped.push(message)
+      continue
+    }
+
+    let replaced = false
+    for (const call of toolCalls) {
+      const signatureKey = getToolCallSignature(call)
+      const idKey = call.toolCallId ? `id:${call.toolCallId}` : null
+      const existingIndex = (idKey ? seenByKey.get(idKey) : undefined) ?? seenByKey.get(signatureKey)
+
+      if (existingIndex !== undefined) {
+        deduped[existingIndex] = message
+        if (idKey) seenByKey.set(idKey, existingIndex)
+        seenByKey.set(signatureKey, existingIndex)
+        replaced = true
+        break
+      }
+    }
+
+    if (!replaced) {
+      const newIndex = deduped.length
+      deduped.push(message)
+      for (const call of toolCalls) {
+        const signatureKey = getToolCallSignature(call)
+        if (call.toolCallId) seenByKey.set(`id:${call.toolCallId}`, newIndex)
+        seenByKey.set(signatureKey, newIndex)
+      }
+    }
+  }
+
+  return deduped
 }
 
 type ExplorationEvent =
@@ -536,7 +622,7 @@ export function MainView() {
       }
       reduced.push(message)
     }
-    return reduced
+    return dedupeToolCallMessages(reduced)
   }, [isStreaming, messages, selectedRuntime?.activeStreamTurn])
   const pendingUserMessageText = selectedRuntime?.pendingUserMessageText ?? null
   const isExecutionActive =
@@ -693,11 +779,7 @@ export function MainView() {
             const isToolResultMessage = role === 'toolResult'
             const text = isToolResultMessage ? '' : extractText(message)
             const toolBlocks = getToolBlocks(message)
-            const visibleToolBlocks = toolBlocks.filter((block) => block.kind === 'toolCall')
-            const messageStreamTurn = getStreamTurn(message)
-            const runtimeStreamTurn = selectedRuntime?.activeStreamTurn ?? null
-            const isCurrentStreamingMessage =
-              isStreaming && runtimeStreamTurn !== null && messageStreamTurn !== null && runtimeStreamTurn === messageStreamTurn
+            const visibleToolBlocks = dedupeToolCalls(toolBlocks)
             const assistantMeta = getAssistantMeta(message)
             const fallbackAssistantErrorText =
               role === 'assistant' && !text && assistantMeta?.errorMessage
@@ -759,7 +841,7 @@ export function MainView() {
                                 key={`${id}-toolgroup-${groupIndex}`}
                                 title={<>{`${readCount} fichiers,${searchCount} recherche exploré(s)`}</>}
                                 badge={badge}
-                                startExpanded={isRunning && isCurrentStreamingMessage}
+                                startExpanded={isRunning}
                                 maxHeight={180}
                               >
                                 <pre className="chat-tool-code-preview">{events.map((item) => item.label).join('\n')}</pre>
@@ -809,7 +891,7 @@ export function MainView() {
                                 </>
                               }
                               badge={badge}
-                              startExpanded={isRunning && isCurrentStreamingMessage}
+                              startExpanded={isRunning}
                               maxHeight={260}
                             >
                               <LiveToolTrace

@@ -281,6 +281,10 @@ body {
     @apply px-2.5 py-2 text-xs text-[#8d8e95];
   }
 
+  .sidebar-show-more {
+    @apply mx-auto mt-2 flex w-fit items-center justify-center rounded-full border border-[#d8dce6] bg-gradient-to-b from-[#ffffff] to-[#f3f5fa] px-3 py-1 text-xs font-medium text-[#4a5060] shadow-sm transition-all duration-150 hover:border-[#c9cfdb] hover:from-[#ffffff] hover:to-[#eceff6] hover:text-[#343a49] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+  }
+
   .sidebar-resize-handle {
     @apply relative w-2 shrink-0 cursor-col-resize bg-[#ececee] transition-colors;
   }
@@ -495,7 +499,7 @@ body {
   }
 
   .chat-tool-summary {
-    @apply list-none cursor-pointer rounded-md px-2 py-1 text-left transition-colors hover:bg-[#0d1420];
+    @apply list-none cursor-pointer rounded-md px-2 py-1 text-left transition-colors hover:bg-[#edf2fb];
   }
 
   .chat-tool-summary > span:first-child {
@@ -526,15 +530,15 @@ body {
   }
 
   .chat-tool-badge {
-    @apply rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#8b96ab];
+    @apply rounded-md border border-[#d1d8e5] bg-[#f7f9fd] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#56627a];
   }
 
   .chat-tool-badge-success {
-    @apply border-[#1f3e2f] bg-[#0f1f18] text-[#79c29b];
+    @apply border-[#b9ddca] bg-[#edf8f1] text-[#256846];
   }
 
   .chat-tool-badge-error {
-    @apply border-[#4a2431] bg-[#23121a] text-[#d98aa1];
+    @apply border-[#e9c1cc] bg-[#fff1f4] text-[#8f2f48];
   }
 
   .chat-tool-terminal {
@@ -783,7 +787,16 @@ body {
   }
 
   .composer-mods-panel {
-    @apply mb-2 overflow-hidden rounded-2xl border border-[#242a35] bg-[#161b23];
+    @apply mb-2 overflow-hidden rounded-2xl border border-[#242a35] bg-[#161b23] transition-[max-height] duration-300 ease-out;
+    max-height: 72px;
+  }
+
+  .composer-mods-panel-open {
+    max-height: 420px;
+  }
+
+  .composer-mods-panel-closed {
+    max-height: 72px;
   }
 
   .composer-mods-header {
@@ -798,16 +811,57 @@ body {
     @apply rounded-md px-2 py-1 text-[15px] text-[#dfe6f3] transition-colors hover:bg-[#1e2531];
   }
 
+  .composer-mods-toggle {
+    @apply inline-flex h-8 w-8 items-center justify-center p-0 transition-transform duration-200 ease-out;
+  }
+
+  .composer-mods-toggle.is-open {
+    transform: rotate(180deg);
+  }
+
   .composer-mods-list {
-    @apply border-t border-[#252c38];
+    @apply border-t border-[#252c38] transition-[max-height,opacity] duration-300 ease-out;
+    max-height: 320px;
+    opacity: 1;
+  }
+
+  .composer-mods-list.is-open {
+    max-height: 320px;
+    opacity: 1;
+  }
+
+  .composer-mods-list.is-closed {
+    max-height: 0;
+    opacity: 0;
+    border-top-color: transparent;
   }
 
   .composer-mods-row {
     @apply flex items-center justify-between gap-2 border-t border-[#232a36] px-4 py-3 first:border-t-0;
   }
 
+  .composer-mods-row-wrap {
+    @apply border-t border-[#232a36] first:border-t-0;
+  }
+
+  .composer-mods-row-wrap .composer-mods-row {
+    @apply border-t-0;
+  }
+
+  .composer-mods-inline {
+    @apply border-t border-[#1f2633] bg-[#111722] px-3 py-2;
+  }
+
+  .composer-mods-inline-note {
+    @apply text-xs text-[#9aa8c0];
+  }
+
+  .composer-mods-inline-error {
+    @apply text-xs text-[#ff9daa];
+  }
+
   .composer-mods-path {
-    @apply overflow-hidden text-ellipsis whitespace-nowrap text-[18px] font-semibold text-[#f1f5fc];
+    @apply overflow-hidden text-ellipsis whitespace-nowrap text-left text-[18px] font-semibold text-[#f1f5fc] transition-colors hover:text-white;
   }
 
   .composer-mods-counts {
@@ -1394,6 +1448,10 @@ body {
     @apply bg-[#18202c];
   }
 
+  .dark .sidebar-show-more {
+    @apply border-[#2b3447] bg-gradient-to-b from-[#111827] to-[#0d1422] text-[#b9c6de] hover:border-[#394760] hover:from-[#152033] hover:to-[#101b2d] hover:text-[#e8efff] focus-visible:ring-[#2a3448];
+  }
+
   .dark .hero-title {
     @apply text-[#edf1fa];
   }
@@ -1438,6 +1496,18 @@ body {
 
   .dark .chat-tool-summary::before {
     @apply text-[#8b98b1];
+  }
+
+  .dark .chat-tool-badge {
+    @apply border-transparent bg-transparent text-[#8b96ab];
+  }
+
+  .dark .chat-tool-badge-success {
+    @apply border-[#1f3e2f] bg-[#0f1f18] text-[#79c29b];
+  }
+
+  .dark .chat-tool-badge-error {
+    @apply border-[#4a2431] bg-[#23121a] text-[#d98aa1];
   }
 
   .dark .extension-modal {

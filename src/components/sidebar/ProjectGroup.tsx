@@ -1,6 +1,7 @@
 import { FolderGit2, PencilLine, Trash2 } from 'lucide-react'
 import { type MouseEvent, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { AnimatePresence, motion } from 'framer-motion'
 
 import { ConversationRow } from '@/components/sidebar/ConversationRow'
 import { useWorkspace } from '@/features/workspace/store'
@@ -16,6 +17,7 @@ export function ProjectGroup({ project }: ProjectGroupProps) {
   const { state, selectConversation, selectProject, createConversationForProject, toggleProjectCollapsed, deleteConversation, deleteProject } =
     useWorkspace()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [afficherTousLesFils, setAfficherTousLesFils] = useState(false)
   const resetTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -57,6 +59,15 @@ export function ProjectGroup({ project }: ProjectGroupProps) {
   const conversations = selectConversationsForProject(state.conversations, project.id, state.settings)
   const collapsed = state.settings.collapsedProjectIds.includes(project.id)
   const sectionId = `project-section-${project.id}`
+  const THREAD_LIMIT = 5
+  const isOverflowing = conversations.length > THREAD_LIMIT
+  const displayedConversations = afficherTousLesFils || !isOverflowing ? conversations : conversations.slice(0, THREAD_LIMIT)
+
+  useEffect(() => {
+    if (!isOverflowing && afficherTousLesFils) {
+      setAfficherTousLesFils(false)
+    }
+  }, [isOverflowing, afficherTousLesFils])
 
   return (
     <section className="project-group" aria-labelledby={`project-label-${project.id}`}>
@@ -101,24 +112,54 @@ export function ProjectGroup({ project }: ProjectGroupProps) {
         </button>
       </div>
 
-      {!collapsed ? (
-        <div id={sectionId} role="list" className="sidebar-thread-list">
-          {conversations.length === 0 ? (
-            <div className="empty-thread-state">Aucun fil pour ce projet</div>
-          ) : (
-            conversations.map((conversation) => (
-            <ConversationRow
-                key={conversation.id}
-                conversation={conversation}
-                isActive={state.selectedConversationId === conversation.id}
-                isStreaming={state.piByConversation[conversation.id]?.status === 'streaming'}
-                onSelect={selectConversation}
-                onDelete={deleteConversation}
-              />
-            ))
-          )}
-        </div>
-      ) : null}
+      <AnimatePresence initial={false}>
+        {!collapsed ? (
+          <motion.div
+            id={sectionId}
+            role="list"
+            className="sidebar-thread-list"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: 'hidden' }}
+          >
+            {conversations.length === 0 ? (
+              <div className="empty-thread-state">Aucun fil pour ce projet</div>
+            ) : (
+              <AnimatePresence initial={false}>
+                {displayedConversations.map((conversation) => (
+                  <motion.div
+                    key={conversation.id}
+                    layout
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.16, ease: 'easeOut' }}
+                  >
+                    <ConversationRow
+                      conversation={conversation}
+                      isActive={state.selectedConversationId === conversation.id}
+                      isStreaming={state.piByConversation[conversation.id]?.status === 'streaming'}
+                      onSelect={selectConversation}
+                      onDelete={deleteConversation}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            )}
+            {isOverflowing && (
+              <button
+                type="button"
+                className="sidebar-show-more"
+                onClick={() => setAfficherTousLesFils((actuel) => !actuel)}
+              >
+                {afficherTousLesFils ? t('Masquer les fils') : t('Plus de fils')}
+              </button>
+            )}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </section>
   )
 }

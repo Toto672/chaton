@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('chaton', {
   deleteProject: (projectId: string) => ipcRenderer.invoke('projects:delete', projectId),
   getInitialState: () => ipcRenderer.invoke('workspace:getInitialState'),
   getGitDiffSummary: (projectId: string) => ipcRenderer.invoke('workspace:getGitDiffSummary', projectId),
+  getGitFileDiff: (projectId: string, filePath: string) =>
+    ipcRenderer.invoke('workspace:getGitFileDiff', projectId, filePath),
   updateSettings: (settings: unknown) => ipcRenderer.invoke('workspace:updateSettings', settings),
   createConversationForProject: (
     projectId: string,

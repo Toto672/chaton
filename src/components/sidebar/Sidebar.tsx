@@ -27,7 +27,7 @@ export function Sidebar({ width }: { width: number }) {
       <nav className="sidebar-nav pt-4" aria-label={t('Navigation principale')}>
         <button
           type="button"
-          className={`sidebar-item ${state.sidebarMode === 'default' ? 'sidebar-item-active' : ''}`}
+          className="sidebar-item"
           onClick={closeSettings}
         >
           <Gauge className="sidebar-nav-icon h-4 w-4" />

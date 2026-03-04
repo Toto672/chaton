@@ -124,6 +124,20 @@ type GitDiffSummaryResult =
   | { ok: true; files: GitModifiedFileStat[]; totals: { added: number; removed: number; files: number } }
   | { ok: false; reason: 'project_not_found' | 'not_git_repo' | 'git_not_available' | 'unknown'; message?: string }
 
+type GitFileDiffResult =
+  | {
+      ok: true
+      path: string
+      diff: string
+      isBinary: boolean
+      firstChangedLine: number | null
+    }
+  | {
+      ok: false
+      reason: 'project_not_found' | 'not_git_repo' | 'git_not_available' | 'file_not_found' | 'unknown'
+      message?: string
+    }
+
 const piRuntimeManager = new PiSessionRuntimeManager()
 
 function mapConversation(c: DbConversation) {
@@ -335,6 +349,7 @@ async function getGitDiffSummaryForProject(projectId: string): Promise<GitDiffSu
     )
 
     const files: GitModifiedFileStat[] = []
+    const seenPaths = new Set<string>()
     for (const line of (stdout ?? '').split('\n')) {
       const trimmed = line.trim()
       if (!trimmed) continue
@@ -348,6 +363,31 @@ async function getGitDiffSummaryForProject(projectId: string): Promise<GitDiffSu
         added: Number.isFinite(added) ? added : 0,
         removed: Number.isFinite(removed) ? removed : 0,
       })
+      seenPaths.add(filePath)
+    }
+
+    // `git diff --numstat` ignores untracked files; include them so new files
+    // created by the agent are visible in the UI modifications panel.
+    const { stdout: statusStdout } = await execFileAsync(
+      'git',
+      ['-C', project.repo_path, 'status', '--porcelain', '--untracked-files=all'],
+      {
+        timeout: 10_000,
+        maxBuffer: 2 * 1024 * 1024,
+        env: buildPiEnv(),
+      },
+    )
+
+    for (const line of (statusStdout ?? '').split('\n')) {
+      if (!line.startsWith('?? ')) {
+        continue
+      }
+      const filePath = line.slice(3).trim()
+      if (!filePath || seenPaths.has(filePath)) {
+        continue
+      }
+      files.push({ path: filePath, added: 0, removed: 0 })
+      seenPaths.add(filePath)
     }
 
     const totals = files.reduce(
@@ -360,6 +400,84 @@ async function getGitDiffSummaryForProject(projectId: string): Promise<GitDiffSu
     )
 
     return { ok: true, files, totals }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.toLowerCase().includes('enoent')) {
+      return { ok: false, reason: 'git_not_available', message }
+    }
+    return { ok: false, reason: 'unknown', message }
+  }
+}
+
+function extractFirstChangedLineFromUnifiedDiff(diffText: string): number | null {
+  for (const line of diffText.split('\n')) {
+    const match = /^@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/.exec(line)
+    if (match) {
+      const parsed = Number.parseInt(match[1], 10)
+      return Number.isFinite(parsed) ? parsed : null
+    }
+  }
+  return null
+}
+
+async function isUntrackedFile(repoPath: string, filePath: string): Promise<boolean> {
+  const { stdout } = await execFileAsync('git', ['-C', repoPath, 'status', '--porcelain', '--untracked-files=all', '--', filePath], {
+    timeout: 10_000,
+    maxBuffer: 512 * 1024,
+    env: buildPiEnv(),
+  })
+  return (stdout ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .some((line) => line === `?? ${filePath}`)
+}
+
+async function getGitFileDiffForProject(projectId: string, filePath: string): Promise<GitFileDiffResult> {
+  const db = getDb()
+  const project = listProjects(db).find((item) => item.id === projectId)
+  if (!project) {
+    return { ok: false, reason: 'project_not_found' }
+  }
+  if (!isGitRepo(project.repo_path)) {
+    return { ok: false, reason: 'not_git_repo' }
+  }
+  if (!filePath || !filePath.trim()) {
+    return { ok: false, reason: 'file_not_found' }
+  }
+
+  try {
+    const untracked = await isUntrackedFile(project.repo_path, filePath)
+    const args = untracked
+      ? ['-C', project.repo_path, 'diff', '--no-index', '--', '/dev/null', filePath]
+      : ['-C', project.repo_path, 'diff', '--', filePath]
+
+    const result = await execFileAsync('git', args, {
+      timeout: 15_000,
+      maxBuffer: 8 * 1024 * 1024,
+      env: buildPiEnv(),
+    }).catch((error: unknown) => {
+      const execError = error as { code?: number; stdout?: string; stderr?: string }
+      // `git diff --no-index` returns exit code 1 when diffs exist.
+      if (untracked && execError && execError.code === 1) {
+        return {
+          stdout: execError.stdout ?? '',
+          stderr: execError.stderr ?? '',
+        }
+      }
+      throw error
+    })
+
+    const diff = result.stdout ?? ''
+    const firstChangedLine = extractFirstChangedLineFromUnifiedDiff(diff)
+    const lower = diff.toLowerCase()
+    const isBinary = lower.includes('binary files') || lower.includes('git binary patch')
+    return {
+      ok: true,
+      path: filePath,
+      diff,
+      isBinary,
+      firstChangedLine,
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (message.toLowerCase().includes('enoent')) {
@@ -830,6 +948,9 @@ export function registerWorkspaceIpc() {
 
   ipcMain.handle('workspace:getInitialState', () => toWorkspacePayload())
   ipcMain.handle('workspace:getGitDiffSummary', (_event, projectId: string) => getGitDiffSummaryForProject(projectId))
+  ipcMain.handle('workspace:getGitFileDiff', (_event, projectId: string, filePath: string) =>
+    getGitFileDiffForProject(projectId, filePath),
+  )
 
   ipcMain.handle('workspace:updateSettings', (_event, settings: DbSidebarSettings) => {
     const db = getDb()

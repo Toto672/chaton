@@ -8,7 +8,6 @@ import { Topbar } from '@/components/shell/Topbar'
 import { PiSettingsProvider } from '@/features/workspace/pi-settings-store'
 import { WorkspaceProvider } from '@/features/workspace/store'
 import { useWorkspace } from '@/features/workspace/store'
-import { workspaceIpc } from '@/services/ipc/workspace'
 
 const SIDEBAR_MIN_WIDTH = 260
 const SIDEBAR_MAX_WIDTH = 460
@@ -99,44 +98,17 @@ function AppShell() {
   }, [isLoading, isResizing, sidebarWidth, state.settings, updateSettings])
 
   useEffect(() => {
-    let currentTheme: 'system' | 'light' | 'dark' = 'system'
     const media = window.matchMedia('(prefers-color-scheme: dark)')
 
     const applyTheme = () => {
-      const isDark = currentTheme === 'dark' || (currentTheme === 'system' && media.matches)
-      document.documentElement.classList.toggle('dark', isDark)
+      document.documentElement.classList.toggle('dark', media.matches)
     }
 
-    const readThemeFromSettings = async () => {
-      const snapshot = await workspaceIpc.getPiConfigSnapshot()
-      const nextTheme = snapshot.settings?.theme
-      if (nextTheme === 'light' || nextTheme === 'dark' || nextTheme === 'system') {
-        currentTheme = nextTheme
-      } else {
-        currentTheme = 'system'
-      }
-      applyTheme()
-    }
-
-    const onSystemThemeChange = () => {
-      if (currentTheme === 'system') {
-        applyTheme()
-      }
-    }
-
-    const onStorageChange = () => {
-      void readThemeFromSettings()
-    }
-
-    void readThemeFromSettings()
-    media.addEventListener('change', onSystemThemeChange)
-    window.addEventListener('focus', onStorageChange)
-    document.addEventListener('visibilitychange', onStorageChange)
+    applyTheme()
+    media.addEventListener('change', applyTheme)
 
     return () => {
-      media.removeEventListener('change', onSystemThemeChange)
-      window.removeEventListener('focus', onStorageChange)
-      document.removeEventListener('visibilitychange', onStorageChange)
+      media.removeEventListener('change', applyTheme)
     }
   }, [])
 
