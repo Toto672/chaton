@@ -568,12 +568,39 @@ async function mergeWorktreeIntoMain(conversationId: string): Promise<WorktreeMe
     return { ok: false, reason: 'worktree_not_found' }
   }
   const baseBranch = 'main'
-  const sourceBranch = await getCurrentBranch(conversation.worktree_path).catch(() => 'HEAD')
+  const worktreePath = conversation.worktree_path
+  const sourceBranch = await getCurrentBranch(worktreePath).catch(() => 'HEAD')
   const alreadyMerged = await isMerged(projectRepoPath, sourceBranch, `origin/${baseBranch}`).catch(() => false)
   if (alreadyMerged) {
     return { ok: false, reason: 'already_merged' }
   }
   try {
+    const { stdout: worktreeStatusStdout } = await execFileAsync('git', ['-C', worktreePath, 'status', '--porcelain', '--untracked-files=all'], {
+      timeout: 10_000,
+      maxBuffer: 1024 * 1024,
+      env: buildPiEnv(),
+    })
+    const hasLocalChanges = Boolean((worktreeStatusStdout ?? '').trim())
+    if (hasLocalChanges) {
+      await execFileAsync('git', ['-C', worktreePath, 'add', '-A'], {
+        timeout: 20_000,
+        maxBuffer: 1024 * 1024,
+        env: buildPiEnv(),
+      })
+      try {
+        await execFileAsync('git', ['-C', worktreePath, 'commit', '-m', `chore(worktree): auto-commit before merge to ${baseBranch}`], {
+          timeout: 20_000,
+          maxBuffer: 2 * 1024 * 1024,
+          env: buildPiEnv(),
+        })
+      } catch (error) {
+        const commitMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+        if (!commitMessage.includes('nothing to commit')) {
+          throw error
+        }
+      }
+    }
+
     await execFileAsync('git', ['-C', projectRepoPath, 'fetch', 'origin', baseBranch], {
       timeout: 20_000,
       maxBuffer: 1024 * 1024,
