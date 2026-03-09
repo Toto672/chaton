@@ -763,45 +763,45 @@ const translations: Record<string, Translation> = {
       releases: "Versões",
     },
     hero: {
-      eyebrow: "O espaço de trabalho AI de desktop construído para equipes que valorizam a liberdade",
-      title: "Entregue mais rápido com IA. Nos seus termos.",
+      eyebrow: "O workspace de IA para desktop feito para equipes que valorizam liberdade",
+      title: "Vá mais rápido com IA. Do seu jeito.",
       subtitle:
-        "Chatons é o espaço de trabalho desktop profissional onde você escolhe seu provedor de IA, constrói extensões personalizadas e mantém controle total. Pare de ser preso em plataformas proprietárias. Comece a construir o espaço de trabalho que sua equipe realmente precisa.",
+        "Chatons é um workspace profissional para desktop em que você escolhe seu provedor de IA, cria extensões sob medida e mantém o controle de ponta a ponta. Saia das plataformas fechadas e monte o ambiente que sua equipe realmente precisa.",
       downloadButton: "Baixar para",
-      selectBinary: "Selecionar outro binário",
+      selectBinary: "Escolher outro binário",
     },
     signals: [
-      "Trabalhe com todos os principais provedores de IA—sem lock-in de fornecedor, flexibilidade ilimitada",
-      "Automatize seu fluxo de trabalho com ferramentas integradas, projetos e extensões personalizadas",
-      "Design desktop-first que respeita sua privacidade, dados e independência",
+      "Trabalhe com os principais provedores de IA, sem ficar preso a um só fornecedor",
+      "Automatize seus fluxos com ferramentas integradas, projetos e extensões personalizadas",
+      "Uma experiência desktop que respeita sua privacidade, seus dados e sua independência",
     ],
     proof: {
-      providerAgnostic: "Agnóstico do Provedor",
-      fullyExtensible: "Totalmente Extensível",
-      openSource: "Código Aberto",
+      providerAgnostic: "Independente de fornecedor",
+      fullyExtensible: "Totalmente extensível",
+      openSource: "Código aberto",
     },
     features: {
       useAnyModel: {
-        title: "Use Qualquer Modelo de IA",
-        body: "ChatGPT, Claude, GitHub Copilot, Llama, ou sua própria API. Mude de provedor instantaneamente sem perder o contexto ou a continuidade do espaço de trabalho. Nunca fique preso por um único provedor.",
+        title: "Use o modelo de IA que preferir",
+        body: "ChatGPT, Claude, GitHub Copilot, Llama ou a sua própria API. Troque de provedor na hora sem perder contexto nem continuidade no workspace.",
       },
       buildExtensions: {
-        title: "Construa Extensões Personalizadas",
-        body: "Crie integrações poderosas, ferramentas personalizadas e automações de equipe. Estenda Chatons para um espaço de trabalho adaptado apenas a como sua equipe trabalha.",
+        title: "Crie extensões sob medida",
+        body: "Monte integrações poderosas, ferramentas próprias e automações para a equipe. Adapte o Chatons ao jeito real como vocês trabalham.",
       },
       ownSetup: {
-        title: "Possua Sua Configuração",
-        body: "100% código aberto, inspecione cada linha, execute localmente ou na nuvem. Mantenha suas chaves de API privadas, seus dados seguros e controle total sobre sua infraestrutura de IA.",
+        title: "Mantenha seu setup sob controle",
+        body: "100% código aberto: inspecione cada linha, rode localmente ou na nuvem e mantenha suas chaves de API, seus dados e sua infraestrutura de IA sob seu controle.",
       },
     },
     downloadOptions: {
       macAppleSilicon: {
         label: "macOS (Apple Silicon)",
-        detail: "Melhor para M1, M2, M3 e Macs mais novos",
+        detail: "Ideal para Macs com M1, M2, M3 e mais recentes",
       },
       macIntel: {
         label: "macOS (Intel)",
-        detail: "Melhor para Macs baseados em Intel",
+        detail: "Ideal para Macs com processador Intel",
       },
       windows: {
         label: "Windows",
@@ -809,45 +809,45 @@ const translations: Record<string, Translation> = {
       },
       linux: {
         label: "Linux",
-        detail: "Compilação de desktop portátil para Linux",
+        detail: "Versão desktop portátil para Linux",
       },
     },
     sections: {
       providers: {
-        eyebrow: "Sem Lock-in de Fornecedor",
-        title: "Use Todos os Provedores de IA",
+        eyebrow: "Sem lock-in",
+        title: "Use o provedor de IA que quiser",
         description:
-          "ChatGPT um dia, Claude o próximo. GitHub Copilot no trabalho, modelos locais em casa. Seu espaço de trabalho se adapta às suas escolhas, não o contrário. Liberdade total. Zero lock-in.",
+          "Hoje ChatGPT, amanhã Claude. GitHub Copilot no trabalho, modelos locais em casa. Seu workspace se adapta às suas escolhas, e não o contrário. Liberdade total, sem amarras.",
       },
       extensions: {
-        eyebrow: "Extensibilidade Ilimitada",
-        title: "Personalize para Sua Equipe",
+        eyebrow: "Extensibilidade sem limites",
+        title: "Personalize para sua equipe",
         description:
-          "Ferramentas genéricas não funcionam. Construa extensões personalizadas e automações que correspondam ao seu fluxo de trabalho exato. Chatons é uma base para o espaço de trabalho que apenas sua equipe poderia imaginar.",
+          "Ferramentas genéricas logo ficam curtas. Crie extensões e automações que combinem de verdade com o seu fluxo de trabalho. O Chatons dá a base para montar um ambiente com a cara do seu time.",
         customTools: {
-          title: "Ferramentas e Scripts Personalizados",
+          title: "Ferramentas e scripts personalizados",
           description:
-            "Escreva ferramentas uma vez, use-as em qualquer lugar. Integre com suas APIs, bancos de dados ou sistemas internos. Os superpoderes da sua equipe em um espaço de trabalho.",
+            "Escreva uma ferramenta uma vez e use onde quiser. Integre suas APIs, bancos de dados ou sistemas internos. Toda a força do seu time em um só lugar.",
         },
         teamAutomation: {
-          title: "Automação de Equipe",
+          title: "Automação para equipes",
           description:
-            "Construa fluxos de trabalho que permitem que sua equipe se concentre no que importa. Reduza tarefas repetitivas, aplique padrões e entregue qualidade consistente.",
+            "Crie fluxos que deixem sua equipe focar no que realmente importa. Reduza tarefas repetitivas, aplique padrões e entregue qualidade com consistência.",
         },
         developerExperience: {
-          title: "Experiência do Desenvolvedor",
+          title: "Experiência para desenvolvedores",
           description:
-            "SDK completo e documentação abrangente. Construa extensões complexas ou scripts simples. Chatons escala de vitórias rápidas para soluções corporativas.",
+            "SDK completo e documentação clara. De scripts simples a extensões complexas, o Chatons acompanha a evolução das suas necessidades.",
         },
-        exploreSDK: "Explore o SDK de Extensões",
+        exploreSDK: "Explorar o SDK de extensões",
       },
       bottomCTA: {
-        eyebrow: "Comece",
-        title: "O espaço de trabalho que sua equipe merece",
+        eyebrow: "Comece agora",
+        title: "O workspace que sua equipe merece",
         description:
-          "Escolha sua IA. Construa suas ferramentas. Possua sua configuração. Chatons lhe dá a liberdade de trabalhar do seu jeito, sem compromissos.",
+          "Escolha sua IA, crie suas ferramentas e mantenha o controle do seu ambiente. O Chatons dá a liberdade de trabalhar do seu jeito, sem concessões.",
         downloadButton: "Baixar para",
-        exploreGitHub: "Explore no GitHub",
+        exploreGitHub: "Ver no GitHub",
       },
     },
   },
@@ -1147,45 +1147,45 @@ const translations: Record<string, Translation> = {
       releases: "Releases",
     },
     hero: {
-      eyebrow: "De desktop AI-werkruimte gebouwd voor teams die vrijheid waarderen",
-      title: "Lever sneller op met AI. Op jouw voorwaarden.",
+      eyebrow: "De desktop AI-werkruimte voor teams die vrijheid belangrijk vinden",
+      title: "Werk sneller met AI. Op jouw manier.",
       subtitle:
-        "Chatons is de professionele desktop-werkruimte waar je je AI-provider kiest, aangepaste extensies bouwt en volledige controle behoudt. Stop met vastzitten in propriëtaire platforms. Begin de werkruimte te bouwen die je team echt nodig heeft.",
+        "Chatons is een professionele desktop-werkruimte waarin je zelf je AI-provider kiest, eigen extensies bouwt en de volledige controle houdt. Weg met gesloten platforms: bouw de werkomgeving die jouw team echt nodig heeft.",
       downloadButton: "Download voor",
-      selectBinary: "Ander binair bestand selecteren",
+      selectBinary: "Kies een andere binary",
     },
     signals: [
-      "Werk met alle grote AI-providers—geen vendor lock-in, onbeperkte flexibiliteit",
-      "Automatiseer je workflow met ingebouwde tools, projecten en aangepaste extensies",
-      "Desktop-first ontwerp dat je privacy, gegevens en onafhankelijkheid respecteert",
+      "Werk met alle grote AI-providers, zonder vast te zitten aan één leverancier",
+      "Automatiseer je workflow met ingebouwde tools, projecten en extensies op maat",
+      "Een desktopervaring die je privacy, data en onafhankelijkheid respecteert",
     ],
     proof: {
-      providerAgnostic: "Provider Agnostisch",
-      fullyExtensible: "Volledig Uitbreidbaar",
-      openSource: "Open Source",
+      providerAgnostic: "Provider-onafhankelijk",
+      fullyExtensible: "Volledig uitbreidbaar",
+      openSource: "Open source",
     },
     features: {
       useAnyModel: {
-        title: "Gebruik elk AI-model",
-        body: "ChatGPT, Claude, GitHub Copilot, Llama, of je eigen API. Wissel instant van provider zonder context of werkruimte continuïteit te verliezen. Zit nooit vast aan één provider.",
+        title: "Gebruik elk AI-model dat je wilt",
+        body: "ChatGPT, Claude, GitHub Copilot, Llama of je eigen API. Wissel direct van provider zonder context of continuiteit in je werkruimte te verliezen.",
       },
       buildExtensions: {
-        title: "Bouw aangepaste extensies",
-        body: "Maak krachtige integraties, aangepaste tools en team-automatiseringen. Breid Chatons uit naar een werkruimte die perfect past bij hoe je team echt werkt.",
+        title: "Bouw extensies op maat",
+        body: "Maak krachtige integraties, eigen tools en automatiseringen voor je team. Pas Chatons aan op de manier waarop jullie echt werken.",
       },
       ownSetup: {
-        title: "Bezit je setup",
-        body: "100% open source, inspecteer elke regel, voer lokaal of in de cloud uit. Houd je API-sleutels privé, je gegevens veilig en heb volledige controle over je AI-infrastructuur.",
+        title: "Houd grip op je setup",
+        body: "100% open source: inspecteer elke regel code, draai lokaal of in de cloud en houd controle over je API-sleutels, data en AI-infrastructuur.",
       },
     },
     downloadOptions: {
       macAppleSilicon: {
         label: "macOS (Apple Silicon)",
-        detail: "Beste voor M1, M2, M3 en nieuwere Macs",
+        detail: "Ideaal voor Macs met M1, M2, M3 en nieuwer",
       },
       macIntel: {
         label: "macOS (Intel)",
-        detail: "Beste voor Intel-gebaseerde Macs",
+        detail: "Ideaal voor Intel-gebaseerde Macs",
       },
       windows: {
         label: "Windows",
@@ -1193,45 +1193,45 @@ const translations: Record<string, Translation> = {
       },
       linux: {
         label: "Linux",
-        detail: "Draagbare desktop-build voor Linux",
+        detail: "Draagbare desktopversie voor Linux",
       },
     },
     sections: {
       providers: {
-        eyebrow: "Geen Vendor Lock-in",
-        title: "Gebruik elke AI-provider",
+        eyebrow: "Zonder vendor lock-in",
+        title: "Gebruik de AI-provider die bij je past",
         description:
-          "ChatGPT de ene dag, Claude de volgende. GitHub Copilot op het werk, lokale modellen thuis. Je werkruimte past zich aan je keuzes aan, niet andersom. Volledige vrijheid. Nul lock-in.",
+          "Vandaag ChatGPT, morgen Claude. GitHub Copilot op het werk, lokale modellen thuis. Je werkruimte past zich aan jouw keuzes aan, niet andersom. Volledige vrijheid, zonder lock-in.",
       },
       extensions: {
-        eyebrow: "Onbeperkte Uitbreidbaarheid",
-        title: "Pas het aan voor je team",
+        eyebrow: "Eindeloos uitbreidbaar",
+        title: "Maak het passend voor je team",
         description:
-          "Generieke tools zijn niet voldoende. Bouw aangepaste extensies en automatisering die passen bij je exacte workflow. Chatons is een basis voor de werkruimte die alleen je team kan dromen.",
+          "Generieke tools schieten vaak tekort. Bouw extensies en automatiseringen die echt aansluiten op jullie workflow. Chatons geeft je de basis voor een werkomgeving die voelt alsof die voor jullie gemaakt is.",
         customTools: {
           title: "Aangepaste tools en scripts",
           description:
-            "Schrijf tools eenmaal, gebruik ze overal. Integreer met je API's, databases of interne systemen. De superkrachten van je team in één werkruimte.",
+            "Schrijf een tool één keer en gebruik hem overal. Koppel je API's, databases of interne systemen. Alle kracht van je team samen in één werkruimte.",
         },
         teamAutomation: {
-          title: "Team-automatisering",
+          title: "Automatisering voor teams",
           description:
-            "Bouw workflows die je team zich kunnen concentreren op wat telt. Reduceer repetitieve taken, handhaf normen en lever consistente kwaliteit.",
+            "Bouw workflows waarmee je team zich kan richten op wat echt belangrijk is. Verminder repetitief werk, bewaak standaarden en lever consistent kwaliteit.",
         },
         developerExperience: {
-          title: "Ontwikkelaarvaring",
+          title: "Developer experience",
           description:
-            "Volledige SDK en uitgebreide documentatie. Bouw complexe extensies of eenvoudige scripts. Chatons schaalt van snelle wins tot enterprise-oplossingen.",
+            "Een volledige SDK en duidelijke documentatie. Van kleine scripts tot complexe extensies: Chatons groeit mee met wat je nodig hebt.",
         },
-        exploreSDK: "Verken Extension SDK",
+        exploreSDK: "Verken de extension SDK",
       },
       bottomCTA: {
-        eyebrow: "Aan de slag",
+        eyebrow: "Ga aan de slag",
         title: "De werkruimte die je team verdient",
         description:
-          "Kies je AI. Bouw je tools. Bezit je setup. Chatons geeft je de vrijheid om op jouw manier te werken, zonder compromissen.",
+          "Kies je AI, bouw je tools en houd controle over je omgeving. Chatons geeft je de vrijheid om te werken zoals jij wilt, zonder concessies.",
         downloadButton: "Download voor",
-        exploreGitHub: "Verken op GitHub",
+        exploreGitHub: "Bekijk op GitHub",
       },
     },
   },
@@ -1243,45 +1243,45 @@ const translations: Record<string, Translation> = {
       releases: "Versioner",
     },
     hero: {
-      eyebrow: "Skrivbordets AI-arbetsyta byggd för team som värderar frihet",
-      title: "Leverera snabbare med AI. På dina villkor.",
+      eyebrow: "AI-arbetsytan för desktop, byggd för team som värdesätter frihet",
+      title: "Kom längre snabbare med AI. På era villkor.",
       subtitle:
-        "Chatons är den professionella skrivbordsarbetsytan där du väljer din AI-leverantör, bygger anpassade tillägg och behåller full kontroll. Sluta vara instängd i proprietära plattformar. Börja bygga arbetsytan som ditt team verkligen behöver.",
+        "Chatons är en professionell desktop-arbetsyta där ni själva väljer AI-leverantör, bygger egna tillägg och behåller full kontroll. Slipp låsta plattformar och skapa den arbetsmiljö som ert team faktiskt behöver.",
       downloadButton: "Ladda ner för",
-      selectBinary: "Välj annan binär",
+      selectBinary: "Välj en annan binär",
     },
     signals: [
-      "Arbeta med alla stora AI-leverantörer—ingen leverantörbindning, obegränsad flexibilitet",
-      "Automatisera ditt arbetsflöde med inbyggda verktyg, projekt och anpassade tillägg",
-      "Skrivbordsdesign som respekterar din integritet, data och oberoende",
+      "Arbeta med de största AI-leverantörerna utan att låsa er till en enda aktör",
+      "Automatisera era arbetsflöden med inbyggda verktyg, projekt och egna tillägg",
+      "En desktopupplevelse som respekterar er integritet, era data och er självständighet",
     ],
     proof: {
-      providerAgnostic: "Leverantöroberoende",
-      fullyExtensible: "Helt utökbar",
+      providerAgnostic: "Leverantörsoberoende",
+      fullyExtensible: "Helt utbyggbar",
       openSource: "Öppen källkod",
     },
     features: {
       useAnyModel: {
-        title: "Använd vilken AI-modell som helst",
-        body: "ChatGPT, Claude, GitHub Copilot, Llama eller ditt eget API. Byt leverantör omedelbar utan att förlora kontexten eller arbetsytans kontinuitet. Bli aldrig fastlåst av en enda leverantör.",
+        title: "Använd vilken AI-modell ni vill",
+        body: "ChatGPT, Claude, GitHub Copilot, Llama eller ert eget API. Byt leverantör direkt utan att tappa kontext eller kontinuitet i arbetsytan.",
       },
       buildExtensions: {
-        title: "Bygg anpassade tillägg",
-        body: "Skapa kraftfulla integrationer, anpassade verktyg och teamautomation. Utöka Chatons till en arbetsyta perfekt anpassad för hur ditt team faktiskt arbetar.",
+        title: "Bygg egna tillägg",
+        body: "Skapa kraftfulla integrationer, anpassade verktyg och automatisering för teamet. Anpassa Chatons efter hur ni faktiskt arbetar.",
       },
       ownSetup: {
-        title: "Äga din konfiguration",
-        body: "100% öppen källkod, inspektera varje rad, kör lokalt eller i molnet. Håll dina API-nycklar privata, dina data säkra och fullständig kontroll över din AI-infrastruktur.",
+        title: "Behåll kontrollen över ert setup",
+        body: "100 % öppen källkod: granska varje rad, kör lokalt eller i molnet och ha full koll på API-nycklar, data och AI-infrastruktur.",
       },
     },
     downloadOptions: {
       macAppleSilicon: {
         label: "macOS (Apple Silicon)",
-        detail: "Bäst för M1, M2, M3 och nyare Macs",
+        detail: "Perfekt för Mac med M1, M2, M3 och senare",
       },
       macIntel: {
         label: "macOS (Intel)",
-        detail: "Bäst för Intel-baserade Macs",
+        detail: "Perfekt för Intel-baserade Mac",
       },
       windows: {
         label: "Windows",
@@ -1289,45 +1289,45 @@ const translations: Record<string, Translation> = {
       },
       linux: {
         label: "Linux",
-        detail: "Portabel skrivbordsbygge för Linux",
+        detail: "Portabel desktop-version för Linux",
       },
     },
     sections: {
       providers: {
-        eyebrow: "Ingen leverantörbindning",
-        title: "Använd varje AI-leverantör",
+        eyebrow: "Utan leverantörslåsning",
+        title: "Använd den AI-leverantör som passar er",
         description:
-          "ChatGPT en dag, Claude nästa dag. GitHub Copilot på jobbet, lokala modeller hemma. Din arbetsyta anpassas till dina val, inte tvärtom. Fullständig frihet. Noll bindning.",
+          "ChatGPT ena dagen, Claude nästa. GitHub Copilot på jobbet, lokala modeller hemma. Arbetsytan anpassar sig efter era val, inte tvärtom. Full frihet, utan inlåsning.",
       },
       extensions: {
-        eyebrow: "Obegränsad utökbarhet",
-        title: "Anpassa för ditt team",
+        eyebrow: "Utbyggbar utan gränser",
+        title: "Forma den efter ert team",
         description:
-          "Generiska verktyg räcker inte. Bygg anpassade tillägg och automationer som matchar ditt exakta arbetsflöde. Chatons är grunden för arbetsytan som bara ditt team kan drömma om.",
+          "Generiska verktyg räcker sällan hela vägen. Bygg tillägg och automatiseringar som faktiskt passar era arbetsflöden. Chatons ger er en stabil grund för att skapa en arbetsyta som känns som er egen.",
         customTools: {
           title: "Anpassade verktyg och skript",
           description:
-            "Skriv verktyg en gång, använd dem överallt. Integrera med dina API:er, databaser eller interna system. Ditt teams superkrafter i en arbetsyta.",
+            "Skriv ett verktyg en gång och använd det överallt. Integrera med era API:er, databaser eller interna system. All styrka i ert team, samlad på ett ställe.",
         },
         teamAutomation: {
-          title: "Teamautomation",
+          title: "Automatisering för team",
           description:
-            "Bygg arbetsflöden som låter ditt team fokusera på vad som spelar roll. Minska repetitiva uppgifter, tillämpa standarder och leverera konsekvent kvalitet.",
+            "Bygg arbetsflöden som låter teamet fokusera på det som verkligen spelar roll. Minska repetitiva uppgifter, håll standarden hög och leverera jämn kvalitet.",
         },
         developerExperience: {
-          title: "Utvecklarupplevelse",
+          title: "Bra utvecklarupplevelse",
           description:
-            "Fullständig SDK och omfattande dokumentation. Bygg komplexa tillägg eller enkla skript. Chatons skaleras från snabba segrar till enterprise-lösningar.",
+            "Ett komplett SDK och tydlig dokumentation. Från små skript till avancerade tillägg - Chatons växer med era behov.",
         },
-        exploreSDK: "Utforska Extensions SDK",
+        exploreSDK: "Utforska tilläggs-SDK:t",
       },
       bottomCTA: {
         eyebrow: "Kom igång",
-        title: "Arbetsytan som ditt team förtjänar",
+        title: "Arbetsytan som ert team förtjänar",
         description:
-          "Välj din AI. Bygg dina verktyg. Äga din konfiguration. Chatons ger dig friheten att arbeta på ditt sätt, utan kompromisser.",
+          "Välj er AI, bygg era verktyg och behåll kontrollen över er miljö. Chatons ger er friheten att arbeta på ert sätt, utan kompromisser.",
         downloadButton: "Ladda ner för",
-        exploreGitHub: "Utforska på GitHub",
+        exploreGitHub: "Se på GitHub",
       },
     },
   },
