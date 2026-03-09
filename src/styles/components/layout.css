@@ -32,14 +32,14 @@
 
   .sidebar-section-head {
     -webkit-app-region: no-drag;
-    @apply flex items-center justify-between px-4 py-2 text-[#8d8e95];
+    @apply flex items-center gap-2 px-4 py-2 text-[#8d8e95];
   }
 
   .sidebar-section-title {
     -webkit-app-region: no-drag;
     font-size: 16px;
     line-height: 1.2;
-    @apply font-semibold;
+    @apply min-w-0 flex-1 truncate font-semibold;
   }
 
   .sidebar-icon-button {

@@ -10,7 +10,7 @@ export function SidebarHeaderActions() {
   const { importProject, createConversationGlobal, toggleSidebarSearch, state } = useWorkspace()
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="ml-auto flex shrink-0 items-center gap-2">
       <button
         type="button"
         className="sidebar-icon-button"
