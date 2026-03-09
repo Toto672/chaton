@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ImageContent, FileContent } from "@/features/workspace/rpc";
+import { usePiStore } from "@/features/workspace/store/pi-store";
 import { workspaceIpc } from "@/services/ipc/workspace";
 
 import { buildMessageWithAttachments } from "./attachments";
@@ -83,6 +84,24 @@ export function useComposerMessaging({
   collapseSidePanel,
 }: UseComposerMessagingArgs): UseComposerMessagingResult {
   const [draftsByKey, setDraftsByKey] = useState<Record<string, string>>({});
+
+  // Subscribe directly to the piStore for queue drain decisions.
+  // This avoids depending on the parent re-render cycle to propagate
+  // runtime changes — the external store subscription fires immediately
+  // when the runtime transitions (e.g. agent_end), ensuring the drain
+  // useEffect re-evaluates without delay.
+  const runtimeIdle = usePiStore((s) => {
+    if (!selectedConversationId) return true;
+    const rt = s.piByConversation[selectedConversationId];
+    if (!rt) return true;
+    return (
+      !rt.state?.isStreaming &&
+      rt.status !== "streaming" &&
+      rt.status !== "starting" &&
+      !rt.pendingUserMessage &&
+      (rt.pendingCommands ?? 0) === 0
+    );
+  });
   const [pendingAttachmentsByKey, setPendingAttachmentsByKey] = useState<Record<string, PendingAttachment[]>>({});
   const [fileAttenteMessagesByKey, setFileAttenteMessagesByKey] = useState<Record<string, string[]>>({});
   const [indexEditionFileAttenteByKey, setIndexEditionFileAttenteByKey] = useState<Record<string, number | null>>({});
@@ -433,6 +452,7 @@ export function useComposerMessaging({
     composerKey,
     envoiFileAttenteEnCours,
     fileAttenteMessages,
+    runtimeIdle,
     selectedRuntime?.pendingUserMessage,
     selectedRuntime?.state?.isStreaming,
     selectedRuntime?.status,

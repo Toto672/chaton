@@ -29,6 +29,14 @@
     border-color: #4fc3f7;
   }
 
+  .dark .tracing-button {
+    @apply text-[#9ca3af];
+  }
+
+  .dark .tracing-button-active {
+    @apply text-[#f87171];
+  }
+
   .dark .sidebar-item,
   .dark .project-header,
   .dark .thread-row-title {

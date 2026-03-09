@@ -910,6 +910,13 @@ export const workspaceIpc = {
     getApi().getAllDrafts(),
   deleteDraft: (key: string): Promise<{ ok: boolean; error?: string }> =>
     getApi().deleteDraft(key),
+
+  // Performance tracing
+  startTracing: (): Promise<{ ok: true } | { ok: false; message: string }> =>
+    getApi().startTracing(),
+  stopTracing: (): Promise<
+    { ok: true; filePath?: string; cancelled?: boolean } | { ok: false; message: string }
+  > => getApi().stopTracing(),
 };
 
 export type { ImportProjectResult, WorkspacePayload };

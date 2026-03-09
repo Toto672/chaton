@@ -191,9 +191,10 @@ export function listRegisteredExtensionUi() {
   return listExtensionManifests().map((manifest) => {
     const installedEntry = installedById.get(manifest.id)
     const usage = Array.from(runtimeState.capabilityUsage.get(manifest.id) ?? new Set())
-    const menuItems = manifest.kind === 'channel'
-      ? []
-      : (manifest.ui?.menuItems ?? [])
+    // Extract sidebar menu items from all extensions (not just channels)
+    const sidebarMenuItems = (manifest.ui?.menuItems ?? []).filter(
+      (item) => item.location === 'sidebar'
+    )
     const serverStatus = runtimeState.serverStatus.get(manifest.id) ?? null
     const icon = manifest.icon
     return {
@@ -201,7 +202,7 @@ export function listRegisteredExtensionUi() {
       kind: manifest.kind ?? null,
       icon,
       iconUrl: icon ? resolveIconDataUrl(manifest.id, icon) ?? icon : undefined,
-      menuItems,
+      sidebarMenuItems,
       mainViews: (manifest.ui?.mainViews ?? []).map((mainView) => ({
         ...mainView,
         icon: mainView.icon ?? manifest.icon,

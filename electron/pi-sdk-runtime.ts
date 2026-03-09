@@ -37,6 +37,7 @@ import {
 import { getDb } from "./db/index.js";
 import { findProjectById } from "./db/repos/projects.js";
 import { getSidebarSettings } from "./db/repos/settings.js";
+import { createCoreTools } from "./core-tools.js";
 import {
   runBeforePiLaunchHooks,
   getChatonsExtensionsBaseDir,
@@ -995,6 +996,13 @@ export class PiSdkRuntime {
     const builtinTools = createCodingTools(toolsCwd);
     const builtinExtensionTools = getBuiltinExtensionTools();
 
+    // Core conversation tools (task list, sub-agents, action suggestions, etc.)
+    // registered directly on the session, not through the extension system.
+    const coreTools = createCoreTools(
+      this.conversationId,
+      (method, payload) => this.emitExtensionUiRequest(method as RpcExtensionUiRequest["method"], payload as Record<string, JsonValue | undefined>),
+    );
+
     // Mutable ref so lazy discovery tools can activate tools on the session
     // after it is created (the session doesn't exist yet at tool definition time).
     let sessionRef: { current: AgentSession | null } = { current: null };
@@ -1248,7 +1256,7 @@ export class PiSdkRuntime {
       resourceLoader,
       sessionManager,
       tools: builtinTools,
-      customTools: [...lazyDiscoveryTools, ...wrappedExtensionTools],
+      customTools: [...coreTools, ...lazyDiscoveryTools, ...wrappedExtensionTools],
       ...(model ? { model } : {}),
       thinkingLevel,
     });

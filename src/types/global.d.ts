@@ -971,6 +971,14 @@ declare global {
       deleteDraft: (
         key: string,
       ) => Promise<{ ok: boolean; error?: string }>;
+      // Performance tracing
+      startTracing: () => Promise<
+        { ok: true } | { ok: false; message: string }
+      >;
+      stopTracing: () => Promise<
+        | { ok: true; filePath?: string; cancelled?: boolean }
+        | { ok: false; message: string }
+      >;
     };
     pi: {
       getModels: () => Promise<PiModel[]>;

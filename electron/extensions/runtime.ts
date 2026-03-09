@@ -16,6 +16,7 @@ import { runtimeState } from './runtime/state.js'
 import { storageFilesRead, storageFilesWrite, storageKvDeleteEntry, storageKvGet, storageKvListEntries, storageKvSet } from './runtime/storage.js'
 import { buildExtensionToolDefinitions } from './runtime/tools.js'
 import { buildToolCatalogFromExposedTools, getToolCatalogEntry, searchToolCatalog } from './runtime/tool-catalog.js'
+import { extensionKvGet, extensionKvSet } from '../db/repos/extension-kv.js'
 import type { ChatonsExtensionRegistryEntry } from './manager.js'
 import type { ExposedExtensionToolDefinition, ExtensionHostCallResult, ExtensionManifest, HostEventTopic } from './runtime/types.js'
 import { createAutomationRuntime } from './runtime/automation.js'
@@ -23,6 +24,54 @@ import { createPiInstructionExecutor } from './runtime/automation-pi-bridge.js'
 import type { PiSessionRuntimeManager } from '../pi-sdk-runtime.js'
 
 let piRuntimeManagerInstance: PiSessionRuntimeManager | null = null
+
+// In-memory event buffer for batched writes to extension KV storage.
+// Groups events by extensionId+key, flushed periodically.
+const eventBuffer = new Map<string, { extensionId: string; key: string; items: unknown[] }>()
+let eventFlushTimer: ReturnType<typeof setTimeout> | null = null
+const EVENT_FLUSH_INTERVAL_MS = 3000
+
+function flushEventBuffer() {
+  eventFlushTimer = null
+  if (eventBuffer.size === 0) return
+  try {
+    const db = getDb()
+    for (const entry of eventBuffer.values()) {
+      const existing = extensionKvGet(db, entry.extensionId, entry.key)
+      const arr = Array.isArray(existing) ? existing : []
+      const merged = arr.concat(entry.items)
+      extensionKvSet(db, entry.extensionId, entry.key, merged)
+    }
+  } catch (_) { /* non-critical -- ignore storage errors */ }
+  eventBuffer.clear()
+}
+
+function scheduleEventFlush() {
+  if (eventFlushTimer) return
+  eventFlushTimer = setTimeout(flushEventBuffer, EVENT_FLUSH_INTERVAL_MS)
+}
+
+/** Append event payload to an extension's KV array, batched for performance. */
+async function appendEventToExtensionKv(extensionId: string, topic: string, payload: unknown) {
+  // Map known topics to storage keys
+  let key: string
+  if (topic === 'conversation.turn.ended') {
+    key = 'usage_records_v1'
+  } else if (topic === 'conversation.tool.executed') {
+    key = 'tool_records_v1'
+  } else {
+    key = 'events_' + topic.replace(/\./g, '_')
+  }
+
+  const bufferKey = extensionId + ':' + key
+  let entry = eventBuffer.get(bufferKey)
+  if (!entry) {
+    entry = { extensionId, key, items: [] }
+    eventBuffer.set(bufferKey, entry)
+  }
+  entry.items.push(payload)
+  scheduleEventFlush()
+}
 
 const require = createRequire(import.meta.url)
 
@@ -142,6 +191,11 @@ export function emitHostEvent(topic: HostEventTopic | string, payload: unknown) 
 
     // Fire-and-forget: run automation in background, don't block event emission
     void automationRuntime.runAutomationOnEvent(subscription.extensionId, topic, payload)
+
+    // For non-automation extensions, persist the event into KV for later retrieval
+    if (subscription.extensionId !== BUILTIN_AUTOMATION_ID) {
+      void appendEventToExtensionKv(subscription.extensionId, topic, payload)
+    }
   }
 
   return { ok: true as const, event }

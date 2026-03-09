@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm'
 
 import { InlineFileDiff } from '@/components/shell/mainView/InlineFileDiff'
 import { CollapsibleToolBlock, LiveToolTrace } from '@/components/shell/mainView/ToolBlocks'
+import { useScrollShadow } from '@/hooks/useScrollShadow'
 import {
   compactCommandLabel,
   dedupeToolCalls,
@@ -79,6 +80,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   const hasToolBlocks = visibleToolBlocks.length > 0
   const messageBodyRef = useRef<HTMLDivElement>(null)
   const isAssistantMessage = role === 'assistant'
+
+  useScrollShadow(messageBodyRef)
 
   const loadDiffForFile = useCallback(
     async (path: string) => {

@@ -276,6 +276,20 @@
     @apply bg-[#dcf2e5] text-[#165233];
   }
 
+  .tracing-button {
+    @apply text-[#5f6573];
+  }
+
+  .tracing-button-active {
+    @apply text-[#e53e3e];
+    animation: tracing-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes tracing-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
   .worktree-commit-box {
     @apply mt-3 flex flex-col gap-2;
   }

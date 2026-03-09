@@ -59,6 +59,30 @@
     @apply max-h-[560px] overflow-auto text-[15px] leading-7 text-[#232731];
   }
 
+  /* Scroll shadow wrapper: use relative positioning on the scrollable element
+     and paint top/bottom shadows via inset box-shadows driven by JS-toggled classes. */
+  .chat-message-text,
+  .chat-markdown {
+    position: relative;
+    /* Two-layer box-shadow: top shadow + bottom shadow, both transparent by default */
+    --shadow-top-opacity: 0;
+    --shadow-bottom-opacity: 0;
+    box-shadow:
+      inset 0 12px 10px -10px rgba(0, 0, 0, calc(var(--shadow-top-opacity) * 0.09)),
+      inset 0 -12px 10px -10px rgba(0, 0, 0, calc(var(--shadow-bottom-opacity) * 0.09));
+    transition: box-shadow 120ms ease;
+  }
+
+  .chat-message-text.scroll-shadow-top,
+  .chat-markdown.scroll-shadow-top {
+    --shadow-top-opacity: 1;
+  }
+
+  .chat-message-text.scroll-shadow-bottom,
+  .chat-markdown.scroll-shadow-bottom {
+    --shadow-bottom-opacity: 1;
+  }
+
   .chat-markdown p {
     @apply my-0;
   }

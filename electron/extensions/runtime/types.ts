@@ -31,6 +31,8 @@ export type HostEventTopic =
   | 'conversation.message.received'
   | 'conversation.agent.started'
   | 'conversation.agent.ended'
+  | 'conversation.turn.ended'
+  | 'conversation.tool.executed'
   | 'project.created'
   | 'project.deleted'
   | 'extension.installed'

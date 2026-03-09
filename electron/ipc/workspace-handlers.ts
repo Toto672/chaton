@@ -94,7 +94,7 @@ import { getOAuthProvider } from "@mariozechner/pi-ai";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-const { app, BrowserWindow, dialog, ipcMain, shell } = electron;
+const { app, BrowserWindow, contentTracing, dialog, ipcMain, shell } = electron;
 
 type ProjectTerminalRunStatus = "running" | "exited" | "failed" | "stopped";
 
@@ -525,229 +525,6 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
     requestId: string,
   ): string | undefined => activeToolExecutionContext.get(requestId);
 
-  (globalThis as Record<string, unknown>).__chatonsDisplayActionSuggestions = (
-    suggestions: Array<{ id: string; label: string; message: string }>,
-  ): boolean => {
-    // Try to find the active runtime by looking for one that's currently streaming
-    let activeRuntime = deps.piRuntimeManager.getActiveRuntime();
-
-    // If no active runtime found, try to get from execution context
-    if (!activeRuntime) {
-      const conversationId = Array.from(activeToolExecutionContext.values())[0];
-      if (conversationId) {
-        activeRuntime =
-          deps.piRuntimeManager.getRuntimeForConversation(conversationId);
-      }
-    }
-
-    if (!activeRuntime) {
-      console.warn("display_action_suggestions: no active Pi runtime found");
-      return false;
-    }
-
-    // Emit an extension_ui_request event through the Pi session
-    try {
-      activeRuntime.emitExtensionUiRequest("set_thread_actions", {
-        actions: suggestions,
-      });
-      return true;
-    } catch (error) {
-      console.error(
-        "display_action_suggestions: failed to emit UI request",
-        error,
-      );
-      return false;
-    }
-  };
-
-  const getLatestActiveConversationId = (): string | null => {
-    const activeEntries = Array.from(activeToolExecutionContext.entries());
-    if (activeEntries.length === 0) return null;
-    return activeEntries[activeEntries.length - 1]?.[1] ?? null;
-  };
-
-  // Resolve the active runtime, preferring an explicit conversation id,
-  // then the tool-execution context, and only then the currently streaming runtime.
-  const resolveRuntimeForConversation = (
-    conversationId?: string | null,
-  ): { runtime: any; conversationId: string | null } => {
-    const targetConversationId =
-      typeof conversationId === "string" && conversationId.trim().length > 0
-        ? conversationId.trim()
-        : getLatestActiveConversationId();
-
-    if (targetConversationId) {
-      const runtime =
-        deps.piRuntimeManager.getRuntimeForConversation(targetConversationId);
-      if (runtime) {
-        return { runtime, conversationId: targetConversationId };
-      }
-    }
-
-    const activeRuntime = deps.piRuntimeManager.getActiveRuntime();
-    return { runtime: activeRuntime ?? null, conversationId: targetConversationId };
-  };
-
-  // Bridge for task list tools: forward create/update calls to the correct Pi runtime.
-  (globalThis as Record<string, unknown>).__chatonsTaskListBridge = {
-    create: (taskList: unknown, conversationId?: string): boolean => {
-      const { runtime } = resolveRuntimeForConversation(conversationId);
-      if (!runtime) {
-        console.warn("create_task_list: no active conversation context found");
-        return false;
-      }
-      try {
-        runtime.emitExtensionUiRequest("set_task_list", {
-          taskList,
-        });
-        return true;
-      } catch (error) {
-        console.error("create_task_list: failed to emit UI request", error);
-        return false;
-      }
-    },
-    updateStatus: (
-      taskId: string,
-      status: string,
-      errorMessage?: string,
-      conversationId?: string,
-    ): boolean => {
-      const { runtime } = resolveRuntimeForConversation(conversationId);
-      if (!runtime) {
-        console.warn(
-          "update_task_status: no active conversation context found",
-        );
-        return false;
-      }
-      try {
-        runtime.emitExtensionUiRequest("update_task_status", {
-          taskId,
-          status,
-          errorMessage,
-        });
-        return true;
-      } catch (error) {
-        console.error("update_task_status: failed to emit UI request", error);
-        return false;
-      }
-    },
-  };
-
-  // Bridge for subagent tracking: forward register/update/task calls to the active Pi runtime
-  (globalThis as Record<string, unknown>).__chatonsSubAgentBridge = {
-    register: (subAgent: unknown): boolean => {
-      const conversationId = getLatestActiveConversationId();
-      let activeRuntime = deps.piRuntimeManager.getActiveRuntime();
-      if (!activeRuntime && conversationId) {
-        activeRuntime =
-          deps.piRuntimeManager.getRuntimeForConversation(conversationId);
-      }
-      if (!activeRuntime) {
-        console.warn("register_subagent: no active Pi runtime found");
-        return false;
-      }
-      try {
-        activeRuntime.emitExtensionUiRequest("register_subagent", {
-          subAgent,
-          conversationId,
-        });
-        return true;
-      } catch (error) {
-        console.error("register_subagent: failed to emit UI request", error);
-        return false;
-      }
-    },
-    updateStatus: (
-      subAgentId: string,
-      status: string,
-      errorMessage?: string,
-    ): boolean => {
-      const conversationId = getLatestActiveConversationId();
-      let activeRuntime = deps.piRuntimeManager.getActiveRuntime();
-      if (!activeRuntime && conversationId) {
-        activeRuntime =
-          deps.piRuntimeManager.getRuntimeForConversation(conversationId);
-      }
-      if (!activeRuntime) {
-        console.warn("update_subagent_status: no active Pi runtime found");
-        return false;
-      }
-      try {
-        activeRuntime.emitExtensionUiRequest("update_subagent_status", {
-          subAgentId,
-          status,
-          errorMessage,
-          conversationId,
-        });
-        return true;
-      } catch (error) {
-        console.error(
-          "update_subagent_status: failed to emit UI request",
-          error,
-        );
-        return false;
-      }
-    },
-    setTaskList: (subAgentId: string, taskList: unknown): boolean => {
-      const conversationId = getLatestActiveConversationId();
-      let activeRuntime = deps.piRuntimeManager.getActiveRuntime();
-      if (!activeRuntime && conversationId) {
-        activeRuntime =
-          deps.piRuntimeManager.getRuntimeForConversation(conversationId);
-      }
-      if (!activeRuntime) {
-        console.warn("set_subagent_task_list: no active Pi runtime found");
-        return false;
-      }
-      try {
-        activeRuntime.emitExtensionUiRequest("set_subagent_task_list", {
-          subAgentId,
-          taskList,
-          conversationId,
-        });
-        return true;
-      } catch (error) {
-        console.error(
-          "set_subagent_task_list: failed to emit UI request",
-          error,
-        );
-        return false;
-      }
-    },
-    updateTaskStatus: (
-      subAgentId: string,
-      taskId: string,
-      status: string,
-      errorMessage?: string,
-    ): boolean => {
-      const conversationId = getLatestActiveConversationId();
-      let activeRuntime = deps.piRuntimeManager.getActiveRuntime();
-      if (!activeRuntime && conversationId) {
-        activeRuntime =
-          deps.piRuntimeManager.getRuntimeForConversation(conversationId);
-      }
-      if (!activeRuntime) {
-        console.warn("update_subagent_task_status: no active Pi runtime found");
-        return false;
-      }
-      try {
-        activeRuntime.emitExtensionUiRequest("update_subagent_task_status", {
-          subAgentId,
-          taskId,
-          status,
-          errorMessage,
-          conversationId,
-        });
-        return true;
-      } catch (error) {
-        console.error(
-          "update_subagent_task_status: failed to emit UI request",
-          error,
-        );
-        return false;
-      }
-    },
-  };
 
   (globalThis as Record<string, unknown>).__chatonRegisterExtensionServer =
     (payload: {
@@ -787,6 +564,36 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
           deps.cacheMessagesFromSnapshot(event.conversationId, snapshot),
         )
         .catch(() => undefined);
+    }
+    // Emit turn_end with usage data for token tracking extensions
+    if (event.event.type === "turn_end") {
+      const turnEvt = event.event as { type: "turn_end"; message?: any; toolResults?: any[] };
+      const msg = turnEvt.message;
+      const usage = msg?.usage ?? null;
+      emitHostEvent("conversation.turn.ended", {
+        conversationId: event.conversationId,
+        provider: msg?.provider ?? null,
+        model: msg?.model ?? null,
+        usage,
+        toolCallCount: turnEvt.toolResults?.length ?? 0,
+        timestamp: Date.now(),
+      });
+    }
+    // Emit tool execution events for tool call tracking
+    if (event.event.type === "tool_execution_end") {
+      const toolEvt = event.event as {
+        type: "tool_execution_end";
+        toolCallId?: string;
+        toolName?: string;
+        isError?: boolean;
+      };
+      emitHostEvent("conversation.tool.executed", {
+        conversationId: event.conversationId,
+        toolName: toolEvt.toolName ?? "unknown",
+        toolCallId: toolEvt.toolCallId ?? null,
+        isError: toolEvt.isError ?? false,
+        timestamp: Date.now(),
+      });
     }
   });
 
@@ -2571,6 +2378,69 @@ export function registerSystemHandlers() {
       return {
         ok: false,
         error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  });
+
+  // Performance tracing (dev mode)
+  let tracingActive = false;
+
+  ipcMain.handle("tracing:start", async () => {
+    if (tracingActive) {
+      return { ok: false, message: "Tracing already active" };
+    }
+    try {
+      await contentTracing.startRecording({
+        included_categories: ["*"],
+      });
+      tracingActive = true;
+      return { ok: true };
+    } catch (error) {
+      console.error("Failed to start tracing:", error);
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  });
+
+  ipcMain.handle("tracing:stop", async () => {
+    if (!tracingActive) {
+      return { ok: false, message: "No active tracing session" };
+    }
+    try {
+      // Stop recording into a temp file first
+      const tempPath = await contentTracing.stopRecording();
+      tracingActive = false;
+
+      // Ask the user where to save the trace file
+      const win = BrowserWindow.getFocusedWindow();
+      const result = await dialog.showSaveDialog(win ?? BrowserWindow.getAllWindows()[0], {
+        title: "Save performance trace",
+        defaultPath: `chaton-trace-${Date.now()}.json`,
+        filters: [{ name: "JSON Trace", extensions: ["json"] }],
+      });
+
+      // @ts-ignore - Electron dialog type issue
+      if (result.canceled || !result.filePath) {
+        // User cancelled, clean up temp file
+        try { fs.unlinkSync(tempPath); } catch { /* ignore */ }
+        return { ok: true, cancelled: true };
+      }
+
+      // Move temp trace to chosen location
+      // @ts-ignore - Electron dialog type issue
+      fs.copyFileSync(tempPath, result.filePath);
+      try { fs.unlinkSync(tempPath); } catch { /* ignore */ }
+
+      // @ts-ignore - Electron dialog type issue
+      return { ok: true, filePath: result.filePath };
+    } catch (error) {
+      tracingActive = false;
+      console.error("Failed to stop tracing:", error);
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "Unknown error",
       };
     }
   });

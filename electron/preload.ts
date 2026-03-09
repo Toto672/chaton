@@ -401,6 +401,9 @@ contextBridge.exposeInMainWorld("chaton", {
   checkPythonAvailability: (cwd?: string) =>
     ipcRenderer.invoke("sandbox:checkPythonAvailability", cwd),
   cleanupSandbox: () => ipcRenderer.invoke("sandbox:cleanup"),
+  // Performance tracing
+  startTracing: () => ipcRenderer.invoke("tracing:start"),
+  stopTracing: () => ipcRenderer.invoke("tracing:stop"),
 });
 
 // Exposer les méthodes spécifiques à Pi pour une utilisation plus simple

@@ -7,6 +7,7 @@ import { ProjectGroup } from '@/components/sidebar/ProjectGroup'
 import { ChannelsNavItem } from '@/components/sidebar/ChannelsNavItem'
 import { UpdateButton } from '@/components/sidebar/UpdateButton'
 import { ChangelogCard } from '@/components/sidebar/ChangelogCard'
+import { ExtensionSidebarItems } from '@/components/sidebar/ExtensionSidebarItems'
 import { useChangelogManager } from '@/components/ChangelogManager'
 import { useWorkspace } from '@/features/workspace/store'
 import { selectGlobalConversations, selectVisibleConversations } from '@/features/workspace/selectors'
@@ -100,6 +101,7 @@ export function Sidebar({ width }: { width: number }) {
           active={state.sidebarMode === 'channels' || state.sidebarMode === 'extension-main-view'}
           onClick={openChannels}
         />
+        <ExtensionSidebarItems />
       </nav>
 
       <div className="sidebar-section-head">

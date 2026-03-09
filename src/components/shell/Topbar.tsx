@@ -1,10 +1,12 @@
 import {
   ChevronDown,
   ChevronRight,
+  Circle,
   Folder,
   GitBranch,
   GitCommitHorizontal,
   Sparkles,
+  Square,
   Terminal,
   Upload,
   Download,
@@ -204,6 +206,7 @@ export function Topbar() {
   const [isCheckingVscode, setIsCheckingVscode] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [stageBusyPath, setStageBusyPath] = useState<string | null>(null);
+  const [isTracing, setIsTracing] = useState(false);
   const { t } = useTranslation();
 
   const selectedConversation = state.conversations.find(
@@ -497,6 +500,28 @@ export function Topbar() {
     }
   };
 
+  const handleToggleTracing = async () => {
+    if (isTracing) {
+      const result = await workspaceIpc.stopTracing();
+      setIsTracing(false);
+      if (!result.ok) {
+        setNotice(result.message ?? t("Impossible d'arreter la trace."));
+      } else if ("cancelled" in result && result.cancelled) {
+        setNotice(t("Trace annulee."));
+      } else if ("filePath" in result && result.filePath) {
+        setNotice(`Trace saved: ${result.filePath}`);
+      }
+    } else {
+      const result = await workspaceIpc.startTracing();
+      if (result.ok) {
+        setIsTracing(true);
+        setNotice(t("Tracing started..."));
+      } else {
+        setNotice(result.message ?? t("Impossible de demarrer la trace."));
+      }
+    }
+  };
+
   const tree = useMemo(
     () => buildTree(worktreeInfo?.changes ?? []),
     [worktreeInfo?.changes],
@@ -570,6 +595,17 @@ export function Topbar() {
               <img src="/src/assets/vscode.webp" alt="VS Code" className="vscode-icon" />
             )}
           </Button>
+        ) : null}
+        {import.meta.env.DEV ? (
+          <button
+            type="button"
+            className={`sidebar-icon-button tracing-button ${isTracing ? "tracing-button-active" : ""}`}
+            aria-label={isTracing ? t("Stop tracing") : t("Start tracing")}
+            title={isTracing ? t("Stop tracing") : t("Start tracing")}
+            onClick={handleToggleTracing}
+          >
+            {isTracing ? <Square className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
+          </button>
         ) : null}
       </div>
 
