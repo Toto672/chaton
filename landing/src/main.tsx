@@ -42,15 +42,15 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
+        {/* Language-prefixed paths - must come before root paths */}
+        <Route path="/:lang" element={<RoutePage Component={LandingPage} />} />
+        <Route path="/:lang/extensions" element={<RoutePage Component={ExtensionsPage} />} />
+        <Route path="/:lang/extensions/:slug" element={<RoutePage Component={ExtensionDetailPage} />} />
+        
         {/* Root paths - auto-detect language */}
         <Route path="/" element={<RoutePage Component={LandingPage} />} />
         <Route path="/extensions" element={<RoutePage Component={ExtensionsPage} />} />
         <Route path="/extensions/:slug" element={<RoutePage Component={ExtensionDetailPage} />} />
-        
-        {/* Language-prefixed paths */}
-        <Route path="/:lang" element={<RoutePage Component={LandingPage} />} />
-        <Route path="/:lang/extensions" element={<RoutePage Component={ExtensionsPage} />} />
-        <Route path="/:lang/extensions/:slug" element={<RoutePage Component={ExtensionDetailPage} />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

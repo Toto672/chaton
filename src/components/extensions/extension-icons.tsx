@@ -1,7 +1,6 @@
 import type { ComponentType, SVGProps } from 'react'
 import { ImageIcon } from 'lucide-react'
 
-const EXTENSION_ICON_FETCH_SIZE = 128
 import {
   Blocks,
   Bot,
@@ -51,13 +50,37 @@ const ICONS: Record<string, IconComponent> = {
   GitBranch,
 }
 
-export function getExtensionIcon(iconName?: string | null): IconValue {
+/**
+ * Try to resolve a local extension icon from the static extension-icons directory.
+ * Returns a path to either .svg or .png version of the icon.
+ */
+function tryStaticIcon(extensionId?: string): string | null {
+  if (!extensionId) return null
+  
+  // Normalize extension ID to filename format: @scope/name -> @scope-name
+  const normalized = extensionId.replace(/\//g, '-')
+  
+  // Try .svg first, then .png
+  // Browser will handle 404 gracefully by falling back to lucide icons
+  const svgPath = `/extension-icons/${normalized}.svg`
+  return svgPath
+}
+
+export function getExtensionIcon(iconName?: string | null, extensionId?: string): IconValue {
   const normalized = typeof iconName === 'string' ? iconName.trim() : ''
-  if (!normalized) return { kind: 'svg', Component: Puzzle }
-  if (/^data:image\//i.test(normalized)) return { kind: 'image', src: normalized }
-  if (/^https?:\/\//i.test(normalized)) {
-    const src = new URL(`/unsafe/rs:fit:${EXTENSION_ICON_FETCH_SIZE}:${EXTENSION_ICON_FETCH_SIZE}/plain/${normalized}`, 'https://wsrv.nl').toString()
-    return { kind: 'image', src }
+  
+  // Priority 1: Try static local icon by extension ID
+  if (extensionId) {
+    const staticPath = tryStaticIcon(extensionId)
+    if (staticPath) return { kind: 'image', src: staticPath }
   }
-  return ICONS[normalized] ? { kind: 'svg', Component: ICONS[normalized] } : { kind: 'svg', Component: ImageIcon }
+  
+  // Priority 2: Handle data URLs
+  if (/^data:image\//i.test(normalized)) return { kind: 'image', src: normalized }
+  
+  // Priority 3: Named lucide-react icons
+  if (ICONS[normalized]) return { kind: 'svg', Component: ICONS[normalized] }
+  
+  // Priority 4: Fall back to generic Puzzle icon
+  return { kind: 'svg', Component: Puzzle }
 }

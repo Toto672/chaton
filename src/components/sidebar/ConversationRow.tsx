@@ -72,7 +72,7 @@ export const ConversationRow = memo(function ConversationRow({ conversation, isA
     : null
 
   const channelIcon = channelExtension
-    ? getExtensionIcon(channelExtension.iconUrl ?? channelExtension.icon)
+    ? getExtensionIcon(channelExtension.iconUrl ?? channelExtension.icon, channelExtension.id)
     : null
 
   // Channel conversations should not show the completion indicator

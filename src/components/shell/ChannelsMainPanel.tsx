@@ -122,6 +122,7 @@ export function ChannelsMainPanel() {
                 typeof entry?.iconUrl === "string"
                   ? entry.iconUrl
                   : entry?.icon,
+                extension.id,
               );
               const needsServer =
                 entry?.serverStatus && entry.serverStatus.ready === false;

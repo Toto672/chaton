@@ -57,7 +57,7 @@ export function ExtensionSidebarItems() {
   return (
     <>
       {sidebarItems.map(({ extensionId, item }) => {
-        const iconValue = getExtensionIcon(item.icon)
+        const iconValue = getExtensionIcon(item.icon, extensionId)
         const isActive =
           state.sidebarMode === 'extension-main-view' &&
           state.activeExtensionViewId === item.openMainView

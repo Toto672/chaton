@@ -1,12 +1,35 @@
 :root {
   color: #f8fafc;
   background:
-    radial-gradient(circle at 18% 18%, rgba(88, 130, 255, 0.2), transparent 28%),
-    radial-gradient(circle at 84% 14%, rgba(111, 66, 255, 0.2), transparent 24%),
-    radial-gradient(circle at 72% 28%, rgba(238, 86, 18, 0.12), transparent 22%),
-    radial-gradient(circle at 30% 78%, rgba(252, 172, 41, 0.1), transparent 24%),
+    radial-gradient(
+      circle at 18% 18%,
+      rgba(88, 130, 255, 0.2),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 84% 14%,
+      rgba(111, 66, 255, 0.2),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at 72% 28%,
+      rgba(238, 86, 18, 0.12),
+      transparent 22%
+    ),
+    radial-gradient(
+      circle at 30% 78%,
+      rgba(252, 172, 41, 0.1),
+      transparent 24%
+    ),
     linear-gradient(180deg, #050814 0%, #09101d 42%, #080c17 100%);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
@@ -91,7 +114,7 @@ video {
 
 .landing-page::before,
 .landing-page::after {
-  content: '';
+  content: "";
   position: absolute;
   border-radius: 999px;
   pointer-events: none;
@@ -146,7 +169,11 @@ video {
   height: 38px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 14px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(75, 124, 255, 0.55));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.18),
+    rgba(75, 124, 255, 0.55)
+  );
   box-shadow: 0 18px 40px rgba(52, 93, 214, 0.28);
 }
 
@@ -160,7 +187,10 @@ video {
 .quick-link {
   text-decoration: none;
   color: rgba(226, 232, 240, 0.82);
-  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
 }
 
 .site-nav a:hover,
@@ -228,7 +258,11 @@ video {
   padding: 9px 15px;
   border: 1px solid rgba(252, 172, 41, 0.24);
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.64), rgba(238, 86, 18, 0.12));
+  background: linear-gradient(
+    135deg,
+    rgba(15, 23, 42, 0.64),
+    rgba(238, 86, 18, 0.12)
+  );
   color: #fff1d6;
   font-size: 12px;
   font-weight: 700;
@@ -273,12 +307,15 @@ video {
   max-width: 100%;
   position: relative;
   z-index: 5;
-  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.22s ease;
+  transition:
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    filter 0.22s ease;
 }
 
 .download-combo:hover {
   transform: translateY(-4px);
-  filter: drop-shadow(0 0 32px rgba(59, 130, 246, 0.6)) drop-shadow(0 0 16px rgba(59, 130, 246, 0.3));
+  filter: drop-shadow(0 0 32px rgba(59, 130, 246, 0.6))
+    drop-shadow(0 0 16px rgba(59, 130, 246, 0.3));
 }
 
 .download-button {
@@ -289,9 +326,16 @@ video {
   min-width: 360px;
   height: 64px;
   padding: 0 32px;
-  border: 2px solid transparent;
+  border: none;
   border-radius: 20px 0 0 20px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 25%, #1d4ed8 50%, #1e40af 75%, #1e3a8a 100%);
+  background: linear-gradient(
+    135deg,
+    #3b82f6 0%,
+    #2563eb 25%,
+    #1d4ed8 50%,
+    #1e40af 75%,
+    #1e3a8a 100%
+  );
   color: #ffffff;
   text-decoration: none;
   font-weight: 600;
@@ -311,10 +355,15 @@ video {
 }
 
 .download-button::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
   opacity: 0;
   transition: opacity 0.4s ease;
   pointer-events: none;
@@ -335,8 +384,14 @@ video {
 }
 
 .download-button:hover {
-  transform: translateY(-3px);
-  background: linear-gradient(135deg, #4f92f7 0%, #3b82f6 25%, #2563eb 50%, #2b5ff0 75%, #2c55d8 100%);
+  background: linear-gradient(
+    135deg,
+    #4f92f7 0%,
+    #3b82f6 25%,
+    #2563eb 50%,
+    #2b5ff0 75%,
+    #2c55d8 100%
+  );
   box-shadow:
     0 0 0 2px rgba(59, 130, 246, 0.8),
     0 0 32px rgba(59, 130, 246, 0.64),
@@ -346,7 +401,6 @@ video {
 }
 
 .download-button:active {
-  transform: translateY(-1px);
   box-shadow:
     0 0 0 2px rgba(59, 130, 246, 0.6),
     0 0 24px rgba(59, 130, 246, 0.48),
@@ -363,10 +417,16 @@ video {
 .download-toggle {
   width: 64px;
   height: 64px;
-  border: 2px solid transparent;
-  border-left: 0;
+  border: none;
   border-radius: 0 20px 20px 0;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 25%, #1d4ed8 50%, #1e40af 75%, #1e3a8a 100%);
+  background: linear-gradient(
+    135deg,
+    #3b82f6 0%,
+    #2563eb 25%,
+    #1d4ed8 50%,
+    #1e40af 75%,
+    #1e3a8a 100%
+  );
   color: #ffffff;
   cursor: pointer;
   display: flex;
@@ -385,10 +445,15 @@ video {
 }
 
 .download-toggle::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.25),
+    transparent
+  );
   opacity: 0;
   transition: opacity 0.4s ease;
   pointer-events: none;
@@ -400,8 +465,14 @@ video {
 }
 
 .download-toggle:hover {
-  transform: translateY(-3px);
-  background: linear-gradient(135deg, #4f92f7 0%, #3b82f6 25%, #2563eb 50%, #2b5ff0 75%, #2c55d8 100%);
+  background: linear-gradient(
+    135deg,
+    #4f92f7 0%,
+    #3b82f6 25%,
+    #2563eb 50%,
+    #2b5ff0 75%,
+    #2c55d8 100%
+  );
   box-shadow:
     0 0 0 2px rgba(59, 130, 246, 0.8),
     0 0 32px rgba(59, 130, 246, 0.52),
@@ -411,7 +482,6 @@ video {
 }
 
 .download-toggle:active {
-  transform: translateY(-1px);
   box-shadow:
     0 0 0 2px rgba(59, 130, 246, 0.6),
     0 0 24px rgba(59, 130, 246, 0.36),
@@ -421,7 +491,8 @@ video {
 }
 
 .download-toggle svg {
-  transition: transform 0.18s ease;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
 }
 
 .chevron-open {
@@ -458,7 +529,11 @@ video {
 
 .download-option:hover,
 .download-option.active {
-  background: linear-gradient(135deg, rgba(252, 172, 41, 0.14), rgba(238, 86, 18, 0.14));
+  background: linear-gradient(
+    135deg,
+    rgba(252, 172, 41, 0.14),
+    rgba(238, 86, 18, 0.14)
+  );
 }
 
 .download-option small {
@@ -481,7 +556,11 @@ video {
   padding: 10px 14px;
   border: 1px solid rgba(252, 172, 41, 0.18);
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.42), rgba(252, 172, 41, 0.08));
+  background: linear-gradient(
+    135deg,
+    rgba(15, 23, 42, 0.42),
+    rgba(252, 172, 41, 0.08)
+  );
   backdrop-filter: blur(14px);
 }
 
@@ -520,7 +599,11 @@ video {
   padding: 18px;
   border: 1px solid rgba(252, 172, 41, 0.14);
   border-radius: 22px;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(238, 86, 18, 0.08));
+  background: linear-gradient(
+    180deg,
+    rgba(15, 23, 42, 0.72),
+    rgba(238, 86, 18, 0.08)
+  );
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
@@ -560,8 +643,7 @@ video {
   width: min(100%, 420px);
   height: auto;
   object-fit: contain;
-  filter:
-    drop-shadow(0 32px 60px rgba(96, 165, 250, 0.18))
+  filter: drop-shadow(0 32px 60px rgba(96, 165, 250, 0.18))
     drop-shadow(0 12px 28px rgba(238, 86, 18, 0.16));
 }
 
@@ -598,7 +680,11 @@ video {
   width: 42px;
   height: 42px;
   border-radius: 14px;
-  background: linear-gradient(135deg, rgba(252, 172, 41, 0.2), rgba(238, 86, 18, 0.2));
+  background: linear-gradient(
+    135deg,
+    rgba(252, 172, 41, 0.2),
+    rgba(238, 86, 18, 0.2)
+  );
   color: #fff1d6;
 }
 
@@ -685,7 +771,11 @@ video {
   width: 52px;
   height: 52px;
   border-radius: 16px;
-  background: linear-gradient(135deg, rgba(252, 172, 41, 0.2), rgba(238, 86, 18, 0.2));
+  background: linear-gradient(
+    135deg,
+    rgba(252, 172, 41, 0.2),
+    rgba(238, 86, 18, 0.2)
+  );
   color: #fff1d6;
   margin-bottom: 18px;
 }
@@ -715,7 +805,11 @@ video {
   padding: 12px 24px;
   border: 1px solid rgba(252, 172, 41, 0.28);
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(252, 172, 41, 0.12), rgba(238, 86, 18, 0.08));
+  background: linear-gradient(
+    135deg,
+    rgba(252, 172, 41, 0.12),
+    rgba(238, 86, 18, 0.08)
+  );
   color: #fff1d6;
   text-decoration: none;
   font-weight: 600;
@@ -726,7 +820,11 @@ video {
 
 .learn-more-link:hover {
   border-color: rgba(252, 172, 41, 0.48);
-  background: linear-gradient(135deg, rgba(252, 172, 41, 0.18), rgba(238, 86, 18, 0.12));
+  background: linear-gradient(
+    135deg,
+    rgba(252, 172, 41, 0.18),
+    rgba(238, 86, 18, 0.12)
+  );
   color: #ffffff;
   transform: translateX(2px);
 }
@@ -753,11 +851,15 @@ video {
 }
 
 .bottom-cta::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: -1px;
   border-radius: 32px;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.4), rgba(37, 99, 235, 0.2));
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.4),
+    rgba(37, 99, 235, 0.2)
+  );
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
@@ -776,7 +878,11 @@ video {
   padding: 48px 40px;
   border-radius: 32px;
   border: 2px solid rgba(59, 130, 246, 0.2);
-  background: linear-gradient(135deg, rgba(30, 58, 138, 0.08), rgba(37, 99, 235, 0.04));
+  background: linear-gradient(
+    135deg,
+    rgba(30, 58, 138, 0.08),
+    rgba(37, 99, 235, 0.04)
+  );
   backdrop-filter: blur(12px);
   box-shadow:
     0 0 0 1px rgba(59, 130, 246, 0.15),
@@ -790,7 +896,11 @@ video {
 
 .bottom-cta-card:hover {
   border-color: rgba(59, 130, 246, 0.35);
-  background: linear-gradient(135deg, rgba(30, 58, 138, 0.12), rgba(37, 99, 235, 0.08));
+  background: linear-gradient(
+    135deg,
+    rgba(30, 58, 138, 0.12),
+    rgba(37, 99, 235, 0.08)
+  );
   box-shadow:
     0 0 0 1px rgba(59, 130, 246, 0.25),
     0 0 40px rgba(59, 130, 246, 0.2),
@@ -803,7 +913,11 @@ video {
   max-width: 720px;
   font-size: 34px;
   line-height: 1.12;
-  background: linear-gradient(135deg, #ffffff 0%, rgba(226, 232, 240, 0.95) 100%);
+  background: linear-gradient(
+    135deg,
+    #ffffff 0%,
+    rgba(226, 232, 240, 0.95) 100%
+  );
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -856,10 +970,14 @@ video {
   width: 100%;
   max-width: 520px;
   aspect-ratio: 16 / 10;
-  background: linear-gradient(135deg, rgba(30, 30, 30, 0.95), rgba(20, 20, 20, 0.95));
+  background: linear-gradient(
+    135deg,
+    rgba(30, 30, 30, 0.95),
+    rgba(20, 20, 20, 0.95)
+  );
   border-radius: 18px 18px 32px 32px;
   border: 8px solid #1a1a1a;
-  box-shadow: 
+  box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.08),
     0 32px 80px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -987,25 +1105,31 @@ video {
   border-radius: 18px;
   /* 3D raised surface look */
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 50%, rgba(0, 0, 0, 0.1) 100%),
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(255, 255, 255, 0.02) 50%,
+      rgba(0, 0, 0, 0.1) 100%
+    ),
     linear-gradient(180deg, rgba(30, 40, 60, 0.92), rgba(15, 20, 35, 0.96));
   box-shadow:
     /* Outer shadow for depth */
     0 8px 24px rgba(0, 0, 0, 0.45),
     0 2px 6px rgba(0, 0, 0, 0.3),
-    /* Inner top highlight for 3D bevel */
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    /* Inner bottom shadow */
-    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+    /* Inner top highlight for 3D bevel */ inset 0 1px 0
+      rgba(255, 255, 255, 0.14),
+    /* Inner bottom shadow */ inset 0 -1px 0 rgba(0, 0, 0, 0.2);
   overflow: hidden;
-  transition: transform 0.28s cubic-bezier(0.23, 1, 0.32, 1),
-              box-shadow 0.28s cubic-bezier(0.23, 1, 0.32, 1);
+  transition:
+    transform 0.28s cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 0.28s cubic-bezier(0.23, 1, 0.32, 1);
   /* Subtle 3D perspective tilt on rest */
   transform: perspective(600px) rotateX(2deg) rotateY(0deg);
 }
 
 .ext-carousel-item:hover .ext-carousel-icon-wrap {
-  transform: perspective(600px) rotateX(-2deg) rotateY(4deg) translateY(-4px) scale(1.08);
+  transform: perspective(600px) rotateX(-2deg) rotateY(4deg) translateY(-4px)
+    scale(1.08);
   box-shadow:
     0 16px 40px rgba(82, 131, 255, 0.25),
     0 4px 12px rgba(0, 0, 0, 0.35),
@@ -1015,7 +1139,7 @@ video {
 
 /* Specular highlight layer on the icon surface */
 .ext-carousel-icon-wrap::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
@@ -1509,7 +1633,9 @@ video {
   font-family: inherit;
   outline: none;
   backdrop-filter: blur(14px);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .mp-search:focus {
@@ -1551,7 +1677,11 @@ video {
 
 .mp-filter-btn.active {
   border-color: rgba(252, 172, 41, 0.48);
-  background: linear-gradient(135deg, rgba(252, 172, 41, 0.14), rgba(238, 86, 18, 0.1));
+  background: linear-gradient(
+    135deg,
+    rgba(252, 172, 41, 0.14),
+    rgba(238, 86, 18, 0.1)
+  );
   color: #fff1d6;
 }
 
@@ -1833,11 +1963,13 @@ video {
   border-radius: 14px;
   background: rgba(8, 15, 28, 0.8);
   color: #67e8f9;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
   font-size: 14px;
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.18s ease, background 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease;
 }
 
 .ed-code-block:hover {
@@ -1867,7 +1999,7 @@ video {
   color: rgba(165, 200, 255, 0.9);
   font-size: 12px;
   font-weight: 600;
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-family: "SF Mono", "Fira Code", monospace;
 }
 
 /* -- Tags -- */
@@ -1922,7 +2054,7 @@ video {
 }
 
 .ed-sidebar-mono {
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-family: "SF Mono", "Fira Code", monospace;
   font-size: 12px !important;
   word-break: break-all;
 }
