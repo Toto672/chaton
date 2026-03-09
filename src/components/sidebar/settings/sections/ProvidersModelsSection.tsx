@@ -102,6 +102,7 @@ export function ProvidersModelsSection({
       // Discover models for this provider
       const discoveryResult = await workspaceIpc.discoverProviderModels(
         providerConfig,
+        key,
       );
 
       console.log('[DEBUG] Discovery result:', discoveryResult);

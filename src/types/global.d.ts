@@ -305,6 +305,7 @@ declare global {
       >;
       discoverProviderModels: (
         providerConfig: Record<string, unknown>,
+        providerId?: string,
       ) => Promise<
         | {
             ok: true;

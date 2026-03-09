@@ -241,6 +241,7 @@ export function OnboardingFlow({ onFinish }: { onFinish?: () => void }) {
       setIsLoadingModels(true);
       const discoveryResult = await workspaceIpc.discoverProviderModels(
         providerConfig,
+        selectedProviderKey,
       );
       
       // Add discovered models to the provider config

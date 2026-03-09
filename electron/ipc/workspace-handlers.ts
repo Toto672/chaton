@@ -147,6 +147,7 @@ type RegisterWorkspaceHandlersDeps = {
   syncPiModelsCache: () => Promise<unknown>;
   discoverProviderModels: (
     providerConfig: Record<string, unknown>,
+    providerId?: string,
   ) => Promise<unknown>;
   testProviderConnection: (
     providerConfig: Record<string, unknown>,
@@ -717,7 +718,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
   ipcMain.handle("models:syncPi", async () => deps.syncPiModelsCache());
   ipcMain.handle(
     "models:discoverProvider",
-    async (_event, providerConfig: unknown) => {
+    async (_event, providerConfig: unknown, providerId?: string) => {
       if (
         !providerConfig ||
         typeof providerConfig !== "object" ||
@@ -731,6 +732,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       }
       return deps.discoverProviderModels(
         providerConfig as Record<string, unknown>,
+        typeof providerId === "string" ? providerId : undefined,
       );
     },
   );
@@ -1036,6 +1038,10 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
           OAUTH_PROVIDER_DEFAULTS[providerId],
         );
       }
+
+      // Discover and populate models for the newly connected OAuth provider
+      // so the provider entry includes a models array immediately.
+      await deps.syncPiModelsCache();
 
       event.sender.send("pi:oauthEvent", { type: "success" });
       return { ok: true as const, providerId };

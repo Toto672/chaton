@@ -2449,6 +2449,7 @@ type PiListedModel = {
 
 async function fetchProviderModelsFromEndpoint(
   providerConfig: Record<string, unknown>,
+  providerId?: string,
 ): Promise<PiListedModel[]> {
   const baseUrl =
     typeof providerConfig.baseUrl === "string"
@@ -2459,10 +2460,27 @@ async function fetchProviderModelsFromEndpoint(
   const normalizedBaseUrl = normalizeHttpBaseUrlShape(baseUrl);
   if (!normalizedBaseUrl) return [];
 
-  const apiKey =
+  // Look for apiKey in provider config first, then fall back to OAuth token from auth.json
+  let apiKey =
     typeof providerConfig.apiKey === "string"
       ? providerConfig.apiKey.trim()
       : "";
+  if (!apiKey && providerId) {
+    const auth = getAuthJson();
+    const entry = auth[providerId] as
+      | { type?: string; access?: string; key?: string }
+      | undefined;
+    if (entry) {
+      if (entry.type === "oauth" && typeof entry.access === "string") {
+        apiKey = entry.access;
+      } else if (
+        entry.type === "api_key" &&
+        typeof entry.key === "string"
+      ) {
+        apiKey = entry.key;
+      }
+    }
+  }
   const headers: Record<string, string> = { accept: "application/json" };
   if (apiKey.length > 0) {
     headers.authorization = `Bearer ${apiKey}`;
@@ -2545,9 +2563,10 @@ async function fetchProviderModelsFromEndpoint(
 
 async function discoverProviderModels(
   providerConfig: Record<string, unknown>,
+  providerId?: string,
 ): Promise<{ ok: boolean; models: PiListedModel[]; message?: string }> {
   try {
-    const discovered = await fetchProviderModelsFromEndpoint(providerConfig);
+    const discovered = await fetchProviderModelsFromEndpoint(providerConfig, providerId);
     if (!discovered || discovered.length === 0) {
       return {
         ok: false,
@@ -2758,6 +2777,7 @@ async function refreshModelsJsonFromPiListModels(): Promise<void> {
     if (!discovered || discovered.length === 0) {
       const discoveredFromEndpoint = await fetchProviderModelsFromEndpoint(
         providerValue as Record<string, unknown>,
+        providerName,
       );
       if (discoveredFromEndpoint.length > 0) {
         discovered = discoveredFromEndpoint;
@@ -2765,6 +2785,7 @@ async function refreshModelsJsonFromPiListModels(): Promise<void> {
     } else {
       const discoveredFromEndpoint = await fetchProviderModelsFromEndpoint(
         providerValue as Record<string, unknown>,
+        providerName,
       );
       if (discoveredFromEndpoint.length > 0) {
         const merged = new Map<string, PiListedModel>();

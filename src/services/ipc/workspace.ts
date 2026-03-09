@@ -293,8 +293,8 @@ export const workspaceIpc = {
   > => getApi().requestConversationAutoTitle(conversationId, firstMessage),
   listPiModels: (): Promise<ListPiModelsResult> => getApi().listPiModels(),
   syncPiModels: (): Promise<ListPiModelsResult> => getApi().syncPiModels(),
-  discoverProviderModels: (providerConfig: Record<string, unknown>): Promise<DiscoverProviderModelsResult> =>
-    getApi().discoverProviderModels(providerConfig),
+  discoverProviderModels: (providerConfig: Record<string, unknown>, providerId?: string): Promise<DiscoverProviderModelsResult> =>
+    getApi().discoverProviderModels(providerConfig, providerId),
   testProviderConnection: (providerConfig: Record<string, unknown>): Promise<TestProviderConnectionResult> =>
     getApi().testProviderConnection(providerConfig),
   setPiModelScoped: (

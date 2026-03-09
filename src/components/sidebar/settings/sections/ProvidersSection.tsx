@@ -26,7 +26,7 @@ export function ProvidersSection({
     setDiscoveryStatus({})
     try {
       const provider = (providers[providerName] ?? {}) as Record<string, unknown>
-      const result = await workspaceIpc.discoverProviderModels(provider)
+      const result = await workspaceIpc.discoverProviderModels(provider, providerName)
       
       if (result.ok && result.models.length > 0) {
         // Update models.json with discovered models
