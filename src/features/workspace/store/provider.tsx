@@ -465,6 +465,16 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     }
 
     hydratingRuntimeIdsRef.current.add(conversationId)
+    dispatch({
+      type: 'setPiRuntime',
+      payload: {
+        conversationId,
+        runtime: {
+          status: 'starting',
+          lastError: null,
+        },
+      },
+    })
 
     const started = await workspaceIpc.piStartSession(conversationId)
     if (!started.ok) {
@@ -512,18 +522,25 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         type: 'addConversation',
         payload: { conversation: result.conversation },
       })
-      
+
+      // Opening a new conversation should leave settings/skills/extensions views
+      // and show the thread immediately, even if creation started from another menu.
+      dispatch({
+        type: 'setSidebarMode',
+        payload: { mode: 'default' },
+      })
+
       // Automatically expand the project if it's collapsed
       if (state.settings.collapsedProjectIds.includes(projectId)) {
         await toggleProjectCollapsed(projectId)
       }
-      
+
       // Automatically select the newly created conversation
       dispatch({
         type: 'selectConversation',
         payload: { conversationId: result.conversation.id },
       })
-      
+
       // Start hydrating the runtime after selection (for new conversations, no cache to preload)
       void hydrateConversationRuntime(result.conversation.id)
       
@@ -547,13 +564,20 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         type: 'addConversation',
         payload: { conversation: result.conversation },
       })
-      
+
+      // Opening a new conversation should leave settings/skills/extensions views
+      // and show the thread immediately, even if creation started from another menu.
+      dispatch({
+        type: 'setSidebarMode',
+        payload: { mode: 'default' },
+      })
+
       // Automatically select the newly created conversation
       dispatch({
         type: 'selectConversation',
         payload: { conversationId: result.conversation.id },
       })
-      
+
       // Start hydrating the runtime after selection (for new conversations, no cache to preload)
       void hydrateConversationRuntime(result.conversation.id)
       

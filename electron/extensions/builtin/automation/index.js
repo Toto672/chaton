@@ -41,6 +41,7 @@
     allModels: [],
     modelPicker: null,
     selected: null,
+    editingRuleId: null,
   };
 
   function nowRel(iso) {
@@ -231,10 +232,13 @@
     detailTitle.id = "detailTitle";
     var detailMeta = ui.el("p", "ce-auto-detail-meta", "");
     detailMeta.id = "detailMeta";
+    var detailToolbar = ui.el("div", "ce-auto-detail-toolbar");
+    detailToolbar.id = "detailToolbar";
     var detailBody = ui.el("div", "ce-auto-detail-body");
     detailBody.id = "detailBody";
     detailCard.appendChild(detailTitle);
     detailCard.appendChild(detailMeta);
+    detailCard.appendChild(detailToolbar);
     detailCard.appendChild(detailBody);
 
     detail.appendChild(detailEmpty);
@@ -369,10 +373,10 @@
     var footerActions = ui.el("div", "ce-toolbar");
     var cancelBtn = ui.createButton({ text: "Annuler", variant: "ghost" });
     cancelBtn.id = "cancelBtn";
-    var createBtn = ui.createButton({ text: "Creer", variant: "default" });
-    createBtn.id = "createBtn";
+    var saveBtn = ui.createButton({ text: "Creer", variant: "default" });
+    saveBtn.id = "saveBtn";
     footerActions.appendChild(cancelBtn);
-    footerActions.appendChild(createBtn);
+    footerActions.appendChild(saveBtn);
 
     modal.appendChild(modalHeader);
     modal.appendChild(assist);
@@ -395,6 +399,7 @@
       detailTitle: detailTitle,
       detailMeta: detailMeta,
       detailBody: detailBody,
+      detailToolbar: detailToolbar,
       modalBg: modalBg,
       nameInput: nameInput,
       projectSelect: projectSelect,
@@ -407,7 +412,8 @@
       newBtn: newBtn,
       cancelBtn: cancelBtn,
       fillBtn: fillBtn,
-      createBtn: createBtn,
+      saveBtn: saveBtn,
+      modalTitle: modalTitle,
     };
   }
 
@@ -422,6 +428,40 @@
     var s = String(text || "");
     if (s.length <= n) return s;
     return s.slice(0, n - 1) + "...";
+  }
+
+  function getPrimaryAction(rule) {
+    if (!rule || !Array.isArray(rule.actions) || !rule.actions.length) return null;
+    var action = rule.actions[0];
+    return action && typeof action === "object" ? action : null;
+  }
+
+  function actionTypeLabel(type) {
+    var map = {
+      notify: "Notification",
+      executeAndNotify: "Executer et notifier",
+      enqueueEvent: "Enqueue event",
+      runHostCommand: "Commande host",
+    };
+    return map[type] || type || "Action inconnue";
+  }
+
+  function summarizeAction(rule) {
+    var action = getPrimaryAction(rule);
+    if (!action) return "Aucune action";
+    if (action.type === "notify") return action.body || action.title || "Notification";
+    if (action.type === "executeAndNotify") return action.instruction || "Execution IA";
+    if (action.type === "enqueueEvent") return action.topic || "Evenement automatise";
+    if (action.type === "runHostCommand") return action.method || "Commande host";
+    return actionTypeLabel(action.type);
+  }
+
+  function findProjectName(projectId) {
+    if (!projectId) return "Globale";
+    var project = state.projects.find(function (item) {
+      return item.id === projectId;
+    });
+    return (project && (project.name || project.repoName)) || projectId;
   }
 
   function classifyRuns() {
@@ -462,12 +502,17 @@
     var line = ui.el("div", "ce-auto-row-line");
     line.appendChild(ui.el("span", "ce-auto-row-title", rule.name || "Sans nom"));
     main.appendChild(line);
+
+    var chips = ui.el("div", "ce-auto-row-chips");
+    chips.appendChild(
+      ui.createBadge({ text: triggerLabel(rule.trigger), variant: "outline" }),
+    );
+    chips.appendChild(
+      ui.createBadge({ text: formatDuration(rule.cooldown), variant: "secondary" }),
+    );
+    main.appendChild(chips);
     main.appendChild(
-      ui.el(
-        "p",
-        "ce-auto-row-meta",
-        clamp(triggerLabel(rule.trigger) + " - " + formatDuration(rule.cooldown), 90),
-      ),
+      ui.el("p", "ce-auto-row-meta", clamp(summarizeAction(rule), 110)),
     );
 
     row.appendChild(main);
@@ -475,12 +520,6 @@
       state.selected = key;
       renderLists();
       renderDetail();
-    });
-
-    row.title = "Double-clic pour supprimer cette automatisation";
-    row.addEventListener("dblclick", async function () {
-      await call("automation.rules.delete", { id: rule.id });
-      await load();
     });
 
     return row;
@@ -590,6 +629,42 @@
 
   function renderRuleDetail(rule) {
     clearChildren(refs.detailBody);
+    clearChildren(refs.detailToolbar);
+
+    var action = getPrimaryAction(rule) || {};
+    var editBtn = ui.createButton({ text: "Modifier", variant: "outline" });
+    editBtn.addEventListener("click", function () {
+      openModal(rule);
+    });
+
+    var toggleBtn = ui.createButton({
+      text: rule.enabled ? "Desactiver" : "Activer",
+      variant: "ghost",
+    });
+    toggleBtn.addEventListener("click", async function () {
+      await saveRuleFromDraft(rule, { enabled: !rule.enabled });
+    });
+
+    var deleteBtn = ui.createButton({ text: "Supprimer", variant: "ghost" });
+    deleteBtn.classList.add("ce-auto-danger-btn");
+    deleteBtn.addEventListener("click", async function () {
+      var ok = window.confirm(
+        "Supprimer l'automatisation \"" + (rule.name || "Sans nom") + "\" ?",
+      );
+      if (!ok) return;
+      var res = await call("automation.rules.delete", { id: rule.id });
+      if (!res.ok) {
+        notify((res.error && res.error.message) || "Impossible de supprimer la regle");
+        return;
+      }
+      if (state.selected === "rule:" + rule.id) state.selected = null;
+      await load();
+      notify("Automatisation supprimee.");
+    });
+
+    refs.detailToolbar.appendChild(editBtn);
+    refs.detailToolbar.appendChild(toggleBtn);
+    refs.detailToolbar.appendChild(deleteBtn);
 
     var summary = ui.el("div", "ce-auto-summary");
     summary.appendChild(
@@ -600,17 +675,53 @@
     );
     summary.appendChild(ui.createBadge({ text: triggerLabel(rule.trigger), variant: "outline" }));
     summary.appendChild(ui.createBadge({ text: formatDuration(rule.cooldown), variant: "secondary" }));
+    summary.appendChild(
+      ui.createBadge({ text: actionTypeLabel(action.type), variant: "secondary" }),
+    );
     refs.detailBody.appendChild(summary);
+
+    var overview = ui.el("div", "ce-auto-highlight-grid");
+    var instructionCard = ui.el("div", "ce-auto-highlight-card");
+    instructionCard.appendChild(ui.el("p", "ce-auto-highlight-label", "Instruction"));
+    instructionCard.appendChild(
+      ui.el("p", "ce-auto-highlight-value", summarizeAction(rule)),
+    );
+    overview.appendChild(instructionCard);
+
+    var scopeCard = ui.el("div", "ce-auto-highlight-card");
+    scopeCard.appendChild(ui.el("p", "ce-auto-highlight-label", "Portee"));
+    scopeCard.appendChild(
+      ui.el(
+        "p",
+        "ce-auto-highlight-value",
+        findProjectName(action.projectId || rule.projectId || ""),
+      ),
+    );
+    overview.appendChild(scopeCard);
+    refs.detailBody.appendChild(overview);
 
     var grid = ui.el("div", "ce-auto-detail-grid");
     appendKv(grid, "ID", rule.id, true);
     appendKv(grid, "Statut", rule.enabled ? "Active" : "Desactivee", false);
     appendKv(grid, "Cooldown", formatDuration(rule.cooldown), false);
     appendKv(grid, "Declencheur", triggerLabel(rule.trigger), false);
+    appendKv(grid, "Modele", String(action.model || "Modele par defaut"), true);
+    appendKv(grid, "Projet", findProjectName(action.projectId || ""), false);
     appendKv(grid, "Mise a jour", fmtDate(rule.updatedAt), false);
     refs.detailBody.appendChild(grid);
 
-    var actionsTitle = ui.el("p", "ce-auto-detail-section-title", "Actions configurees");
+    if (action.type === "executeAndNotify" || action.type === "notify") {
+      var requestTitle = ui.el("p", "ce-auto-detail-section-title", "Contenu principal");
+      var requestBox = ui.el(
+        "div",
+        "ce-auto-request-box",
+        String(action.instruction || action.body || "-"),
+      );
+      refs.detailBody.appendChild(requestTitle);
+      refs.detailBody.appendChild(requestBox);
+    }
+
+    var actionsTitle = ui.el("p", "ce-auto-detail-section-title", "Configuration complete");
     var actionsCode = ui.el("pre", "ce-auto-detail-code", toPretty(rule.actions || []));
     refs.detailBody.appendChild(actionsTitle);
     refs.detailBody.appendChild(actionsCode);
@@ -618,6 +729,7 @@
 
   function renderRunDetail(run) {
     clearChildren(refs.detailBody);
+    clearChildren(refs.detailToolbar);
 
     var statusRow = ui.el("div", "ce-auto-status-row");
     var statusClass = run.status === "error"
@@ -757,16 +869,113 @@
     renderDetail();
   }
 
-  function openModal() {
+  function resetForm() {
+    state.editingRuleId = null;
+    refs.modalTitle.textContent = "Creer une automatisation";
+    refs.saveBtn.textContent = "Creer";
+    refs.nameInput.value = "";
+    refs.projectSelect.value = "";
+    refs.triggerSelect.value = "conversation.created";
+    refs.actionTypeSelect.value = "notify";
+    refs.cooldownInput.value = "0";
+    refs.requestInput.value = "";
+    refs.instructionInput.value = "";
+    if (state.modelPicker) {
+      var saved = localStorage.getItem(MODEL_KEY);
+      state.modelPicker.setSelected(saved || null);
+    }
+  }
+
+  function populateForm(rule) {
+    resetForm();
+    state.editingRuleId = rule.id;
+    refs.modalTitle.textContent = "Modifier une automatisation";
+    refs.saveBtn.textContent = "Enregistrer";
+    refs.nameInput.value = rule.name || "";
+    refs.triggerSelect.value = rule.trigger || "conversation.created";
+    refs.cooldownInput.value = String(rule.cooldown || 0);
+
+    var action = getPrimaryAction(rule) || {};
+    refs.actionTypeSelect.value = action.type || "notify";
+    refs.requestInput.value = String(action.instruction || action.body || "");
+    refs.instructionInput.value = String(action.instruction || action.body || "");
+    refs.projectSelect.value = String(action.projectId || "");
+    if (state.modelPicker) {
+      state.modelPicker.setSelected(action.model || localStorage.getItem(MODEL_KEY) || null);
+    }
+  }
+
+  function openModal(rule) {
+    if (rule) populateForm(rule);
+    else resetForm();
     refs.modalBg.classList.add("is-open");
     refs.nameInput.focus();
   }
 
   function closeModal() {
     refs.modalBg.classList.remove("is-open");
+    resetForm();
   }
 
-  refs.newBtn.addEventListener("click", openModal);
+  async function saveRuleFromDraft(rule, overrides) {
+    var action = getPrimaryAction(rule) || {};
+    var payload = {
+      id: rule.id,
+      name: (overrides && overrides.name) || rule.name,
+      trigger: (overrides && overrides.trigger) || rule.trigger,
+      enabled:
+        overrides && Object.prototype.hasOwnProperty.call(overrides, "enabled")
+          ? overrides.enabled
+          : rule.enabled,
+      conditions: Array.isArray(rule.conditions) ? rule.conditions : [],
+      actions: [
+        {
+          type: action.type,
+          title: action.title,
+          body: action.body,
+          instruction: action.instruction,
+          topic: action.topic,
+          method: action.method,
+          params: action.params,
+          model:
+            overrides && Object.prototype.hasOwnProperty.call(overrides, "model")
+              ? overrides.model
+              : action.model,
+          projectId:
+            overrides && Object.prototype.hasOwnProperty.call(overrides, "projectId")
+              ? overrides.projectId
+              : action.projectId,
+        },
+      ],
+      cooldown:
+        overrides && Object.prototype.hasOwnProperty.call(overrides, "cooldown")
+          ? overrides.cooldown
+          : rule.cooldown,
+    };
+
+    var cleanedAction = payload.actions[0];
+    Object.keys(cleanedAction).forEach(function (key) {
+      if (
+        cleanedAction[key] === undefined ||
+        cleanedAction[key] === null ||
+        cleanedAction[key] === ""
+      ) {
+        delete cleanedAction[key];
+      }
+    });
+
+    var res = await call("automation.rules.save", payload);
+    if (!res.ok) {
+      notify((res.error && res.error.message) || "Impossible de sauvegarder la regle");
+      return false;
+    }
+    await load();
+    return true;
+  }
+
+  refs.newBtn.addEventListener("click", function () {
+    openModal();
+  });
   refs.cancelBtn.addEventListener("click", closeModal);
 
   refs.modalBg.addEventListener("click", function (event) {
@@ -793,7 +1002,7 @@
     notify("Pre-remplissage IA applique.");
   });
 
-  refs.createBtn.addEventListener("click", async function () {
+  refs.saveBtn.addEventListener("click", async function () {
     var name = refs.nameInput.value.trim();
     if (!name) {
       notify("Nom d'automatisation requis");
@@ -831,26 +1040,40 @@
     action.model = state.modelPicker ? state.modelPicker.getSelected() : null;
     if (refs.projectSelect.value) action.projectId = refs.projectSelect.value;
 
-    var res = await call("automation.rules.save", {
+    var payload = {
+      id: state.editingRuleId || undefined,
       name: name,
       trigger: trigger,
       enabled: true,
       conditions: [],
       actions: [action],
       cooldown: Math.max(0, Number(refs.cooldownInput.value) || 0),
-    });
+    };
+
+    if (state.editingRuleId) {
+      var currentRule = state.rules.find(function (rule) {
+        return rule.id === state.editingRuleId;
+      });
+      if (currentRule) payload.enabled = currentRule.enabled;
+    }
+
+    var wasEditing = !!state.editingRuleId;
+    var res = await call("automation.rules.save", payload);
 
     if (!res.ok) {
-      notify((res.error && res.error.message) || "Impossible de creer la regle");
+      notify(
+        (res.error && res.error.message) ||
+          (state.editingRuleId
+            ? "Impossible de modifier la regle"
+            : "Impossible de creer la regle"),
+      );
       return;
     }
 
     closeModal();
-    refs.nameInput.value = "";
-    refs.requestInput.value = "";
-    refs.instructionInput.value = "";
-    refs.cooldownInput.value = "0";
+    resetForm();
     await load();
+    notify(wasEditing ? "Automatisation mise a jour." : "Automatisation creee.");
   });
 
   window.addEventListener("message", function (event) {

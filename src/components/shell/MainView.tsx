@@ -493,8 +493,8 @@ export function MainView() {
         <section className="hero-section">
           <div className="hero-group">
             <HeroMascot />
-            <h1 className="hero-title">Sélectionnez un fil</h1>
-            <div className="hero-subtitle">ou créez-en un depuis la barre latérale</div>
+            <h1 className="hero-title">Sélectionnez une conversation</h1>
+            <div className="hero-subtitle">ou créez-en une depuis la barre latérale</div>
           </div>
           <AnimatePresence mode="wait">
             <motion.div

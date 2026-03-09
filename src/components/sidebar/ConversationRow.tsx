@@ -138,7 +138,7 @@ export const ConversationRow = memo(function ConversationRow({ conversation, isA
             void onDeleteClick(event)
           }}
           aria-label={confirmDelete ? t('Confirmer la suppression de {{title}}', { title: conversation.title }) : t('Supprimer {{title}}', { title: conversation.title })}
-          title={confirmDelete ? t('Cliquer à nouveau pour supprimer') : t('Supprimer le fil')}
+          title={confirmDelete ? t('Cliquer à nouveau pour supprimer') : t('Supprimer la conversation')}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>

@@ -70,19 +70,19 @@ export function getExtensionIcon(
 ): IconValue {
   const normalized = typeof iconName === "string" ? iconName.trim() : "";
 
-  // Priority 1: Try static local icon by extension ID
+  // Prefer explicit image URLs resolved by the backend for installed extensions.
+  if (/^(data:image\/|https?:\/\/|\/)/i.test(normalized)) {
+    return { kind: "image", src: normalized };
+  }
+
+  // Named lucide-react icons are used by manifest menu items.
+  if (ICONS[normalized]) return { kind: "svg", Component: ICONS[normalized] };
+
+  // Fall back to static marketplace icons bundled with the app.
   if (extensionId) {
     const staticPath = tryStaticIcon(extensionId);
     if (staticPath) return { kind: "image", src: staticPath };
   }
 
-  // Priority 2: Handle data URLs
-  if (/^data:image\//i.test(normalized))
-    return { kind: "image", src: normalized };
-
-  // Priority 3: Named lucide-react icons
-  if (ICONS[normalized]) return { kind: "svg", Component: ICONS[normalized] };
-
-  // Priority 4: Fall back to generic Puzzle icon
   return { kind: "svg", Component: Puzzle };
 }

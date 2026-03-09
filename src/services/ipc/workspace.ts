@@ -38,6 +38,7 @@ type PiModel = {
     "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
   >;
   contextWindow?: number;
+  contextWindowSource?: "provider" | "pi";
   maxTokens?: number;
   reasoning?: boolean;
   imageInput?: boolean;

@@ -1,4 +1,4 @@
-import { Puzzle, Search, Settings, Workflow } from 'lucide-react'
+import { Plus, Puzzle, Search, Settings, Workflow } from 'lucide-react'
 
 import { ConversationRow } from '@/components/sidebar/ConversationRow'
 import { SettingsSidebar } from '@/components/sidebar/settings/SettingsSidebar'
@@ -68,7 +68,8 @@ export function Sidebar({ width }: { width: number }) {
             void createConversationGlobal()
           }}
         >
-          {t('Nouveau fil')}
+          <Plus className="sidebar-nav-icon h-4 w-4" />
+          {t('Nouvelle conversation')}
         </button>
         <button
           type="button"
@@ -97,14 +98,14 @@ export function Sidebar({ width }: { width: number }) {
       </nav>
 
       <div className="sidebar-section-head">
-        <span className="sidebar-section-title">{t('Fils')}</span>
+        <span className="sidebar-section-title">{t('Conversations')}</span>
         <SidebarHeaderActions />
       </div>
 
       {state.settings.isSearchVisible ? (
         <div className="px-3 pb-2">
           <label htmlFor="sidebar-search" className="sr-only">
-            {t('Rechercher un fil')}
+            {t('Rechercher une conversation')}
           </label>
           <div className="sidebar-search-wrap">
             <Search className="h-4 w-4 text-[#8d8e95]" />
@@ -115,7 +116,7 @@ export function Sidebar({ width }: { width: number }) {
               onChange={(event) => {
                 void setSearchQuery(event.target.value)
               }}
-              placeholder={t('Filtrer les fils')}
+              placeholder={t('Filtrer les conversations')}
             />
           </div>
         </div>

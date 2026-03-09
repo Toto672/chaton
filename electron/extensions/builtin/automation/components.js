@@ -140,6 +140,7 @@
       ".ce-auto-row-title { display: inline-block; max-width: 215px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 560; }",
       ".ce-auto-row-time { flex: 0 0 auto; color: var(--ce-muted-fg); font-size: 13px; }",
       ".ce-auto-row-meta { margin: 2px 0 0; color: var(--ce-muted-fg); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }",
+      ".ce-auto-row-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }",
       ".ce-auto-subempty { border: 1px dashed var(--ce-border); border-radius: 8px; padding: 8px 10px; color: var(--ce-muted-fg); font-size: 12px; }",
 
       ".ce-auto-detail { background: color-mix(in srgb, var(--ce-bg) 99%, white); display: flex; align-items: center; justify-content: center; padding: 28px; position: relative; overflow: auto; min-width: 0; }",
@@ -150,6 +151,7 @@
       ".ce-auto-detail-card { display: none; width: 100%; max-width: 740px; min-width: 0; border: 1px solid var(--ce-border); border-radius: 14px; background: var(--ce-card); box-shadow: var(--ce-shadow-card); padding: 18px; }",
       ".ce-auto-detail-title { margin: 0; font-size: 24px; letter-spacing: -0.01em; word-break: break-word; overflow-wrap: break-word; }",
       ".ce-auto-detail-meta { margin: 6px 0 0; color: var(--ce-muted-fg); font-size: 14px; }",
+      ".ce-auto-detail-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 14px 0 0; }",
       ".ce-auto-detail-body { margin: 14px 0 0; padding: 0; width: 100%; max-height: 58vh; overflow: auto; min-width: 0; }",
       ".ce-auto-status-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }",
       ".ce-auto-status-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; border: 1px solid var(--ce-border); }",
@@ -157,6 +159,10 @@
       ".ce-auto-status-pill--error { background: color-mix(in srgb, var(--ce-danger) 16%, var(--ce-card)); color: color-mix(in srgb, var(--ce-danger) 78%, black); }",
       ".ce-auto-status-time { color: var(--ce-muted-fg); font-size: 12px; }",
       ".ce-auto-summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }",
+      ".ce-auto-highlight-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }",
+      ".ce-auto-highlight-card { border: 1px solid var(--ce-border); background: color-mix(in srgb, var(--ce-card) 92%, var(--ce-muted)); border-radius: 12px; padding: 12px; min-width: 0; }",
+      ".ce-auto-highlight-label { margin: 0 0 6px; color: var(--ce-muted-fg); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }",
+      ".ce-auto-highlight-value { margin: 0; color: var(--ce-fg); font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }",
       ".ce-auto-detail-grid { display: grid; gap: 8px; width: 100%; min-width: 0; }",
       ".ce-auto-kv { display: grid; gap: 3px; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--ce-border); background: color-mix(in srgb, var(--ce-card) 90%, var(--ce-muted)); min-width: 0; }",
       ".ce-auto-k { color: var(--ce-muted-fg); font-size: 12px; }",
@@ -164,12 +170,15 @@
       ".ce-auto-v--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size: 12px; word-break: break-all; }",
       ".ce-auto-detail-section-title { margin: 14px 0 7px; color: var(--ce-muted-fg); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }",
       ".ce-auto-detail-code { display: block; margin: 0; padding: 10px; border-radius: 10px; border: 1px solid var(--ce-border); background: var(--ce-muted); color: var(--ce-fg); font-size: 12px; line-height: 1.45; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; white-space: pre-wrap; word-break: break-all; max-width: 100%; min-width: 0; }",
+      ".ce-auto-request-box { border: 1px solid var(--ce-border); background: color-mix(in srgb, var(--ce-card) 90%, var(--ce-muted)); color: var(--ce-fg); border-radius: 12px; padding: 12px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }",
+      ".ce-auto-danger-btn { color: var(--ce-danger); }",
+      ".ce-auto-danger-btn:hover { background: color-mix(in srgb, var(--ce-danger) 10%, transparent); color: var(--ce-danger); }",
       ".ce-auto-error-box { border: 1px solid color-mix(in srgb, var(--ce-danger) 45%, var(--ce-border)); background: color-mix(in srgb, var(--ce-danger-soft) 70%, var(--ce-card)); color: var(--ce-danger); border-radius: 10px; padding: 10px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; max-width: 100%; min-width: 0; }",
 
       ".dark .ce-auto-title { color: var(--ce-fg); }",
       ".dark .ce-auto-empty-title { color: var(--ce-fg); }",
 
-      "@media (max-width: 840px) { .ce-grid--2 { grid-template-columns: 1fr; } .ce-page { padding: 12px 16px; } .ce-page-header { flex-direction: column; align-items: stretch; } .ce-list-row { flex-direction: column; } .ce-list-row__aside { white-space: normal; } .ce-modal { padding: 16px; border-radius: 12px; } }",
+      "@media (max-width: 840px) { .ce-grid--2 { grid-template-columns: 1fr; } .ce-auto-highlight-grid { grid-template-columns: 1fr; } .ce-page { padding: 12px 16px; } .ce-page-header { flex-direction: column; align-items: stretch; } .ce-list-row { flex-direction: column; } .ce-list-row__aside { white-space: normal; } .ce-modal { padding: 16px; border-radius: 12px; } }",
       "@media (max-width: 1280px) { .ce-auto-layout { grid-template-columns: 380px 1fr; } .ce-auto-empty-title { font-size: 30px; } }",
       "@media (max-width: 980px) { .ce-auto-layout { grid-template-columns: 1fr; } .ce-auto-inbox { border-right: 0; border-bottom: 1px solid var(--ce-border); max-height: 52vh; } .ce-auto-detail { min-height: 48vh; } .ce-auto-empty-title { font-size: 24px; text-align: center; } }",
     ].join("\n");

@@ -648,12 +648,14 @@ function normalizeInstalledExtensionEntryFromDisk(extensionId: string, rootDir: 
   const name = typeof manifest.name === 'string' ? manifest.name.trim() : ''
   const version = typeof manifest.version === 'string' ? manifest.version.trim() : '0.0.0'
   const description = typeof manifest.description === 'string' ? manifest.description : ''
+  const manifestKind = typeof manifest.kind === 'string' ? manifest.kind.trim() : null
+  const manifestIcon = typeof manifest.icon === 'string' ? manifest.icon.trim() : null
   if (!id || id !== extensionId || !name || !version) return null
 
   const packageJson = readJsonFile(path.join(rootDir, 'package.json'))
   const chatons = packageJson?.chatons && typeof packageJson.chatons === 'object' ? packageJson.chatons as Record<string, unknown> : null
   const requiresRestart = extractRequiresRestart(packageJson)
-  
+
   // Extract the npm package name if available
   const npmPackageName = typeof packageJson?.name === 'string' ? packageJson.name.trim() : null
 
@@ -666,6 +668,8 @@ function normalizeInstalledExtensionEntryFromDisk(extensionId: string, rootDir: 
     installSource: 'localPath',
     health: 'ok',
     config: {
+      ...(manifestKind ? { kind: manifestKind } : {}),
+      ...(manifestIcon ? { icon: manifestIcon } : {}),
       ...(requiresRestart ? { requiresRestart } : {}),
       ...(chatons ? { sandboxed: true } : {}),
       ...(npmPackageName ? { npmPackageName } : {}),
@@ -721,7 +725,9 @@ function mergeRegistryWithDiscoveredExtensions(registry: RegistryFile) {
 
     const merged: ChatonsExtensionRegistryEntry = {
       ...discoveredEntry,
-      enabled: existing.enabled,
+      // Preserve explicit user disable, but allow manifest discovery to default
+      // newly found on-disk extensions to enabled.
+      enabled: existing.enabled === false ? false : discoveredEntry.enabled,
       health: existing.health,
       lastRunAt: existing.lastRunAt,
       lastRunStatus: existing.lastRunStatus,

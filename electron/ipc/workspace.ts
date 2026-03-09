@@ -2497,6 +2497,7 @@ type PiListedModel = {
   maxTokens?: number;
   reasoning?: boolean;
   imageInput?: boolean;
+  contextWindowSource?: "provider" | "pi";
 };
 
 async function fetchProviderModelsFromEndpoint(
@@ -2567,9 +2568,10 @@ async function fetchProviderModelsFromEndpoint(
           id: modelId,
         };
 
-        // Extract context window if available
+        // Only trust explicit provider metadata for context windows.
         if (typeof item.context_window === "number" && item.context_window > 0) {
           model.contextWindow = item.context_window;
+          model.contextWindowSource = "provider";
         }
 
         // Extract max completion tokens if available
@@ -2628,7 +2630,13 @@ async function discoverProviderModels(
     }
     return {
       ok: true,
-      models: discovered,
+      models: discovered.map((model) => ({
+        ...model,
+        contextWindow:
+          model.contextWindowSource === "provider"
+            ? model.contextWindow
+            : undefined,
+      })),
     };
   } catch (error) {
     return {
@@ -2766,6 +2774,7 @@ function parsePiListModelsStdout(stdout: string): PiListedModel[] {
       maxTokens: parsePiTokenCount(maxOut),
       reasoning: thinking.toLowerCase() === "yes",
       imageInput: images.toLowerCase() === "yes",
+      contextWindowSource: "pi",
     });
   }
 
@@ -2845,9 +2854,21 @@ async function refreshModelsJsonFromPiListModels(): Promise<void> {
           merged.set(model.id, model);
         }
         for (const model of discoveredFromEndpoint) {
-          if (!merged.has(model.id)) {
+          const existing = merged.get(model.id);
+          if (!existing) {
             merged.set(model.id, model);
+            continue;
           }
+          merged.set(model.id, {
+            ...existing,
+            ...model,
+            contextWindow:
+              typeof model.contextWindow === "number"
+                ? model.contextWindow
+                : existing.contextWindow,
+            contextWindowSource:
+              model.contextWindowSource ?? existing.contextWindowSource,
+          });
         }
         discovered = Array.from(merged.values());
       }
@@ -2858,7 +2879,10 @@ async function refreshModelsJsonFromPiListModels(): Promise<void> {
 
     const nextModelList = discovered.map((model) => {
       const entry: Record<string, unknown> = { id: model.id };
-      if (typeof model.contextWindow === "number") {
+      if (
+        typeof model.contextWindow === "number" &&
+        model.contextWindowSource === "provider"
+      ) {
         entry.contextWindow = model.contextWindow;
       }
       if (typeof model.maxTokens === "number") {

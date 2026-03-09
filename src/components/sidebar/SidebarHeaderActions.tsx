@@ -14,8 +14,8 @@ export function SidebarHeaderActions() {
       <button
         type="button"
         className="sidebar-icon-button"
-        aria-label={t("Nouveau fil global")}
-        title={t("Nouveau fil global")}
+        aria-label={t("Nouvelle conversation globale")}
+        title={t("Nouvelle conversation globale")}
         onClick={() => {
           void createConversationGlobal()
         }}

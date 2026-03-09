@@ -185,7 +185,7 @@ export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [
                 className="sidebar-show-more"
                 onClick={() => setAfficherTousLesFils((actuel) => !actuel)}
               >
-                {afficherTousLesFils ? t('Masquer les fils') : t('Plus de fils')}
+                {afficherTousLesFils ? t('Masquer les conversations') : t('Plus de conversations')}
               </button>
             )}
           </motion.div>

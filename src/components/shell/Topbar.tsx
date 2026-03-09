@@ -536,7 +536,7 @@ export function Topbar() {
 
   return (
     <header className="topbar">
-      <div className="topbar-title">{selectedConversation?.title ?? t("Nouveau fil")}</div>
+      <div className="topbar-title">{selectedConversation?.title ?? t("Nouvelle conversation")}</div>
       <div className="topbar-actions">
         {selectedConversation?.projectId ? (
           <>

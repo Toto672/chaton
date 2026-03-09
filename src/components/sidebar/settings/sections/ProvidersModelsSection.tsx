@@ -116,7 +116,7 @@ export function ProvidersModelsSection({
         providerConfig.models = discoveryResult.models.map((model) => {
           // provider field is omitted - Pi SDK assigns it from the provider key in models.json
           const entry: Record<string, unknown> = { id: model.id };
-          if (typeof model.contextWindow === "number") {
+          if (typeof model.contextWindow === "number" && model.contextWindowSource === "provider") {
             entry.contextWindow = model.contextWindow;
           }
           if (typeof model.maxTokens === "number") {

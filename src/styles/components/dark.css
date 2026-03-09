@@ -1137,11 +1137,11 @@
   }
 
   .dark .ep-mode-btn {
-    @apply text-[#7a8aaa];
+    @apply text-[#c8d4ec] hover:bg-[#182131] hover:text-[#eef2fb];
   }
 
   .dark .ep-mode-btn-active {
-    @apply bg-[#1e2a3d] text-[#eef2fb];
+    @apply bg-[#253149] text-[#f8fbff];
   }
 
   .dark .ep-marketplace-card {

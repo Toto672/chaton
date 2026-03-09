@@ -32,7 +32,7 @@ export function ProvidersSection({
         // Update models.json with discovered models
         const discoveredModelsList = result.models.map((model) => {
           const entry: Record<string, unknown> = { id: model.id }
-          if (typeof model.contextWindow === 'number') {
+          if (typeof model.contextWindow === 'number' && model.contextWindowSource === 'provider') {
             entry.contextWindow = model.contextWindow
           }
           if (typeof model.maxTokens === 'number') {

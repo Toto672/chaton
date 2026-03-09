@@ -23,6 +23,10 @@ interface GitHubRelease {
   published_at: string
 }
 
+interface GitHubApiError {
+  message?: string
+}
+
 export class UpdateService {
   private static readonly REPO_OWNER = 'thibautrey'
   private static readonly REPO_NAME = 'chaton'
@@ -82,15 +86,19 @@ export class UpdateService {
     }
   }
 
+  private static getGitHubApiHeaders() {
+    return {
+      'User-Agent': 'Chatons-Update-Checker',
+      'Accept': 'application/vnd.github.v3+json'
+    }
+  }
+
   private static async fetchReleases(): Promise<GitHubRelease[]> {
     return new Promise((resolve, reject) => {
       const options = {
         hostname: 'api.github.com',
         path: `/repos/${this.REPO_OWNER}/${this.REPO_NAME}/releases`,
-        headers: {
-          'User-Agent': 'Chatons-Update-Checker',
-          'Accept': 'application/vnd.github.v3+json'
-        },
+        headers: this.getGitHubApiHeaders(),
         timeout: 15000
       }
 
@@ -143,7 +151,7 @@ export class UpdateService {
       // Determine protocol from URL
       const protocol = url.startsWith('https') ? https : http
       
-      const req = protocol.get(url, { timeout: 15000 }, (res: any) => {
+      const req = protocol.get(url, { headers: this.getGitHubApiHeaders(), timeout: 15000 }, (res: any) => {
         let data = ''
 
         res.on('data', (chunk: Buffer) => {
@@ -179,6 +187,62 @@ export class UpdateService {
         req.destroy()
         reject(new Error('API request timed out'))
       })
+    })
+  }
+
+  private static async fetchReleaseByTag(version: string): Promise<GitHubRelease | null> {
+    return new Promise((resolve, reject) => {
+      const normalizedVersion = version.replace(/^v/i, '').trim()
+      const tag = normalizedVersion.startsWith('v') ? normalizedVersion : `v${normalizedVersion}`
+      const options = {
+        hostname: 'api.github.com',
+        path: `/repos/${this.REPO_OWNER}/${this.REPO_NAME}/releases/tags/${encodeURIComponent(tag)}`,
+        headers: this.getGitHubApiHeaders(),
+        timeout: 15000
+      }
+
+      const req = https.request(options, (res: any) => {
+        let data = ''
+
+        res.on('data', (chunk: Buffer) => {
+          data += chunk
+        })
+
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            try {
+              const release = JSON.parse(data) as GitHubRelease
+              resolve(release)
+            } catch {
+              reject(new Error('Failed to parse release details'))
+            }
+            return
+          }
+
+          if (res.statusCode === 404) {
+            resolve(null)
+            return
+          }
+
+          try {
+            const payload = JSON.parse(data) as GitHubApiError
+            reject(new Error(payload.message || `GitHub API returned status ${res.statusCode}`))
+          } catch {
+            reject(new Error(`GitHub API returned status ${res.statusCode}`))
+          }
+        })
+      })
+
+      req.on('error', (error: Error) => {
+        reject(error)
+      })
+
+      req.on('timeout', () => {
+        req.destroy()
+        reject(new Error('GitHub API request timed out'))
+      })
+
+      req.end()
     })
   }
 
@@ -765,13 +829,37 @@ sudo rpm -i "${filePath}"
   static async fetchAndStoreChangelogForVersion(version: string): Promise<{version: string, content: string} | null> {
     try {
       console.log(`Fetching changelog for version ${version} from GitHub...`)
+
+      const directRelease = await this.fetchReleaseByTag(version)
+      if (directRelease) {
+        const changelogData = {
+          version: directRelease.tag_name,
+          content: directRelease.body,
+          timestamp: new Date().toISOString()
+        }
+
+        const changelogDir = join(app.getPath('userData'), 'changelogs')
+        if (!existsSync(changelogDir)) {
+          mkdirSync(changelogDir, { recursive: true })
+        }
+
+        const changelogFile = join(changelogDir, `changelog-${directRelease.tag_name.replace(/\//g, '-')}.json`)
+        writeFileSync(changelogFile, JSON.stringify(changelogData, null, 2))
+        console.log(`Changelog fetched directly and stored for version ${directRelease.tag_name}`)
+
+        return {
+          version: changelogData.version,
+          content: changelogData.content
+        }
+      }
+
       const releases = await this.fetchReleases()
       
       // Normalize version for comparison (handle v prefix and ensure consistent format)
       const normalizeVersion = (v: string) => v.replace(/^v/, '').trim().toLowerCase()
       const normalizedVersion = normalizeVersion(version)
       
-      // Find the release that matches the version with better matching logic
+      // Fall back to scanning releases when the direct tag lookup does not resolve.
       const targetRelease = releases.find(release => {
         const tagNormalized = normalizeVersion(release.tag_name)
         const nameNormalized = normalizeVersion(release.name)

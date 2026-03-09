@@ -963,8 +963,8 @@ export function Composer() {
               selectedConversation
                 ? `Répondre dans « ${selectedConversation.title} »`
                 : isDraftConversation
-                  ? "Écrivez votre premier message pour créer ce fil"
-                  : "Sélectionnez un fil pour commencer"
+                  ? "Écrivez votre premier message pour créer cette conversation"
+                  : "Sélectionnez une conversation pour commencer"
             }
             value={message}
             onChange={(event) => setMessage(event.target.value)}

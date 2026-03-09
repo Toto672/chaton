@@ -65,7 +65,7 @@ export function SortFilterPopover({ children }: PropsWithChildren) {
   ]
 
   const showOptions: Array<Option<'all' | 'relevant'>> = [
-    { value: 'all', label: t('Tous les fils') },
+    { value: 'all', label: t('Toutes les conversations') },
     { value: 'relevant', label: t('Pertinente') },
   ]
 
@@ -73,7 +73,7 @@ export function SortFilterPopover({ children }: PropsWithChildren) {
     <div className="relative" ref={rootRef}>
       <span onClick={() => setOpen((prev) => !prev)}>{children}</span>
       {open ? (
-        <div className="filter-popover" role="dialog" aria-label={t('Filtrer trier et organiser les fils')}>
+        <div className="filter-popover" role="dialog" aria-label={t('Filtrer trier et organiser les conversations')}>
           <div className="filter-group">
             <h3 className="filter-heading">{t('Organiser')}</h3>
             {organizeOptions.map((option) => (

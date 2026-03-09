@@ -20,10 +20,6 @@ function extractUsageTotal(message: JsonValue): number {
   }
 
   const record = message as Record<string, JsonValue>;
-  if (record.role !== "assistant") {
-    return 0;
-  }
-
   const usage =
     record.usage && typeof record.usage === "object" && !Array.isArray(record.usage)
       ? (record.usage as Record<string, JsonValue>)
