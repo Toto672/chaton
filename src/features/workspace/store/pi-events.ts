@@ -611,7 +611,8 @@ export function applyPiEvent(
     // Find the conversation title for notification
     const conversation = stateRef.current.conversations.find(c => c.id === conversationId)
     if (conversation && (options?.shouldNotifyConversationCompleted?.(conversationId) ?? true)) {
-      void playConversationSuccessChime()
+      const enableChime = stateRef.current.settings.enableConversationChime ?? true
+      void playConversationSuccessChime(enableChime)
       void showConversationCompletedNotification(conversation.title)
     }
   }

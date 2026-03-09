@@ -51,6 +51,7 @@ export type SidebarSettings = {
   hasCompletedOnboarding: boolean
   allowAnonymousTelemetry: boolean
   telemetryConsentAnswered: boolean
+  enableConversationChime: boolean
 }
 
 export type SidebarMode = 'default' | 'settings' | 'skills' | 'extensions' | 'channels' | 'extension-main-view'

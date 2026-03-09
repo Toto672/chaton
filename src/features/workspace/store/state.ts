@@ -61,6 +61,7 @@ export const defaultSettings: SidebarSettings = {
   hasCompletedOnboarding: false,
   allowAnonymousTelemetry: false,
   telemetryConsentAnswered: false,
+  enableConversationChime: true,
   defaultBehaviorPrompt: `When searching for text or files, prefer using \`rg\` or \`rg --files\` respectively because \`rg\` is much faster than alternatives like \`grep\`. (If the \`rg\` command is not found, then use alternatives.)
 ## Editing constraints
 - Default to ASCII when editing or creating files. Only introduce non-ASCII or other Unicode characters when there is a clear justification and the file already uses them.

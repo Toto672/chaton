@@ -406,27 +406,21 @@ export function useComposerMessaging({
       return;
     }
 
+    // Remove the message from the queue immediately so it disappears from
+    // the UI as soon as it is sent, rather than waiting for the full
+    // execution to complete.
+    setFileAttenteMessagesByKey((previous) => ({
+      ...previous,
+      [composerKey]: (previous[composerKey] ?? []).slice(1),
+    }));
     setEnvoiFileAttenteEnCoursByKey((previous) => ({
       ...previous,
       [composerKey]: true,
     }));
     setIsSubmittingByKey((previous) => ({ ...previous, [composerKey]: true }));
     void envoyerMessageRef.current(messageSuivant)
-      .then(() => {
-        // Always remove from queue after send attempt (success or failure)
-        // If the send failed, envoyerMessage() already restored the message to draft
-        setFileAttenteMessagesByKey((previous) => ({
-          ...previous,
-          [composerKey]: (previous[composerKey] ?? []).slice(1),
-        }));
-      })
       .catch((error) => {
-        // Even on error, remove from queue (the message stays as draft)
         console.error('Error sending queued message:', error);
-        setFileAttenteMessagesByKey((previous) => ({
-          ...previous,
-          [composerKey]: (previous[composerKey] ?? []).slice(1),
-        }));
       })
       .finally(() => {
         setEnvoiFileAttenteEnCoursByKey((previous) => ({

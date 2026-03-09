@@ -428,8 +428,8 @@ export function Composer() {
   }, [openDiffPaths, diffByPath]);
 
   // Helpers to update scoped diff state for the current composerKey
-  const setScopedState = <T,>(
-    setter: React.Dispatch<React.SetStateAction<Record<string, Record<string, T>>>>,
+  const setScopedState = <T extends any,>(
+    setter: React.Dispatch<React.SetStateAction<Record<string, Record<string, any>>>>,
     path: string,
     value: T,
   ) => {

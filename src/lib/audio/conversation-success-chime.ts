@@ -16,7 +16,11 @@ function getAudioNode(): HTMLAudioElement | null {
   return audioNode
 }
 
-export async function playConversationSuccessChime(): Promise<void> {
+export async function playConversationSuccessChime(enabled: boolean = true): Promise<void> {
+  if (!enabled) {
+    return
+  }
+
   const now = Date.now()
   if (now - lastPlayedAt < 1500) {
     return

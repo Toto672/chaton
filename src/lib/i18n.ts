@@ -24,6 +24,7 @@ i18n.use(initReactI18next).init({
         Configurer: "Configure",
         Paramètres: "Settings",
         Général: "General",
+        Audio: "Audio",
         Modèles: "Models",
         Providers: "Providers",
         "Packages & Extensions": "Packages & Extensions",
@@ -146,7 +147,7 @@ i18n.use(initReactI18next).init({
         "Paramètres supplémentaires": "Additional Settings",
         "Modèle par défaut": "Default Model",
         "Sélectionnez un modèle par défaut": "Select a default model",
-        "Impossible de changer le statut de l’extension.":
+        "Impossible de changer le statut de l'extension.":
           "Unable to change extension status.",
         "Health check exécuté pour {{name}}.":
           "Health check executed for {{name}}.",
@@ -162,7 +163,7 @@ i18n.use(initReactI18next).init({
           "Unable to open extensions folder.",
         "Ouvrir le dossier des extensions": "Open extensions folder",
         "📁 Ouvrir le dossier": "📁 Open folder",
-        "Parcourez la bibliothèque d’extensions.":
+        "Parcourez la bibliothèque d'extensions.":
           "Browse the extensions library.",
         "Parcourez la bibliothèque de compétences.":
           "Browse the skills library.",
@@ -236,7 +237,7 @@ i18n.use(initReactI18next).init({
         "Conversation terminée": "Conversation completed",
         'La conversation "{{title}}" a terminé son action':
           'The conversation "{{title}}" has completed its action',
-        "Sélecteur de mode d’accès agent": "Agent access mode selector",
+        "Sélecteur de mode d'accès agent": "Agent access mode selector",
         "Passer en mode sécurisé": "Switch to secure mode",
         "Passer en mode ouvert": "Switch to open mode",
         "Mode sécurisé: comportement actuel, accès limité au contexte de la conversation.":
@@ -259,6 +260,7 @@ i18n.use(initReactI18next).init({
           "Unable to send message: authentication failed (401/access denied). Check the provider API key.",
         "notice.sendMessage.failedWithReason":
           "Unable to send message to the model: {{reason}}",
+        "Chime à la fin des conversations": "Chime at end of conversations",
       },
     },
     fr: {
@@ -452,8 +454,8 @@ i18n.use(initReactI18next).init({
         "Modèle par défaut": "Modèle par défaut",
         "Sélectionnez un modèle par défaut":
           "Sélectionnez un modèle par défaut",
-        "Impossible de changer le statut de l’extension.":
-          "Impossible de changer le statut de l’extension.",
+        "Impossible de changer le statut de l'extension.":
+          "Impossible de changer le statut de l'extension.",
         "Health check exécuté pour {{name}}.":
           "Health check exécuté pour {{name}}.",
         "Exécution de la commande en cours":
@@ -469,8 +471,8 @@ i18n.use(initReactI18next).init({
           "Impossible d'ouvrir le dossier des extensions.",
         "Ouvrir le dossier des extensions": "Ouvrir le dossier des extensions",
         "📁 Ouvrir le dossier": "📁 Ouvrir le dossier",
-        "Parcourez la bibliothèque d’extensions.":
-          "Parcourez la bibliothèque d’extensions.",
+        "Parcourez la bibliothèque d'extensions.":
+          "Parcourez la bibliothèque d'extensions.",
         "Parcourez la bibliothèque de compétences.":
           "Parcourez la bibliothèque de compétences.",
         "Filtrer par nom, package ou description...":
@@ -549,7 +551,7 @@ i18n.use(initReactI18next).init({
         "Conversation terminée": "Conversation terminée",
         'La conversation "{{title}}" a terminé son action':
           'La conversation "{{title}}" a terminé son action',
-        "Sélecteur de mode d’accès agent": "Sélecteur de mode d’accès agent",
+        "Sélecteur de mode d'accès agent": "Sélecteur de mode d'accès agent",
         "Passer en mode sécurisé": "Passer en mode sécurisé",
         "Passer en mode ouvert": "Passer en mode ouvert",
         "Mode sécurisé: comportement actuel, accès limité au contexte de la conversation.":
@@ -567,6 +569,7 @@ i18n.use(initReactI18next).init({
           "Peut aller plus loin pour réaliser des tâches complètes.",
         "Pratique quand vous voulez une aide plus large.":
           "Pratique quand vous voulez une aide plus large.",
+        "Chime à la fin des conversations": "Chime à la fin des conversations",
       },
     },
   },

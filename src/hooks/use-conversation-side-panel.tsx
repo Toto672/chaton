@@ -167,14 +167,20 @@ export function ConversationSidePanelProvider(props: {
       const newMap = new Map(prev)
       const convState = { ...readConvState(prev, conversationId) }
 
+      // Ensure incoming has required fields with defaults
+      const normalizedSubAgent: SubAgent = {
+        ...incoming,
+        previousTaskLists: incoming.previousTaskLists ?? [],
+      }
+
       // Don't duplicate: update if already registered
-      const existingIdx = convState.subAgents.findIndex((a) => a.id === incoming.id)
+      const existingIdx = convState.subAgents.findIndex((a) => a.id === normalizedSubAgent.id)
       if (existingIdx >= 0) {
         const updated = [...convState.subAgents]
-        updated[existingIdx] = { ...updated[existingIdx], ...incoming }
+        updated[existingIdx] = { ...updated[existingIdx], ...normalizedSubAgent }
         convState.subAgents = updated
       } else {
-        convState.subAgents = [...convState.subAgents, incoming]
+        convState.subAgents = [...convState.subAgents, normalizedSubAgent]
       }
 
       newMap.set(conversationId, convState)

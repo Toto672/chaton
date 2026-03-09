@@ -9,6 +9,7 @@ import { LanguageSection } from "@/components/sidebar/settings/sections/Language
 import { ProvidersModelsSection } from "@/components/sidebar/settings/sections/ProvidersModelsSection";
 import { SessionsSection } from "@/components/sidebar/settings/sections/SessionsSection";
 import { SidebarSection } from "@/components/sidebar/settings/sections/SidebarSection";
+import { AudioSection } from "@/components/sidebar/settings/sections/AudioSection";
 import { useWorkspace } from "@/features/workspace/store";
 import { usePiSettingsStore } from "@/features/workspace/pi-settings-store";
 import { workspaceIpc } from "@/services/ipc/workspace";
@@ -73,6 +74,13 @@ export function PiSettingsMainPanel() {
         ) : null}
         {activeSection === "sidebar" ? (
           <SidebarSection
+            settings={state.settings}
+            setSettings={(next) => updateSettings(next)}
+            onSave={handleSaveBehaviorSettings}
+          />
+        ) : null}
+        {activeSection === "audio" ? (
+          <AudioSection
             settings={state.settings}
             setSettings={(next) => updateSettings(next)}
             onSave={handleSaveBehaviorSettings}
