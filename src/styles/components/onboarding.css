@@ -83,6 +83,38 @@
   .onboarding-provider-card {
     @apply relative flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-[#d7dce7] bg-transparent p-3 text-center text-xs text-[#3d404a] transition-all duration-200 ease-in-out hover:bg-[#f7f8fb] hover:shadow-md;
   }
+
+  .onboarding-provider-subgrid {
+    @apply grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-2;
+  }
+
+  .onboarding-provider-variant-card {
+    @apply flex flex-col items-start gap-1 rounded-xl border border-[#d7dce7] bg-[#fbfbfc] px-3 py-2 text-left text-xs text-[#3d404a] transition-all duration-200 ease-in-out hover:border-[#4a5568];
+  }
+
+  .onboarding-provider-variant-card strong {
+    @apply text-sm text-[#2d3039];
+  }
+
+  .onboarding-provider-variant-card span {
+    @apply text-[11px];
+  }
+
+  .onboarding-provider-variant-card.is-selected {
+    @apply border-[#4a5568] bg-[#eef1f6];
+  }
+
+  .onboarding-provider-group-count {
+    @apply text-[10px] text-[#6b7083];
+  }
+
+  .onboarding-provider-variant-subtext {
+    @apply text-[#666b79];
+  }
+
+  .onboarding-provider-variant-auth {
+    @apply text-[#8f94a4];
+  }
   .onboarding-provider-card strong {
     @apply text-[#3d404a];
   }
@@ -244,6 +276,19 @@
   }
 
   .dark .onboarding-provider-card.is-selected {
+    @apply border-[#8f9bb0] bg-[#323846];
+  }
+
+  .dark .onboarding-provider-variant-card {
+    @apply border-[#4d5563] bg-[#1d2026];
+  }
+  .dark .onboarding-provider-variant-card strong {
+    @apply text-[#f2f4f8];
+  }
+  .dark .onboarding-provider-variant-card span {
+    @apply text-[#b0b6c5];
+  }
+  .dark .onboarding-provider-variant-card.is-selected {
     @apply border-[#8f9bb0] bg-[#323846];
   }
 

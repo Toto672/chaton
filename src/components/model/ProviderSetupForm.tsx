@@ -1,13 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  KNOWN_PROVIDER_ICON,
   KNOWN_PROVIDER_PRESETS,
+  KNOWN_PROVIDER_PRESET_GROUPS,
   normalizeProviderName,
+  type ProviderPreset,
 } from "@/features/workspace/provider-presets";
 import { workspaceIpc } from "@/services/ipc/workspace";
 import { OAuthConnectButton } from "./OAuthConnectButton";
 
-type ProviderApiType = "openai-responses" | "openai-completions";
+type ProviderApiType =
+  | "openai-responses"
+  | "openai-completions"
+  | "openai-codex-responses";
 
 type ProviderStatus = {
   installed: boolean;
@@ -56,6 +60,48 @@ export function ProviderSetupForm({
       normalizeProviderName(preset.provider) ===
       normalizeProviderName(draft.providerPreset),
   );
+  const providerGroups = KNOWN_PROVIDER_PRESET_GROUPS;
+  const matchedProviderGroup = useMemo(
+    () =>
+      providerGroups.find((group) =>
+        group.presets.some(
+          (preset) =>
+            normalizeProviderName(preset.provider) ===
+            normalizeProviderName(draft.providerPreset),
+        ),
+      ),
+    [draft.providerPreset, providerGroups],
+  );
+  const [expandedGroupId, setExpandedGroupId] = useState(
+    providerGroups[0]?.id ?? "",
+  );
+  useEffect(() => {
+    if (matchedProviderGroup?.id) {
+      setExpandedGroupId(matchedProviderGroup.id);
+    }
+  }, [matchedProviderGroup?.id]);
+  const expandedGroup =
+    providerGroups.find((group) => group.id === expandedGroupId) ??
+    providerGroups[0];
+  
+  // Auto-select single-preset groups
+  useEffect(() => {
+    if (expandedGroup && expandedGroup.presets.length === 1) {
+      selectProviderPreset(expandedGroup.presets[0]);
+    }
+  }, [expandedGroupId]);
+  
+  const selectProviderPreset = (preset: ProviderPreset) => {
+    onDraftChange({
+      providerPreset: preset.provider,
+      providerName:
+        preset.provider === "custom" ? "" : preset.provider,
+      apiType: preset.api,
+      baseUrl: preset.baseUrl,
+      apiKey: draft.apiKey,
+    });
+    onSelectPreset?.(normalizeProviderName(preset.provider));
+  };
   const isLocalOllama =
     selectedProviderKey === "ollama" &&
     !!ollamaStatus?.checked &&
@@ -102,33 +148,19 @@ export function ProviderSetupForm({
   return (
     <>
       <div className="onboarding-provider-grid">
-        {KNOWN_PROVIDER_PRESETS.map((preset) => {
-          const iconSrc =
-            KNOWN_PROVIDER_ICON[normalizeProviderName(preset.provider)];
-          const isSelected =
-            normalizeProviderName(draft.providerPreset) ===
-            normalizeProviderName(preset.provider);
-          const isPreferred =
-            normalizeProviderName(preset.provider) === "mistral";
-
+        {providerGroups.map((group) => {
+          const isGroupSelected = expandedGroupId === group.id;
+          const isPreferredGroup = group.id === "mistral";
           return (
             <button
-              key={preset.provider}
+              key={`group-${group.id}`}
               type="button"
-              className={`onboarding-provider-card group ${isSelected ? "is-selected" : ""} ${isPreferred ? "is-preferred" : ""}`}
-              onClick={() => {
-                onDraftChange({
-                  providerPreset: preset.provider,
-                  providerName:
-                    preset.provider === "custom" ? "" : preset.provider,
-                  apiType: preset.api,
-                  baseUrl: preset.baseUrl,
-                  apiKey: draft.apiKey,
-                });
-                onSelectPreset?.(normalizeProviderName(preset.provider));
-              }}
+              className={`onboarding-provider-card group ${isGroupSelected ? "is-selected" : ""} ${
+                isPreferredGroup ? "is-preferred" : ""
+              }`}
+              onClick={() => setExpandedGroupId(group.id)}
             >
-              {isPreferred ? (
+              {isPreferredGroup ? (
                 <span
                   className="onboarding-provider-preferred-star"
                   aria-hidden="true"
@@ -136,16 +168,48 @@ export function ProviderSetupForm({
                   ★
                 </span>
               ) : null}
-              {iconSrc ? (
-                <img src={iconSrc} alt="" loading="lazy" />
+              {group.icon ? (
+                <img src={group.icon} alt="" loading="lazy" />
               ) : (
-                <span>{preset.label.slice(0, 1)}</span>
+                <span>{group.label.slice(0, 1)}</span>
               )}
-              <strong>{preset.label}</strong>
+              <strong>{group.label}</strong>
+              {group.presets.length > 1 ? (
+                <span className="onboarding-provider-group-count">
+                  {group.presets.length} options
+                </span>
+              ) : null}
             </button>
           );
         })}
       </div>
+      {expandedGroup && expandedGroup.presets.length > 1 ? (
+        <div className="onboarding-provider-subgrid">
+          {expandedGroup.presets.map((preset) => {
+            const isVariantSelected =
+              normalizeProviderName(preset.provider) ===
+              normalizeProviderName(draft.providerPreset);
+            return (
+              <button
+                key={`variant-${preset.provider}`}
+                type="button"
+                className={`onboarding-provider-variant-card ${isVariantSelected ? "is-selected" : ""}`}
+                onClick={() => selectProviderPreset(preset)}
+              >
+                <strong>{preset.label}</strong>
+                <span className="onboarding-provider-variant-subtext">
+                  {preset.oauthProvider
+                    ? "OAuth-backed"
+                    : preset.baseUrl || "Custom base URL"}
+                </span>
+                <span className="onboarding-provider-variant-auth">
+                  {preset.oauthProvider ? "OAuth" : "API key"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
       <div className={containerClassName}>
         {showCustomFields && draft.providerPreset === "custom" ? (
@@ -170,6 +234,7 @@ export function ProviderSetupForm({
                   })
                 }
               >
+                <option value="openai-codex-responses">openai-codex-responses</option>
                 <option value="openai-responses">openai-responses</option>
                 <option value="openai-completions">openai-completions</option>
               </select>
@@ -180,6 +245,17 @@ export function ProviderSetupForm({
                 value={draft.baseUrl}
                 onChange={(e) =>
                   onDraftChange({ ...draft, baseUrl: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              API key (optional)
+              <input
+                type={apiKeyInputType}
+                placeholder={apiKeyPlaceholder}
+                value={draft.apiKey}
+                onChange={(e) =>
+                  onDraftChange({ ...draft, apiKey: e.target.value })
                 }
               />
             </label>
@@ -226,7 +302,7 @@ export function ProviderSetupForm({
           </div>
         ) : null}
 
-        {!isLocalOllama && !isLocalLmStudio && !isOAuthConnected ? (
+        {!isLocalOllama && !isLocalLmStudio && !isOAuthConnected && draft.providerPreset !== "custom" ? (
           <>
             <div
               style={{

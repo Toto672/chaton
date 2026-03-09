@@ -293,6 +293,10 @@ Chatons supports OAuth login for providers that implement it in the Pi SDK:
 | `anthropic` (Claude Pro/Max) | PKCE, user pastes code from browser | Claude.ai authorization page, user copies the code back |
 | `github-copilot` | GitHub Device flow | User enters a short code on github.com, polling completes automatically |
 
+Onboarding and the Provider Settings screen now surface two OpenAI-flavored presets: **ChatGPT** maps to the OAuth-backed `openai-codex` provider and talks to `https://chatgpt.com/backend-api`, while **OpenAI** maps to the standard `openai` provider (using `openai-completions` against `https://api.openai.com/v1`) and expects an API key. Both entries share the same key management UI but target different authentication flows.
+
+Provider selection is grouped by company so that vendors exposing multiple entry points display under a single card. Clicking a company highlights the group and reveals the available workflows beneath it (e.g., ChatGPT vs. OpenAI), allowing the user to pick the variant that matches their credentials. The **Mistral** group now offers both `Mistral` (standard API at `https://api.mistral.ai/v1`) and `Mistral Vibe` (Vibe endpoint at `https://vibe.mistral.ai/v1`), while the `OpenAI` group retains the ChatGPT OAuth flow alongside the API-key-based connection.
+
 ### How it works
 
 1. The user clicks **"Se connecter"** on an OAuth-capable provider card in the Onboarding or Provider Settings.

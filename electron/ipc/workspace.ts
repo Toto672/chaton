@@ -190,6 +190,58 @@ export function ensurePiAgentBootstrapped() {
 
   ensurePiAuthJsonExists(agentDir);
   syncProviderApiKeysBetweenModelsAndAuth(agentDir);
+  migrateOpenAICodexBaseUrl(agentDir);
+}
+
+/**
+ * Fix openai-codex provider baseUrl in models.json if it was incorrectly set
+ * to the standard OpenAI API URL instead of the ChatGPT backend API.
+ */
+function migrateOpenAICodexBaseUrl(agentDir: string): void {
+  const modelsPath = path.join(agentDir, "models.json");
+  if (!fs.existsSync(modelsPath)) return;
+
+  let models: Record<string, unknown>;
+  try {
+    models = JSON.parse(fs.readFileSync(modelsPath, "utf8")) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    return;
+  }
+
+  const providers = models.providers as
+    | Record<string, Record<string, unknown>>
+    | undefined;
+  if (!providers || typeof providers !== "object") return;
+
+  const codexProvider = providers["openai-codex"];
+  if (!codexProvider || typeof codexProvider !== "object") return;
+
+  const WRONG_BASE_URL = "https://api.openai.com/v1";
+  const CORRECT_BASE_URL = "https://chatgpt.com/backend-api";
+
+  if (
+    typeof codexProvider.baseUrl === "string" &&
+    codexProvider.baseUrl.replace(/\/+$/, "") === WRONG_BASE_URL
+  ) {
+    codexProvider.baseUrl = CORRECT_BASE_URL;
+    if (codexProvider.api === "openai-responses") {
+      codexProvider.api = "openai-codex-responses";
+    }
+    try {
+      atomicWriteJson(modelsPath, models);
+      console.info(
+        `[pi] Migrated openai-codex provider baseUrl from "${WRONG_BASE_URL}" to "${CORRECT_BASE_URL}"`,
+      );
+    } catch (error) {
+      console.error(
+        `[pi] Failed to migrate openai-codex baseUrl:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
 }
 
 type WorkspacePayload = {

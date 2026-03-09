@@ -141,6 +141,12 @@ Implemented behavior:
 - if `auth.json` contains API key credentials, Chatons can mirror them back into `models.json`
 - `auth.json` is proactively created during bootstrap if missing
 
+### OpenAI vs ChatGPT provider cards
+
+The onboarding and Provider Settings builder show two distinct cards for OpenAI-related access. Selecting **ChatGPT** wires up the OAuth-backed `openai-codex` provider (`openai-codex-responses` against `https://chatgpt.com/backend-api`), while **OpenAI** creates the standard `openai` provider (`openai-completions` against `https://api.openai.com/v1`) and expects an API key. Both entries share the same keyUrl and background sync logic but feed different credential flows into `models.json` and `auth.json`.
+
+Provider cards are grouped by company, so vendors offering multiple backends (OpenAI, Mistral, etc.) display as a single card with the available flows revealed below it. The **Mistral** group exposes both the default `Mistral` endpoint (`https://api.mistral.ai/v1`) and the `Mistral Vibe` endpoint (`https://vibe.mistral.ai/v1`), letting the user pick the box that matches their credentials without cluttering the grid with duplicate brands.
+
 ### Auth diagnostics
 
 On auth-related runtime failures such as `401` or missing credentials, Chatons appends a sanitized debug suffix to runtime error information.

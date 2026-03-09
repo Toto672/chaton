@@ -44,7 +44,7 @@ export function OnboardingFlow({ onFinish }: { onFinish?: () => void }) {
   const [providerPreset, setProviderPreset] = useState("mistral");
   const [providerName, setProviderName] = useState("mistral");
   const [apiType, setApiType] = useState<
-    "openai-responses" | "openai-completions"
+    "openai-responses" | "openai-completions" | "openai-codex-responses"
   >("openai-completions");
   const [baseUrl, setBaseUrl] = useState("https://api.mistral.ai/v1");
   const [apiKey, setApiKey] = useState("");
@@ -82,6 +82,7 @@ export function OnboardingFlow({ onFinish }: { onFinish?: () => void }) {
     if (oauthProviderId && !selectedPreset?.keyUrl) {
       return isOAuthConnected || apiKey.trim().length > 0;
     }
+    // Custom providers allow optional API keys
     return true;
   }, [
     providerName,

@@ -1024,8 +1024,8 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
           baseUrl: "https://api.individual.githubcopilot.com",
         },
         "openai-codex": {
-          api: "openai-responses",
-          baseUrl: "https://api.openai.com/v1",
+          api: "openai-codex-responses",
+          baseUrl: "https://chatgpt.com/backend-api",
         },
         anthropic: {
           api: "openai-completions",

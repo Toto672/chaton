@@ -20,7 +20,10 @@ type ProviderConfig = {
   [key: string]: unknown;
 };
 
-type ProviderApiType = "openai-completions" | "openai-responses";
+type ProviderApiType =
+  | "openai-completions"
+  | "openai-responses"
+  | "openai-codex-responses";
 
 function emptyProviderConfig(): ProviderConfig {
   return { api: "", baseUrl: "", apiKey: "" };

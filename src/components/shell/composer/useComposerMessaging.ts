@@ -285,9 +285,6 @@ export function useComposerMessaging({
       return;
     }
 
-    // Collapse side panel when user sends a new message
-    collapseSidePanel?.();
-
     const isPiOccupe = Boolean(
       selectedRuntime?.state?.isStreaming ||
         selectedRuntime?.status === "streaming" ||
@@ -320,6 +317,9 @@ export function useComposerMessaging({
       return;
     }
 
+    // Collapse side panel when actually sending a message rather than queueing it.
+    collapseSidePanel?.();
+
     const attachmentsToSend = pendingAttachments;
     clearCurrentDraft();
     setPendingAttachmentsByKey((previous) => ({ ...previous, [composerKey]: [] }));
@@ -348,7 +348,7 @@ export function useComposerMessaging({
     selectedRuntime?.pendingUserMessage,
     selectedRuntime?.state?.isStreaming,
     selectedRuntime?.status,
-    setMessage,
+    setMessage
   ]);
 
   // When a new conversation is created (composerKey transitions from a draft key

@@ -203,6 +203,8 @@ This distinction powers the UI:
 
 **Validation on startup:** If no models are scoped, app prevents launch (enforced in `electron/ipc/workspace.ts` line ~1700)
 
+**Provider cards note:** The onboarding and Provider Settings forms now group vendor cards that expose multiple backends (OpenAI, Mistral). The **ChatGPT** and **OpenAI** variants live under a single OpenAI card (OAuth vs. API key), while the **Mistral** card now exposes both a `Mistral` variant (standard API at `https://api.mistral.ai/v1`) and a `Mistral Vibe` variant (Vibe endpoint at `https://vibe.mistral.ai/v1`). Each visible option maps to its own Pi provider entry even though they share the same scoping machinery, so keep documentation and sync logic aligned whenever one of these flows changes.
+
 ---
 
 ## 6. CLI Command Resolution
@@ -975,7 +977,190 @@ Do **not** use this file for:
 
 ---
 
-## 19. Documentation Standards
+## 19. Extension Versioning Requirements
+
+When creating or modifying an extension, **you must increment the semantic version in both the `manifest.json` and `package.json`** at the end of the modification.
+
+### Why This Matters
+
+- **Extension registry tracking** — The Chatons extension registry and package managers use version numbers to determine if an update is available
+- **User awareness** — Users need clear versioning to understand what changes between extension releases
+- **Dependency resolution** — Version numbers help tools understand compatibility and breaking changes
+- **Rollback capability** — Proper versioning enables users to downgrade to previous versions if needed
+
+### Version Files That Must Be Updated
+
+Every extension has two critical version fields:
+
+1. **`manifest.json`** (located in extension root)
+   ```json
+   {
+     "id": "@namespace/extension-name",
+     "version": "1.0.0",
+     "name": "Display Name"
+   }
+   ```
+
+2. **`package.json`** (located in extension root)
+   ```json
+   {
+     "name": "@namespace/extension-name",
+     "version": "1.0.0",
+     "description": "..."
+   }
+   ```
+
+**Both must have identical version numbers.**
+
+### Semantic Versioning Rules
+
+Follow [Semantic Versioning 2.0.0](https://semver.org/):
+
+- **MAJOR** (e.g., `1.0.0` → `2.0.0`):
+  - Breaking API changes
+  - Incompatible manifest schema changes
+  - Removal of capabilities or tools
+  - Changes that require user reconfiguration
+
+- **MINOR** (e.g., `1.0.0` → `1.1.0`):
+  - New features or capabilities
+  - New tools or commands added
+  - Non-breaking enhancements
+  - Backward-compatible extensions to the manifest
+
+- **PATCH** (e.g., `1.0.0` → `1.0.1`):
+  - Bug fixes
+  - Performance improvements
+  - Documentation updates
+  - Internal refactoring with no behavioral changes
+
+### Extension Versioning Workflow
+
+**At the end of every extension modification:**
+
+1. **Determine the change type:**
+   - `feat` → Minor bump (e.g., `1.0.0` → `1.1.0`)
+   - `fix` → Patch bump (e.g., `1.0.0` → `1.0.1`)
+   - `BREAKING CHANGE` → Major bump (e.g., `1.0.0` → `2.0.0`)
+
+2. **Update `manifest.json`:**
+   ```bash
+   # Before
+   "version": "1.0.0"
+   
+   # After (for a fix)
+   "version": "1.0.1"
+   ```
+
+3. **Update `package.json`:**
+   ```bash
+   # Use the same version number
+   "version": "1.0.1"
+   ```
+
+4. **Verify both files match:**
+   ```bash
+   # Check they're identical
+   jq .version manifest.json
+   jq .version package.json
+   # Should output the same version
+   ```
+
+5. **Commit the changes with a message describing the modification:**
+   ```bash
+   git add manifest.json package.json
+   git commit -m "feat: add new tool endpoint (v1.1.0)"
+   ```
+
+### Examples
+
+#### Example 1: Bug Fix in Extension
+
+**Before:**
+- Extension version: `1.2.3`
+- Modified file: `src/handler.js` (fixed a null pointer exception)
+
+**After:**
+- `manifest.json`: `"version": "1.2.4"`
+- `package.json`: `"version": "1.2.4"`
+
+#### Example 2: Adding a New Feature
+
+**Before:**
+- Extension version: `2.1.0`
+- Modified files: Added `src/new-tool.js` and extended `manifest.json` with new capability
+
+**After:**
+- `manifest.json`: `"version": "2.2.0"`
+- `package.json`: `"version": "2.2.0"`
+
+#### Example 3: Breaking Change
+
+**Before:**
+- Extension version: `3.0.0`
+- Modified files: Restructured UI components, removed deprecated API
+
+**After:**
+- `manifest.json`: `"version": "4.0.0"`
+- `package.json`: `"version": "4.0.0"`
+
+### Validation Checklist
+
+When you finish modifying an extension, verify:
+
+- [ ] `manifest.json` has been updated to new version
+- [ ] `package.json` has been updated to the same version
+- [ ] Version strings match exactly (no typos like `1.0.0` vs `1.0.00`)
+- [ ] Semantic versioning rules were applied correctly (major/minor/patch)
+- [ ] Changes are committed with a meaningful message
+- [ ] No version mismatch between the two files
+
+### Common Mistakes to Avoid
+
+**Mistake 1: Forgetting to update one file**
+```bash
+# Don't do this
+# Updated manifest.json to "1.1.0"
+# But forgot to update package.json
+# Result: Version mismatch detected by tools
+```
+
+**Mistake 2: Using inconsistent format**
+```bash
+# Don't do this
+manifest.json: "version": "1.1.0"
+package.json: "version": "1.1"      # Missing patch version
+```
+
+**Mistake 3: Not following semantic versioning**
+```bash
+# Don't do this
+# Made a patch-level fix but bumped to 2.0.0
+# Users expect major version bumps to indicate breaking changes
+```
+
+**Mistake 4: Committing without version bump**
+```bash
+# Don't do this
+# Modified extension functionality
+# But forgot to increment version
+# Users have no way to know an update is available
+```
+
+### How This Integrates with CI/CD
+
+The Chatons build pipeline may use version numbers to:
+
+- Trigger registry updates
+- Create release artifacts
+- Generate changelogs
+- Track extension history
+
+Therefore, always ensure versions are accurate and committed before pushing changes.
+
+---
+
+## 20. Documentation Standards
 
 As of 2026, Chatons documentation has migrated to MDX format in the `docs/content/` directory.
 
