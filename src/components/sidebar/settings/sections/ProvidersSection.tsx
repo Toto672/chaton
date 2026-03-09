@@ -18,6 +18,8 @@ export function ProvidersSection({
   const providers = ((models.providers ?? {}) as Record<string, unknown>)
   const [refreshingProvider, setRefreshingProvider] = useState<string | null>(null)
   const [discoveryStatus, setDiscoveryStatus] = useState<Record<string, { ok: boolean; message?: string }>>({})
+  const [testingProvider, setTestingProvider] = useState<string | null>(null)
+  const [testStatus, setTestStatus] = useState<Record<string, { ok: boolean; message?: string; latency?: number }>>({})
 
   const handleRefreshModels = async (providerName: string) => {
     setRefreshingProvider(providerName)
@@ -82,11 +84,38 @@ export function ProvidersSection({
     }
   }
 
+  const handleTestConnection = async (providerName: string) => {
+    setTestingProvider(providerName)
+    setTestStatus({})
+    try {
+      const provider = (providers[providerName] ?? {}) as Record<string, unknown>
+      const result = await workspaceIpc.testProviderConnection(provider)
+      
+      setTestStatus({
+        [providerName]: {
+          ok: result.ok,
+          message: result.message,
+          latency: result.ok ? result.latency : (result as any).latency,
+        },
+      })
+    } catch (error) {
+      setTestStatus({
+        [providerName]: {
+          ok: false,
+          message: error instanceof Error ? error.message : 'Failed to test connection',
+        },
+      })
+    } finally {
+      setTestingProvider(null)
+    }
+  }
+
   return (
     <section className="settings-card">
       {Object.entries(providers).map(([name, cfg]) => {
         const provider = (cfg ?? {}) as Record<string, unknown>
         const status = discoveryStatus[name]
+        const connStatus = testStatus[name]
         return (
           <div key={name} className="settings-subcard">
             <div className="settings-subtitle">{name}</div>
@@ -126,20 +155,38 @@ export function ProvidersSection({
               }
             />
             <div className="settings-row-wrap">
-              <button
-                type="button"
-                className="settings-action-secondary"
-                onClick={() => handleRefreshModels(name)}
-                disabled={refreshingProvider === name}
-              >
-                {refreshingProvider === name ? 'Discovering...' : 'Discover Models'}
-              </button>
-              {status && (
-                <span className={`settings-muted ${status.ok ? 'ok' : 'error'}`} style={{ marginLeft: '8px' }}>
-                  {status.message}
-                </span>
-              )}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="settings-action-secondary"
+                  onClick={() => handleTestConnection(name)}
+                  disabled={testingProvider === name || refreshingProvider === name}
+                >
+                  {testingProvider === name ? 'Testing...' : 'Ping'}
+                </button>
+                <button
+                  type="button"
+                  className="settings-action-secondary"
+                  onClick={() => handleRefreshModels(name)}
+                  disabled={refreshingProvider === name || testingProvider === name}
+                >
+                  {refreshingProvider === name ? 'Discovering...' : 'Discover Models'}
+                </button>
+              </div>
             </div>
+            {connStatus && (
+              <div style={{ marginTop: '8px' }}>
+                <div className={`settings-muted ${connStatus.ok ? 'ok' : 'error'}`}>
+                  <strong>Ping:</strong> {connStatus.message}
+                  {connStatus.ok && connStatus.latency !== undefined && ` (${connStatus.latency}ms)`}
+                </div>
+              </div>
+            )}
+            {status && (
+              <span className={`settings-muted ${status.ok ? 'ok' : 'error'}`} style={{ marginLeft: '0px', display: 'block', marginTop: '4px' }}>
+                <strong>Models:</strong> {status.message}
+              </span>
+            )}
           </div>
         )
       })}

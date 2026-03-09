@@ -130,20 +130,21 @@ export function Composer() {
     added: 0,
     removed: 0,
   });
-  const [openDiffPaths, setOpenDiffPaths] = useState<Record<string, boolean>>(
+  // Diff states scoped by composerKey to avoid leaking between conversations
+  const [openDiffPathsByKey, setOpenDiffPathsByKey] = useState<Record<string, Record<string, boolean>>>(
     {},
   );
-  const [diffByPath, setDiffByPath] = useState<Record<string, FileDiffDetails>>(
+  const [diffByPathByKey, setDiffByPathByKey] = useState<Record<string, Record<string, FileDiffDetails>>>(
     {},
   );
-  const [diffLoadingByPath, setDiffLoadingByPath] = useState<
-    Record<string, boolean>
+  const [diffLoadingByPathByKey, setDiffLoadingByPathByKey] = useState<
+    Record<string, Record<string, boolean>>
   >({});
-  const [diffErrorByPath, setDiffErrorByPath] = useState<
-    Record<string, string | null>
+  const [diffErrorByPathByKey, setDiffErrorByPathByKey] = useState<
+    Record<string, Record<string, string | null>>
   >({});
-  const [currentChangeIndexByPath, setCurrentChangeIndexByPath] = useState<
-    Record<string, number>
+  const [currentChangeIndexByPathByKey, setCurrentChangeIndexByPathByKey] = useState<
+    Record<string, Record<string, number>>
   >({});
   const [isDragOverComposer, setIsDragOverComposer] = useState(false);
   const footerRef = useRef<HTMLElement | null>(null);
@@ -183,6 +184,12 @@ export function Composer() {
   const diffLinesContainerRefs = useRef<Record<string, HTMLDivElement | null>>(
     {},
   );
+  // Derive per-conversation diff state from the scoped stores
+  const openDiffPaths = openDiffPathsByKey[composerKey] ?? {};
+  const diffByPath = diffByPathByKey[composerKey] ?? {};
+  const diffLoadingByPath = diffLoadingByPathByKey[composerKey] ?? {};
+  const diffErrorByPath = diffErrorByPathByKey[composerKey] ?? {};
+  const currentChangeIndexByPath = currentChangeIndexByPathByKey[composerKey] ?? {};
   const hasInlineDiffOpen = Object.values(openDiffPaths).some(Boolean);
 
   const {
@@ -349,11 +356,6 @@ export function Composer() {
     if (!conversationId) {
       setGitModifiedFiles([]);
       setGitModificationTotals({ files: 0, added: 0, removed: 0 });
-      setOpenDiffPaths({});
-      setDiffByPath({});
-      setDiffLoadingByPath({});
-      setDiffErrorByPath({});
-      setCurrentChangeIndexByPath({});
       return;
     }
 
@@ -361,13 +363,10 @@ export function Composer() {
     if (!baseline) {
       setGitModifiedFiles([]);
       setGitModificationTotals({ files: 0, added: 0, removed: 0 });
-      setOpenDiffPaths({});
-      setDiffByPath({});
-      setDiffLoadingByPath({});
-      setDiffErrorByPath({});
-      setCurrentChangeIndexByPath({});
       return;
     }
+
+    const key = composerKey;
 
     const refresh = async () => {
       const result = await workspaceIpc.getGitDiffSummary(conversationId);
@@ -375,58 +374,28 @@ export function Composer() {
       if (!result.ok) {
         setGitModifiedFiles([]);
         setGitModificationTotals({ files: 0, added: 0, removed: 0 });
-        setOpenDiffPaths({});
-        setDiffByPath({});
-        setDiffLoadingByPath({});
-        setDiffErrorByPath({});
-        setCurrentChangeIndexByPath({});
         return;
       }
       const threadFiles = computeThreadDeltaFiles(result.files, baseline);
       setGitModifiedFiles(threadFiles);
       setGitModificationTotals(computeTotals(threadFiles));
-      setDiffByPath((previous) => {
-        const next: Record<string, FileDiffDetails> = {};
+      // Prune stale entries from scoped diff state, keeping only paths still in threadFiles
+      const pruneByThreadFiles = <T,>(prev: Record<string, Record<string, T>>): Record<string, Record<string, T>> => {
+        const inner = prev[key];
+        if (!inner) return prev;
+        const next: Record<string, T> = {};
         for (const file of threadFiles) {
-          if (previous[file.path]) {
-            next[file.path] = previous[file.path];
+          if (inner[file.path] !== undefined) {
+            next[file.path] = inner[file.path];
           }
         }
-        return next;
-      });
-      setDiffLoadingByPath((previous) => {
-        const next: Record<string, boolean> = {};
-        for (const file of threadFiles) {
-          if (previous[file.path]) {
-            next[file.path] = previous[file.path];
-          }
-        }
-        return next;
-      });
-      setDiffErrorByPath((previous) => {
-        const next: Record<string, string | null> = {};
-        for (const file of threadFiles) {
-          if (previous[file.path]) {
-            next[file.path] = previous[file.path];
-          }
-        }
-        return next;
-      });
-      setOpenDiffPaths((previous) => {
-        const next: Record<string, boolean> = {};
-        for (const file of threadFiles) {
-          if (previous[file.path]) next[file.path] = true;
-        }
-        return next;
-      });
-      setCurrentChangeIndexByPath((previous) => {
-        const next: Record<string, number> = {};
-        for (const file of threadFiles) {
-          if (previous[file.path] !== undefined)
-            next[file.path] = previous[file.path];
-        }
-        return next;
-      });
+        return { ...prev, [key]: next };
+      };
+      setDiffByPathByKey(pruneByThreadFiles);
+      setDiffLoadingByPathByKey(pruneByThreadFiles);
+      setDiffErrorByPathByKey(pruneByThreadFiles);
+      setOpenDiffPathsByKey(pruneByThreadFiles);
+      setCurrentChangeIndexByPathByKey(pruneByThreadFiles);
     };
 
     void refresh();
@@ -442,6 +411,7 @@ export function Composer() {
       window.clearInterval(timer);
     };
   }, [
+    composerKey,
     gitBaselineByConversationId,
     isWorkingOnChanges,
     selectedConversation?.id,
@@ -457,38 +427,53 @@ export function Composer() {
     }
   }, [openDiffPaths, diffByPath]);
 
+  // Helpers to update scoped diff state for the current composerKey
+  const setScopedState = <T,>(
+    setter: React.Dispatch<React.SetStateAction<Record<string, Record<string, T>>>>,
+    path: string,
+    value: T,
+  ) => {
+    setter((prev) => ({
+      ...prev,
+      [composerKey]: { ...(prev[composerKey] ?? {}), [path]: value },
+    }));
+  };
+
   const loadDiffForFile = async (path: string) => {
     const conversationId = selectedConversation?.id;
     if (!conversationId) {
       return;
     }
-    setDiffLoadingByPath((previous) => ({ ...previous, [path]: true }));
-    setDiffErrorByPath((previous) => ({ ...previous, [path]: null }));
+    setScopedState(setDiffLoadingByPathByKey, path, true);
+    setScopedState(setDiffErrorByPathByKey, path, null);
     const result = await workspaceIpc.getGitFileDiff(conversationId, path);
     if (!result.ok) {
-      setDiffLoadingByPath((previous) => ({ ...previous, [path]: false }));
-      setDiffErrorByPath((previous) => ({
-        ...previous,
-        [path]:
-          result.message ?? "Impossible de charger le diff pour ce fichier.",
-      }));
+      setScopedState(setDiffLoadingByPathByKey, path, false);
+      setScopedState(
+        setDiffErrorByPathByKey,
+        path,
+        result.message ?? "Impossible de charger le diff pour ce fichier.",
+      );
       return;
     }
     const normalizedLines = result.diff.replace(/\r\n/g, "\n").split("\n");
-    setDiffByPath((previous) => ({
-      ...previous,
-      [path]: {
-        path: result.path,
-        lines: normalizedLines,
-        firstChangedLine: result.firstChangedLine,
-        isBinary: result.isBinary,
-      },
-    }));
-    setDiffLoadingByPath((previous) => ({ ...previous, [path]: false }));
+    setScopedState(setDiffByPathByKey, path, {
+      path: result.path,
+      lines: normalizedLines,
+      firstChangedLine: result.firstChangedLine,
+      isBinary: result.isBinary,
+    });
+    setScopedState(setDiffLoadingByPathByKey, path, false);
   };
 
   const handleToggleDiffForFile = (path: string) => {
-    setOpenDiffPaths((previous) => ({ ...previous, [path]: !previous[path] }));
+    setOpenDiffPathsByKey((prev) => ({
+      ...prev,
+      [composerKey]: {
+        ...(prev[composerKey] ?? {}),
+        [path]: !(prev[composerKey]?.[path] ?? false),
+      },
+    }));
     const existing = diffByPath[path];
     const isLoading = diffLoadingByPath[path];
     if (!existing && !isLoading) {
@@ -499,9 +484,9 @@ export function Composer() {
   const scrollToChange = (path: string, index: number) => {
     const nodes = diffChangeRefs.current[path] ?? [];
     const clamped = Math.max(0, Math.min(index, nodes.length - 1));
-    setCurrentChangeIndexByPath((previous) => ({
-      ...previous,
-      [path]: clamped,
+    setCurrentChangeIndexByPathByKey((prev) => ({
+      ...prev,
+      [composerKey]: { ...(prev[composerKey] ?? {}), [path]: clamped },
     }));
     const target = nodes[clamped];
     if (target) {

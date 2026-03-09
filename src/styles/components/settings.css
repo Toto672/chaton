@@ -195,6 +195,10 @@
     @apply rounded-lg border border-[#cacbd1] bg-white px-3 py-2 text-sm font-medium text-[#3b3d45] transition-colors hover:bg-[#f2f2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
   }
 
+  .settings-action-secondary {
+    @apply rounded-lg border border-[#d9dadf] bg-[#f5f5f7] px-3 py-2 text-sm font-medium text-[#3b3d45] transition-colors hover:bg-[#ececf1] hover:border-[#cacbd1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
   .settings-icon-action {
     @apply rounded-md p-1 text-[#646670] hover:bg-[#ececf1];
   }
@@ -209,6 +213,14 @@
 
   .settings-muted {
     @apply text-xs text-[#7f8088];
+  }
+
+  .settings-muted.ok {
+    @apply text-[#246747] bg-[#edf8f1] rounded px-2 py-1;
+  }
+
+  .settings-muted.error {
+    @apply text-[#a63a3a] bg-[#fff1f1] rounded px-2 py-1;
   }
 
   .settings-mono {

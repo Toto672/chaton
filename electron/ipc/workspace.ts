@@ -306,7 +306,7 @@ type GitFileDiffResult =
       message?: string;
     };
 
-const piRuntimeManager = new PiSessionRuntimeManager();
+export const piRuntimeManager = new PiSessionRuntimeManager();
 const extensionQueueWorker: NodeJS.Timeout | null = null;
 const execFileAsync = promisify(execFile);
 const requireFromHere = createRequire(import.meta.url);
@@ -2568,6 +2568,88 @@ async function discoverProviderModels(
   }
 }
 
+async function testProviderConnection(
+  providerConfig: Record<string, unknown>,
+): Promise<{ ok: boolean; latency: number; statusCode?: number; message: string }> {
+  const startTime = Date.now();
+  try {
+    const baseUrl =
+      typeof providerConfig.baseUrl === "string"
+        ? providerConfig.baseUrl.trim()
+        : "";
+    if (!baseUrl) {
+      return {
+        ok: false,
+        latency: 0,
+        message: "No base URL provided",
+      };
+    }
+
+    const normalizedBaseUrl = normalizeHttpBaseUrlShape(baseUrl);
+    if (!normalizedBaseUrl) {
+      return {
+        ok: false,
+        latency: 0,
+        message: "Invalid base URL format",
+      };
+    }
+
+    const apiKey =
+      typeof providerConfig.apiKey === "string"
+        ? providerConfig.apiKey.trim()
+        : "";
+    const headers: Record<string, string> = { accept: "application/json" };
+    if (apiKey.length > 0) {
+      headers.authorization = `Bearer ${apiKey}`;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    
+    try {
+      const response = await fetch(`${normalizedBaseUrl}/models`, {
+        method: "HEAD",
+        headers,
+        signal: controller.signal,
+      });
+      const latency = Date.now() - startTime;
+      
+      if (response.ok || response.status === 401 || response.status === 403) {
+        return {
+          ok: true,
+          latency,
+          statusCode: response.status,
+          message: `Connection successful (${response.status}) - ${latency}ms`,
+        };
+      }
+      
+      return {
+        ok: false,
+        latency,
+        statusCode: response.status,
+        message: `Connection failed with status ${response.status}`,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  } catch (error) {
+    const latency = Date.now() - startTime;
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (message.includes("aborted")) {
+      return {
+        ok: false,
+        latency,
+        message: "Connection timeout (10s) - server may be unreachable or very slow",
+      };
+    }
+    return {
+      ok: false,
+      latency,
+      message: `Connection test failed: ${message}`,
+    };
+  }
+}
+
 function parsePiTokenCount(raw: string): number | undefined {
   const value = raw.trim().toUpperCase();
   if (!value) return undefined;
@@ -3195,6 +3277,7 @@ async function listPiModels(): Promise<PiModelsResult> {
           scoped: enabledScopedModels.has(key),
           supportsThinking: Boolean(model.reasoning),
           thinkingLevels: model.reasoning ? THINKING_LEVELS : [],
+          contextWindow: model.contextWindow,
         } satisfies PiModel;
       })
       .filter((model, index, array) => {
@@ -3251,6 +3334,7 @@ function listPiModelsFromCache(): PiModel[] {
         return [];
       }
     })(),
+    contextWindow: model.context_window ?? undefined,
   }));
 }
 
@@ -3270,6 +3354,7 @@ async function syncPiModelsCache(): Promise<PiModelsResult> {
       id: model.id,
       supportsThinking: model.supportsThinking,
       thinkingLevels: model.thinkingLevels,
+      contextWindow: model.contextWindow,
     })),
   );
   return result;
@@ -3433,6 +3518,7 @@ export function registerWorkspaceIpc() {
     isGitRepo,
     removeConversationWorktree,
     discoverProviderModels,
+    testProviderConnection,
     hasWorkingTreeChanges,
     hasStagedChanges,
     mapConversation,

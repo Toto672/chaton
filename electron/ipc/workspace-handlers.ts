@@ -147,6 +147,9 @@ type RegisterWorkspaceHandlersDeps = {
   discoverProviderModels: (
     providerConfig: Record<string, unknown>,
   ) => Promise<unknown>;
+  testProviderConnection: (
+    providerConfig: Record<string, unknown>,
+  ) => Promise<unknown>;
   setPiModelScoped: (
     provider: string,
     id: string,

@@ -6,13 +6,14 @@ export type DbPiModelCache = {
   id: string
   supports_thinking: number
   thinking_levels_json: string | null
+  context_window: number | null
   updated_at: string
 }
 
 export function listPiModelsCache(db: Database.Database): DbPiModelCache[] {
   return db
     .prepare(
-      'SELECT key, provider, id, supports_thinking, thinking_levels_json, updated_at FROM pi_models_cache ORDER BY provider ASC, id ASC',
+      'SELECT key, provider, id, supports_thinking, thinking_levels_json, context_window, updated_at FROM pi_models_cache ORDER BY provider ASC, id ASC',
     )
     .all() as DbPiModelCache[]
 }
@@ -25,12 +26,13 @@ export function replacePiModelsCache(
     id: string
     supportsThinking: boolean
     thinkingLevels: string[]
+    contextWindow?: number
   }>,
 ) {
   const now = new Date().toISOString()
   const clearStmt = db.prepare('DELETE FROM pi_models_cache')
   const insertStmt = db.prepare(
-    'INSERT INTO pi_models_cache(key, provider, id, supports_thinking, thinking_levels_json, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    'INSERT INTO pi_models_cache(key, provider, id, supports_thinking, thinking_levels_json, context_window, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
   )
 
   const tx = db.transaction(() => {
@@ -42,6 +44,7 @@ export function replacePiModelsCache(
         model.id,
         model.supportsThinking ? 1 : 0,
         model.thinkingLevels.length > 0 ? JSON.stringify(model.thinkingLevels) : null,
+        model.contextWindow ?? null,
         now,
       )
     }

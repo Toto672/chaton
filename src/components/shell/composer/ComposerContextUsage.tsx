@@ -66,7 +66,7 @@ export function ComposerContextUsage({
       tooltipLabel:
         capacity > 0
           ? `Contexte: ${formatCompactTokens(boundedUsed)}/${formatCompactTokens(capacity)} (${percent}%)`
-          : "Contexte du modele indisponible",
+          : "Contexte du modèle indisponible",
     };
   }, [contextWindow, messages]);
 

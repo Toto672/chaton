@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import { createRequire } from 'node:module'
 import { listQueueMessages } from '../db/repos/extension-queue.js'
 import { getDb } from '../db/index.js'
 import { hasCapability, trackCapability } from './runtime/capabilities.js'
@@ -23,10 +24,12 @@ import type { PiSessionRuntimeManager } from '../pi-sdk-runtime.js'
 
 let piRuntimeManagerInstance: PiSessionRuntimeManager | null = null
 
+const require = createRequire(import.meta.url)
+
 function getPiRuntimeManager(): PiSessionRuntimeManager {
   if (!piRuntimeManagerInstance) {
-    // Lazy import to avoid circular dependencies
-    const workspace = require('../ipc/workspace.js')
+    // Lazy import to avoid circular dependencies - use dynamic import for ESM
+    const workspace = require('../ipc/workspace.js') as typeof import('../ipc/workspace.js')
     piRuntimeManagerInstance = workspace.piRuntimeManager as PiSessionRuntimeManager
   }
   return piRuntimeManagerInstance

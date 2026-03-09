@@ -334,6 +334,21 @@ declare global {
             message?: string;
           }
       >;
+      testProviderConnection: (
+        providerConfig: Record<string, unknown>,
+      ) => Promise<
+        | {
+            ok: true;
+            latency: number;
+            statusCode: number;
+            message: string;
+          }
+        | {
+            ok: false;
+            message: string;
+            statusCode?: number;
+          }
+      >;
       setPiModelScoped: (
         provider: string,
         id: string,

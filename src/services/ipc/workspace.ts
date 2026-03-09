@@ -55,6 +55,9 @@ type SetPiModelScopedResult =
 type DiscoverProviderModelsResult =
   | { ok: true; models: PiModel[] }
   | { ok: false; models?: PiModel[]; message?: string };
+type TestProviderConnectionResult =
+  | { ok: true; latency: number; statusCode: number; message: string }
+  | { ok: false; message: string; statusCode?: number; latency?: number };
 type PiCommandParams = { search?: string; source?: string; local?: boolean };
 type WorktreeFileChange = {
   path: string;
@@ -292,6 +295,8 @@ export const workspaceIpc = {
   syncPiModels: (): Promise<ListPiModelsResult> => getApi().syncPiModels(),
   discoverProviderModels: (providerConfig: Record<string, unknown>): Promise<DiscoverProviderModelsResult> =>
     getApi().discoverProviderModels(providerConfig),
+  testProviderConnection: (providerConfig: Record<string, unknown>): Promise<TestProviderConnectionResult> =>
+    getApi().testProviderConnection(providerConfig),
   setPiModelScoped: (
     provider: string,
     id: string,
