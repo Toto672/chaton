@@ -186,6 +186,18 @@ function statusBadgeClass(file: WorktreeFileChange) {
   return "git-status-badge git-status-badge-modified";
 }
 
+function inferProjectFileStatus(
+  file: Pick<ProjectFileChange, "added" | "removed">,
+): ProjectFileChange["status"] {
+  if (file.added > 0 && file.removed === 0) {
+    return "added";
+  }
+  if (file.removed > 0 && file.added === 0) {
+    return "deleted";
+  }
+  return "modified";
+}
+
 function projectStatusBadgeClass(file: ProjectFileChange) {
   switch (file.status) {
     case 'added':
@@ -205,11 +217,6 @@ function projectStatusBadgeClass(file: ProjectFileChange) {
     default:
       return "git-status-badge git-status-badge-modified";
   }
-  if (file.untracked) return "git-status-badge git-status-badge-added";
-  if (file.deleted) return "git-status-badge git-status-badge-deleted";
-  if (file.renamed) return "git-status-badge git-status-badge-renamed";
-  if (file.staged) return "git-status-badge git-status-badge-staged";
-  return "git-status-badge git-status-badge-modified";
 }
 
 function ProjectTreeRow({
@@ -462,12 +469,12 @@ export function Topbar() {
         setProjectGitInfo([]);
         return;
       }
-      // Convert the summary format to our ProjectFileChange format
-      const changes: ProjectFileChange[] = result.files.map(file => ({
+      // Convert the summary format to our ProjectFileChange format.
+      const changes: ProjectFileChange[] = result.files.map((file) => ({
         path: file.path,
         added: file.added,
         removed: file.removed,
-        status: file.status as ProjectFileChange['status']
+        status: inferProjectFileStatus(file),
       }));
       setProjectGitInfo(changes);
       
