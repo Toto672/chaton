@@ -1,337 +1,124 @@
 ---
 title: Pi Integration
-description: Practical reference for how Chatons uses Pi Coding Agent.
+description: How Chatons uses Pi Coding Agent as its conversation runtime.
 ---
 
 # Pi Integration in Chatons
 
-Related pages:
+This page documents how Chatons uses the Pi Coding Agent SDK. Verified against `electron/ipc/workspace.ts`, `electron/pi-sdk-runtime.ts`, and `electron/main.ts` as of March 10, 2026.
 
-- [Developer Guide](/developer-guide)
-- [User Guide](/user-guide)
-
----
-
-## 1. High-level model
-
-Chatons uses Pi as its coding-agent runtime.
-
-In practice, Pi is responsible for:
-
-- model and provider handling
-- session creation
-- tool execution inside conversations
-- skills commands
-- parts of the settings and diagnostics workflow
-
-The desktop app wraps Pi with its own:
-
-- Electron IPC layer
-- per-conversation runtime management
-- persistent app database
-- renderer state and UI
+Related: [Developer Guide](/developer-guide), [User Guide](/user-guide)
 
 ---
 
-## 2. The important Pi directories and files
+## 1. What Pi Does in Chatons
 
-Chatons keeps a managed Pi directory under:
+Pi is responsible for:
 
-- `<userData>/.pi/agent`
+- Model and provider handling (registry, credentials, API compatibility)
+- Per-conversation session creation and management
+- Tool execution inside conversations (read, write, edit, bash)
+- Skills commands (install, uninstall, list)
+- Parts of the settings and diagnostics workflow
 
-Key files and directories used there include:
+Chatons wraps Pi with:
 
-- `settings.json`
-- `models.json`
-- `auth.json`
-- `sessions/`
-- `worktrees/chaton/`
-- `bin/`
-
-Chatons also maintains a global workspace directory under:
-
-- `<userData>/workspace/global`
-
-These paths are created and managed from the Electron side.
+- Electron IPC layer for cross-process communication
+- Per-conversation runtime lifecycle management
+- SQLite database for app-level persistence
+- React UI and workspace state
+- Extension runtime for third-party integrations
 
 ---
 
-## 3. Internal runtime resolution
+## 2. Managed Pi Directory
 
-For Pi CLI-style actions, Chatons prefers its internal runtime.
+Chatons keeps its own Pi directory, separate from any user-global `~/.pi` install:
 
-The intended resolution path is:
+```
+<userData>/.pi/agent/
+```
 
-- bundled `@mariozechner/pi-coding-agent/dist/cli.js` when available
-- otherwise fallback paths under the Chatons-managed agent directory
+Where `<userData>` is `<appData>/Chatons` (overridden from Electron's default in `main.ts`).
 
-Key logic lives in:
+### Directory Structure
 
-- `electron/ipc/workspace.ts`
+| Path | Purpose |
+|------|---------|
+| `settings.json` | Pi settings: `enabledModels`, `defaultProvider`, `defaultModel`, `theme` |
+| `models.json` | Provider definitions and model metadata |
+| `auth.json` | Provider credentials (API keys and OAuth tokens) |
+| `sessions/` | Pi session state files |
+| `worktrees/chaton/` | Git worktree storage |
+| `bin/` | Fallback Pi binary location |
 
-Important methods to know:
+### Why Not the User's Global Pi?
 
-- `getBundledPiCliPath()`
-- `getPiBinaryPath()`
-- `runPiExec()`
-
-### What this means in practice
-
-Chatons app behavior is based on its own Pi runtime wiring and config directory.
-
-It does not depend on a user's shell-level global Pi install being present or configured in the same way.
+- App behavior is deterministic and isolated
+- Credentials are app-scoped
+- Model scope is app-scoped
+- Multiple Chatons versions or Pi-based apps can coexist
+- All CLI executions force `PI_CODING_AGENT_DIR` to this directory
 
 ---
 
-## 4. Configuration files
+## 3. Bootstrap Process
+
+`ensurePiAgentBootstrapped()` in `electron/ipc/workspace.ts` runs on startup:
+
+1. Creates the directory tree if missing
+2. Writes default `settings.json` if missing (`{ enabledModels: [], defaultProvider: null, defaultModel: null }`)
+3. Writes default `models.json` if missing (`{ providers: {} }`)
+4. Creates `auth.json` as `{}` if missing
+5. Syncs API keys between `models.json` and `auth.json`
+6. Migrates `openai-codex` base URL if incorrectly set
+7. Cleans up stale `settings.json.lock` files (older than 5 minutes)
+8. Creates the global workspace at `<userData>/workspace/global`
+
+---
+
+## 4. Configuration Files
 
 ### `settings.json`
 
-This file stores Pi settings used by the app, including model scope.
+```json
+{
+  "enabledModels": ["openai/gpt-4o", "anthropic/claude-3.5-sonnet"],
+  "defaultProvider": "openai",
+  "defaultModel": "openai/gpt-4o",
+  "theme": "dark"
+}
+```
 
-Most importantly for the UI:
-
-- `enabledModels` is the source of truth for scoped model selection
+`enabledModels` is the **single source of truth** for scoped model selection. When a user stars/unstars a model in the UI, this array is updated in the actual file, not just in UI state.
 
 ### `models.json`
 
-This file stores provider definitions and model information.
+```json
+{
+  "providers": {
+    "openai": {
+      "name": "OpenAI",
+      "baseUrl": "https://api.openai.com/v1",
+      "models": [
+        { "id": "gpt-4o", "maxTokens": 4096 }
+      ]
+    }
+  }
+}
+```
+
+This is the registry Pi uses to discover available models. Chatons reads it to populate model lists.
 
 ### `auth.json`
 
-This file stores provider credentials used for runtime authentication.
-
-Chatons proactively creates this file during bootstrap if needed.
-
----
-
-## 5. Provider/auth synchronization
-
-Chatons currently keeps provider auth information synchronized between `models.json` and `auth.json`.
-
-That means:
-
-- if provider API keys exist in `models.json` and auth is missing, Chatons can populate `auth.json`
-- if credentials exist in `auth.json`, Chatons can mirror them into the provider model configuration when needed
-
-This dual handling exists to keep the app runtime and Pi-side auth behavior consistent.
-
----
-
-## 6. Model scope behavior
-
-Chatons follows Pi's distinction between:
-
-- all available models
-- scoped models
-
-The source of truth for scope is:
-
-- `settings.json > enabledModels`
-
-User-facing implications:
-
-- the normal model picker shows scoped models first
-- the `more` action reveals all models
-- starring or unstarring a model updates real Pi config, not just UI state
-
-This is consistent across:
-
-- onboarding
-- composer model picking
-- provider/model settings
-- extension model picker helper behavior
-
----
-
-## 7. Per-conversation Pi sessions
-
-Chatons creates a Pi runtime per conversation through its runtime manager in:
-
-- `electron/pi-sdk-runtime.ts`
-
-### Working directory selection
-
-The runtime cwd is chosen in this order:
-
-1. conversation worktree if present
-2. project repository if present
-3. global workspace directory
-
-### Access mode effect
-
-Access mode affects tool cwd behavior:
-
-- `secure` mode uses the conversation cwd
-- `open` mode uses filesystem root
-
-That difference is what powers the user-visible `secure` / `open` toggle in the composer.
-
----
-
-## 8. Prompt and runtime additions
-
-At session creation time, Chatons adds host-level prompt guidance around topics such as:
-
-- access mode
-- thread action suggestions
-- how the assistant should explain secure-mode limitations
-
-The runtime also exposes commands such as `get_access_mode` so the model can check live state while a session is running.
-
----
-
-## 9. Event bridge
-
-Pi runtime events are bridged back into the renderer.
-
-Examples include:
-
-- message lifecycle events
-- tool execution lifecycle events
-- compaction events
-- retry events
-- extension UI requests
-- runtime status and error events
-
-Chatons also logs runtime-side events through its logging pipeline with Pi as the source.
-
----
-
-## 10. Settings manager robustness
-
-The Pi integration includes defensive handling around Pi settings locking.
-
-Current behavior in `electron/pi-sdk-runtime.ts` includes:
-
-- cleanup of stale `settings.json.lock` files older than 5 minutes
-- retrying `SettingsManager.create(...)` with exponential backoff
-
-This exists to reduce failures from stale lock state.
-
----
-
-## 11. Diagnostics and settings UI
-
-The Chatons settings interface exposes Pi-related sections for:
-
-- providers and models
-- sessions
-- commands
-- diagnostics
-
-Diagnostics currently surfaces runtime path information such as:
-
-- Pi path
-- settings path
-- models path
-
-This makes it easier to debug what runtime the app is actually using.
-
----
-
-## 12. Skills integration
-
-Skills are managed through Pi commands, not through the Chatons extension runtime.
-
-The Skills panel in the app uses Pi command execution to:
-
-- list installed skills
-- search available skills
-- install skills
-- uninstall skills
-
-This is one of the clearest examples of the distinction between:
-
-- Pi-managed skills
-- Chatons-managed extensions
-
----
-
-## 13. Current source files to trust
-
-The current source of truth lives primarily in:
-
-- `electron/ipc/workspace.ts`
-- `electron/pi-sdk-runtime.ts`
-- the workspace store and related renderer components
-
----
-
-## 14. What is safe to rely on today
-
-These points are clearly implemented:
-
-- Chatons uses an internal managed Pi directory
-- model scope is driven by Pi settings `enabledModels`
-- Pi sessions are created per conversation
-- access mode changes the effective tool cwd
-- the app routes Pi runtime events into the renderer
-- Pi is the backend used for skills management
-
----
-
-## 15. What to document carefully
-
-A few things should be described precisely rather than broadly:
-
-- Chatons is Pi-backed, but the app wraps Pi with its own runtime and UI model
-- the project terminal is a separate host command runner and not the same thing as Pi tool execution
-- global shell Pi setup is not the source of truth for the desktop app runtime
-
-If Pi wiring changes, this file and the main user/developer guides should be updated in the same change.
-
----
-
-## 16. OAuth Provider Authentication
-
-Chatons supports OAuth login for providers that implement it in the Pi SDK:
-
-| Provider | OAuth flow | Notes |
-|----------|-----------|-------|
-| `openai-codex` (ChatGPT) | PKCE + local HTTP server on port 1455 | Server starts automatically, browser callback handled silently |
-| `anthropic` (Claude Pro/Max) | PKCE, user pastes code from browser | Claude.ai authorization page, user copies the code back |
-| `github-copilot` | GitHub Device flow | User enters a short code on github.com, polling completes automatically |
-
-Onboarding and the Provider Settings screen now surface two OpenAI-flavored presets: **ChatGPT** maps to the OAuth-backed `openai-codex` provider and talks to `https://chatgpt.com/backend-api`, while **OpenAI** maps to the standard `openai` provider (using `openai-completions` against `https://api.openai.com/v1`) and expects an API key. Both entries share the same key management UI but target different authentication flows.
-
-Provider selection is grouped by company so that vendors exposing multiple entry points display under a single card. Clicking a company highlights the group and reveals the available workflows beneath it (e.g., ChatGPT vs. OpenAI), allowing the user to pick the variant that matches their credentials. The **Mistral** group now offers both `Mistral` (standard API at `https://api.mistral.ai/v1`) and `Mistral Vibe` (Vibe endpoint at `https://vibe.mistral.ai/v1`), while the `OpenAI` group retains the ChatGPT OAuth flow alongside the API-key-based connection.
-
-### How it works
-
-1. The user clicks **"Se connecter"** on an OAuth-capable provider card in the Onboarding or Provider Settings.
-2. An IPC call `pi:oauthLogin(providerId)` is made to the Electron main process.
-3. The main process calls the Pi SDK OAuth provider's `login()` function with three callbacks:
-   - `onAuth({ url, instructions })` -- opens the URL in the system browser via `shell.openExternal()` and emits a `pi:oauthEvent { type: "auth" }` event to the renderer
-   - `onPrompt({ message, placeholder })` -- sends a `pi:oauthEvent { type: "prompt" }` to the renderer, waits for `pi:oauthPromptReply`
-   - `onProgress(msg)` -- sends a `pi:oauthEvent { type: "progress" }` to the renderer
-4. When credentials are received, they are saved to `auth.json` under the provider key as `{ type: "oauth", access, refresh, expires }`.
-5. If no entry exists in `models.json` for the provider, a default entry is created automatically.
-6. A `pi:oauthEvent { type: "success" }` is emitted and the UI shows the connected state.
-
-### OpenAI Codex local server
-
-The Pi SDK's OpenAI Codex OAuth flow starts a local HTTP server on port 1455 (`http://localhost:1455/auth/callback`) internally. The app simply opens the browser with the authorization URL -- the callback is handled automatically by the SDK without any special setup needed in Chatons.
-
-### Credentials storage
-
-OAuth credentials are stored in `<userData>/.pi/agent/auth.json`:
-
 ```json
 {
+  "openai": {
+    "type": "api-key",
+    "key": "sk-..."
+  },
   "openai-codex": {
-    "type": "oauth",
-    "access": "...",
-    "refresh": "...",
-    "expires": 1234567890
-  },
-  "anthropic": {
-    "type": "oauth",
-    "access": "...",
-    "refresh": "...",
-    "expires": 1234567890
-  },
-  "github-copilot": {
     "type": "oauth",
     "access": "...",
     "refresh": "...",
@@ -340,15 +127,215 @@ OAuth credentials are stored in `<userData>/.pi/agent/auth.json`:
 }
 ```
 
-API keys (non-OAuth) continue to work in parallel through the same form.
+Credentials are stored here. Chatons synchronizes credentials between `models.json` and `auth.json` for compatibility (both directions).
 
-### IPC channels involved
+---
+
+## 5. CLI Execution
+
+For Pi CLI commands (model sync, skill management), Chatons resolves the CLI path:
+
+1. **Bundled:** `@mariozechner/pi-coding-agent/dist/cli.js` (preferred, already in `node_modules`)
+2. **Fallback:** `<userData>/.pi/agent/bin/pi`
+
+Key functions:
+
+| Function | Purpose |
+|----------|---------|
+| `getBundledPiCliPath()` | Returns path to bundled CLI or null |
+| `getPiBinaryPath()` | Returns preferred CLI path (bundled or fallback) |
+| `runPiExec(args, timeout)` | Executes Pi with given args, forces managed Pi directory |
+
+All executions run with `PI_CODING_AGENT_DIR=<userData>/.pi/agent`.
+
+---
+
+## 6. Model Scope
+
+### Two Tiers
+
+| Tier | Source | Meaning |
+|------|--------|---------|
+| All models | `models.json` | Every model Pi knows about |
+| Scoped models | `settings.json > enabledModels` | Subset the user has starred |
+
+### User-Facing Behavior
+
+- **Model picker:** Shows scoped models by default. "More" reveals all models with a filter.
+- **Star button:** Updates `enabledModels` in the real Pi settings file.
+- **Consistent everywhere:** Same behavior in onboarding, composer, and settings.
+- **Startup validation:** If no models are scoped and no providers exist, onboarding is shown.
+
+### Provider Cards
+
+Grouped by company in onboarding and settings:
+
+- **OpenAI group:** "OpenAI" (API key, `openai-completions`, `api.openai.com/v1`) and "ChatGPT" (OAuth, `openai-codex-responses`, `chatgpt.com/backend-api`)
+- **Mistral group:** "Mistral" (`api.mistral.ai/v1`) and "Mistral Vibe" (`vibe.mistral.ai/v1`)
+
+Each variant maps to its own Pi provider entry.
+
+---
+
+## 7. Per-Conversation Sessions
+
+`PiSessionRuntimeManager` in `electron/pi-sdk-runtime.ts` manages one `PiSdkRuntime` per conversation.
+
+### Working Directory Selection
+
+1. Conversation worktree path (if worktree is enabled)
+2. Project repository path (if conversation is project-linked)
+3. Global workspace directory (`<userData>/workspace/global`)
+
+### Access Mode
+
+| Mode | Tool cwd | Behavior |
+|------|----------|----------|
+| `secure` | Conversation working directory | Tools restricted to project scope |
+| `open` | `/` (Unix) or drive root (Windows) | Full filesystem access |
+
+The runtime exposes `get_access_mode` so the model can check the live mode during a session.
+
+### Prompt Injection
+
+At session creation, Chatons appends system prompt guidance about:
+
+- Access mode constraints and behavior
+- Thread action suggestion format
+- How to explain secure-mode limitations to users
+- Available extension tools (prompt snippets and guidelines from extension manifests)
+
+### Channel Subagents
+
+The runtime manager also supports ephemeral subagents for channel message ingestion, keyed by conversation ID. These are separate from user-facing conversation runtimes.
+
+---
+
+## 8. Event Bridge
+
+Pi runtime events are forwarded to the renderer via the `pi:event` IPC channel and broadcast to all browser windows.
+
+Events include:
+
+- Message lifecycle (create, update, complete)
+- Tool execution lifecycle
+- Compaction events
+- Retry events
+- Extension UI requests (requirement sheets, etc.)
+- Runtime status and error events
+
+Events are also routed through the logging pipeline with `source: "pi"`.
+
+---
+
+## 9. OAuth Authentication
+
+### Supported Flows
+
+| Provider | Flow | How It Works |
+|----------|------|-------------|
+| ChatGPT (`openai-codex`) | PKCE + local server | Pi SDK starts HTTP server on port 1455; browser callback is automatic |
+| Claude Pro (`anthropic`) | PKCE, user pastes code | User copies authorization code from claude.ai |
+| GitHub Copilot (`github-copilot`) | Device flow | User enters code on github.com; polling completes automatically |
+
+### IPC Channels
 
 | Channel | Direction | Purpose |
 |---------|-----------|---------|
-| `pi:oauthLogin` (invoke) | renderer -> main | Start the OAuth flow for a provider |
-| `pi:oauthPromptReply` (send) | renderer -> main | User's answer to an interactive prompt |
-| `pi:oauthPromptCancel` (send) | renderer -> main | User cancelled the prompt |
-| `pi:oauthLoginCancel` (send) | renderer -> main | Abort the entire login flow |
+| `pi:oauthLogin` (invoke) | renderer -> main | Start OAuth flow |
 | `pi:oauthEvent` (send) | main -> renderer | Flow events: `auth`, `prompt`, `progress`, `success`, `error` |
-| `pi:getAuthJson` (invoke) | renderer -> main | Read current auth.json for status display |
+| `pi:oauthPromptReply` (send) | renderer -> main | User's answer to interactive prompt |
+| `pi:oauthPromptCancel` (send) | renderer -> main | User cancelled prompt |
+| `pi:oauthLoginCancel` (send) | renderer -> main | Abort entire login flow |
+| `pi:getAuthJson` (invoke) | renderer -> main | Read auth.json for status display |
+
+### Limitation
+
+OAuth tokens are **not** auto-refreshed when they expire. If a token expires during use, the conversation fails. The user must re-authenticate via Settings > Providers & Models.
+
+---
+
+## 10. Settings Lock Robustness
+
+Pi uses `settings.json.lock` to prevent concurrent modifications.
+
+Chatons implements:
+
+- **Stale lock cleanup:** Removes `.lock` files older than 5 minutes on startup
+- **Retry with backoff:** `SettingsManager.create()` retried up to 3 times with exponential backoff (100ms, 200ms, 400ms)
+
+---
+
+## 11. Skills Integration
+
+Skills are managed through Pi CLI commands, not through the Chatons extension runtime.
+
+The Skills panel uses `runPiExec()` to:
+
+- List installed skills
+- Search available skills
+- Install skills
+- Uninstall skills
+
+This is one of the clearest examples of the distinction between Pi-managed skills and Chatons-managed extensions.
+
+---
+
+## 12. Diagnostics
+
+Settings > Diagnostics surfaces:
+
+- Pi binary path
+- Settings file path
+- Models file path
+- Runtime validation checks
+
+### Manual Verification
+
+```bash
+# Check the managed Pi directory
+ls -la ~/Library/Application\ Support/Chatons/.pi/agent/
+
+# Inspect model scope
+cat ~/Library/Application\ Support/Chatons/.pi/agent/settings.json | grep enabledModels
+
+# Check available models
+cat ~/Library/Application\ Support/Chatons/.pi/agent/models.json | head -50
+
+# Validate JSON
+jq . ~/Library/Application\ Support/Chatons/.pi/agent/settings.json > /dev/null
+```
+
+---
+
+## 13. Source Files
+
+The authoritative source for Pi integration lives in:
+
+| File | What It Controls |
+|------|-----------------|
+| `electron/ipc/workspace.ts` | Bootstrap, CLI resolution, provider sync, base URL normalization |
+| `electron/pi-sdk-runtime.ts` | Session creation, access mode, prompt composition, event bridge, lock handling |
+| `electron/ipc/workspace-handlers.ts` | IPC handler registration for all workspace operations |
+| `electron/ipc/pi.ts` | OAuth IPC handlers |
+
+---
+
+## 14. What Is Safe to Rely On
+
+These behaviors are clearly implemented and stable:
+
+- Internal managed Pi directory at `<userData>/.pi/agent`
+- Model scope driven by `settings.json > enabledModels`
+- Per-conversation Pi sessions with conversation-specific cwd
+- Access mode controlling tool cwd (`secure` vs `open`)
+- Pi runtime events bridged to renderer
+- Pi as the backend for skills management
+- Credential sync between `models.json` and `auth.json`
+
+### What to Document Carefully
+
+- OAuth tokens are not auto-refreshed
+- The project terminal is a separate host command runner, not Pi tool execution
+- Global shell Pi setup is not the source of truth for the desktop app
+- Extension hot-reload in the same process is not guaranteed

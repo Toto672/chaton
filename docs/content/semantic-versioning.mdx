@@ -1,163 +1,127 @@
 ---
 title: Semantic Versioning
-description: Versioning policy and release semantics for Chatons.
+description: Version bump policy and release flow for Chatons.
 ---
 
 # Versioning and Releases
 
-Related:
-
-- [Versioning Implementation](/versioning-implementation)
-- [Implementation Summary](/implementation-summary)
+How Chatons determines version numbers and builds release artifacts.
 
 ---
 
-## 1. What exists today
+## Version Bump Script
 
-The repository includes a version bump script:
+`scripts/version.js` examines Git commit messages since the latest semver tag and determines the bump type.
 
-- `scripts/version.js`
+### How It Works
 
-and a GitHub Actions workflow:
+1. Find the latest Git tag matching `v?X.Y.Z` (sorted by `version:refname`)
+2. If no tag exists, start from `0.0.0`
+3. Read all commit subjects since that tag (`git log TAG..HEAD --oneline --no-merges`)
+4. Parse each subject for conventional commit type
+5. Determine bump: major, minor, patch, or none
+6. Update `package.json > version`
+7. Print the new version to stdout
 
-- `.github/workflows/build-all-platforms.yml`
+### Commit Parsing Rules
 
-Together, they implement a lightweight automated version bump and release flow based on Git history.
+The script recognizes these commit types:
 
----
+| Type | Example |
+|------|---------|
+| `feat` | `feat: add model picker to extensions` |
+| `fix` | `fix: prevent crash on empty model list` |
+| `docs` | `docs: update user guide` |
+| `style` | `style: format composer component` |
+| `refactor` | `refactor: simplify auth flow` |
+| `perf` | `perf: cache model list` |
+| `test` | `test: add settings validation tests` |
+| `chore` | `chore: update dependencies` |
 
-## 2. How version bumps are determined
+### Bump Precedence
 
-`scripts/version.js` examines Git commit messages since the latest semver-style tag and decides whether to bump:
+| Priority | Condition | Bump |
+|----------|-----------|------|
+| 1 | Subject contains `BREAKING CHANGE` or ends with `!` | **major** |
+| 2 | At least one `feat:` commit | **minor** |
+| 3 | At least one `fix:` commit | **patch** |
+| 4 | No qualifying commit type | **none** |
 
-- major
-- minor
-- patch
-- or not bump at all
+### What It Is Not
 
-It starts from the latest Git tag if one exists. If no semver tag is found, it falls back to `0.0.0` and then to `package.json` where appropriate.
-
----
-
-## 3. Commit message rules currently implemented
-
-The script looks for conventional-commit-like subjects.
-
-Current recognized types are:
-
-- `feat`
-- `fix`
-- `docs`
-- `style`
-- `refactor`
-- `perf`
-- `test`
-- `chore`
-
-### Bump rules currently implemented in code
-
-- **major**: when the parsed commit subject contains `BREAKING CHANGE` or ends with `!`
-- **minor**: when at least one parsed commit is `feat:`
-- **patch**: when at least one parsed commit is `fix:`
-- **none**: when no qualifying commit type is found
-
-Important caveat:
-
-- the implementation checks the parsed commit subject line, not a full multi-line conventional commit body/footer parser
-- `BREAKING CHANGE` detection is simpler than a full conventional-commits implementation
-- do not document this as a fully standards-complete commit parser
+- Not a complete Conventional Commits parser (does not parse multi-line footers)
+- Not a full `semantic-release` implementation
+- `BREAKING CHANGE` detection checks the subject line only, not the commit body
 
 ---
 
-## 4. What the script updates
+## CI Workflow
 
-When a bump is needed, the script updates:
+`.github/workflows/build-all-platforms.yml` handles the release pipeline.
 
-- `package.json > version`
+### Jobs
 
-and prints the resulting version.
+1. **Determine and Set Version**
+   - Checks out with full history
+   - Runs `node scripts/version.js`
+   - Commits updated `package.json` if version changed (`[skip ci]`)
+   - Outputs version for downstream jobs
 
-If no bump is needed, it returns the current version unchanged.
+2. **Build macOS ARM64** (and other platform jobs)
+   - Syncs `package.json` to the computed version
+   - Determines signing mode based on available secrets
+   - Builds renderer and Electron main process
+   - Runs Electron Builder
+   - Validates and signs artifacts (see [Signing Guide](/signing-guide))
 
----
+### Ignored Paths
 
-## 5. CI workflow behavior
+Push and pull-request triggers ignore:
 
-The GitHub workflow currently does the following high-level steps:
+- `docs/**`
+- `README.md`
+- `**/*.md`
 
-1. checks out the repository with full history
-2. runs `node scripts/version.js`
-3. commits the updated `package.json` when it changed
-4. builds release artifacts for supported platforms
-
-The workflow also ignores pure documentation changes for push-triggered build jobs.
-
-Examples from the workflow:
-
-- `docs/**` is ignored for push and pull-request triggers
-- Markdown-only changes are largely excluded from release builds
-
-That means documentation edits alone do not normally trigger the full build-and-release pipeline.
-
----
-
-## 6. What to expect from artifact naming
-
-Do not assume version numbers appear in every artifact filename exactly as older docs described.
-
-Current `package.json` Electron Builder configuration uses:
-
-- DMG artifact name: `${"productName"}-latest-${"arch"}.${"ext"}`
-
-So the default macOS DMG naming is architecture-based and `latest`-styled, not semver-in-filename by default.
-
-If you change artifact naming, update this document and the signing docs in the same change.
+Documentation-only changes do not trigger release builds.
 
 ---
 
-## 7. How to use it locally
+## Artifact Naming
 
-### Print or apply the current version logic
+Current Electron Builder configuration:
+
+| Platform | Pattern | Example |
+|----------|---------|---------|
+| macOS DMG | `${productName}-latest-${arch}.${ext}` | `Chatons-latest-arm64.dmg` |
+| Windows NSIS | `${productName}Setup-latest.${ext}` | `ChatonsSetup-latest.exe` |
+| Linux | `${productName}-latest.${ext}` | `Chatons-latest.AppImage` |
+
+Artifact filenames use `latest` and architecture, **not** the semver number. Do not assume semver appears in filenames.
+
+---
+
+## Local Usage
 
 ```bash
+# Print the computed version (or apply the bump)
 node scripts/version.js
-```
 
-### Run version tests
-
-```bash
+# Run version tests
 npm run version:test
 ```
 
-The repository includes:
+Test files:
 
 - `scripts/test-version.js`
 - `scripts/test-version-logic.js`
 
-Use those when changing version logic.
+### Manual Override
+
+No dedicated release CLI for manual overrides. The fallback is editing `package.json > version` directly and committing.
 
 ---
 
-## 8. Manual override strategy
+## Related
 
-If you need a manual override, the current repository does not implement a dedicated release CLI for that.
-
-The practical fallback is still editing `package.json` version directly, then committing the change intentionally.
-
----
-
-## 9. What this system is and is not
-
-### It is
-
-- an automated version bump helper based on Git commit messages
-- simple enough to understand and debug locally
-- integrated into the GitHub build workflow
-
-### It is not
-
-- a full semantic-release implementation
-- a complete parser for every nuance of Conventional Commits
-- a guarantee that artifact filenames always embed semver numbers by default
-
-That distinction matters because older documentation overstated the completeness of the release pipeline.
+- [Signing Guide](/signing-guide) -- macOS signing and notarization
+- [Developer Guide](/developer-guide) -- Overall architecture

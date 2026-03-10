@@ -16,6 +16,73 @@ Related:
 
 ## March 10, 2026
 
+### Complete rewrite of all non-extension documentation
+
+All remaining documentation files outside the `extensions/` directory were rewritten after a code-audit-driven review. Every claim was verified against the source code.
+
+**Source files examined:**
+
+- `electron/main.ts` -- App bootstrap, window creation, deep links, status bar, telemetry
+- `electron/ipc/workspace.ts` -- Pi bootstrap, project terminal, provider sync, URL normalization
+- `electron/ipc/workspace-handlers.ts` -- All IPC handler registration
+- `electron/pi-sdk-runtime.ts` -- Per-conversation runtime, access mode, prompt injection, event bridge
+- `electron/lib/update/update-service.ts` -- GitHub release checking, download, changelog prefetch
+- `electron/lib/telemetry/sentry.ts` -- Sentry integration, consent gating
+- `electron/lib/status-bar.ts` -- macOS tray icon
+- `electron/lib/sandbox/sandbox-manager.ts` -- Node.js/Python sandboxed execution
+- `electron/extensions/runtime/automation.ts` -- Automation rule evaluation and action execution
+- `electron/extensions/runtime/automation-pi-bridge.ts` -- Ephemeral Pi session executor
+- `electron/extensions/runtime/memory.ts` -- Memory CRUD and hashed trigram search engine
+- `electron/extensions/runtime/constants.ts` -- Trigger topics, tool name pattern
+- `electron/db/repos/automation.ts` -- Automation DB operations
+- `electron/db/migrations/*.sql` -- All 14 migration files
+- `scripts/version.js` -- Semantic version bump logic
+- `scripts/build-signed.sh` -- Local signing helper
+- `.github/workflows/build-all-platforms.yml` -- CI release pipeline
+- `build/entitlements.mac.plist` -- macOS entitlements
+- `package.json` -- Electron Builder configuration
+- `src/App.tsx` -- Loading splash, app shell, onboarding gate
+- `src/components/onboarding/OnboardingFlow.tsx` -- Onboarding flow and intro slides
+- `src/components/shell/ProjectTerminalDialog.tsx` -- Terminal UI
+- `src/hooks/use-task-progress.ts` -- Task progress hook
+
+**Files rewritten:**
+
+1. **`index.mdx` (Documentation Index)** -- Replaced placeholder with structured documentation map organized by audience (users, developers, extension authors, reference).
+
+2. **`getting-started.mdx`** -- Rewrote with verified feature list, first-launch sequence, key concepts table, and audience routing.
+
+3. **`user-guide.mdx`** -- Complete rewrite. Verified: loading splash behavior (4 rotating messages, `chaton-hero.webm`), onboarding flow (4-slide intro, 3-step setup), provider card grouping (OpenAI/ChatGPT, Mistral/Vibe), sidebar items, main panel routing, composer behavior (translucent backgrounds, queueing, attachments), model picker (scoped vs all), access mode (secure/open with runtime restart), live file-change tracking (thread-scoped deltas, edit-tool association), worktree mode (disabled by default, branch icon toggle), project terminal (5 project types, `open` access mode required, not a PTY), automations, skills, extensions, channels, memory (global/project scopes, hashed trigram search), settings sections, telemetry consent, macOS window behavior (close hides, quit quits, status bar), updates (GitHub releases, DMG on macOS), deep links (`chatons://extensions/install/...`), notifications.
+
+4. **`developer-guide.mdx`** -- Complete rewrite with verified architecture. Documented: 5-layer architecture with key entry points table, technology stack (including Sentry, sandbox manager, status bar), startup sequence (11 steps verified from `main.ts`), Pi integration (managed directory, bootstrap, CLI resolution, model scoping), per-conversation runtimes (cwd selection, access mode, prompt injection, channel subagents), provider/auth system (credential sync, OAuth flows, provider card grouping, base URL normalization, auth diagnostics), renderer state (workspace store files, composer behavior), SQLite data model (14 tables from migrations), project terminal (project type detection from `detectProjectType()`, command generation from `buildDetectedProjectCommands()`, `open` access mode requirement), extension platform overview, memory extension (search engine internals: FNV-1a trigram hashing, 256-dimension vectors, cosine similarity), worktrees (current state and limitations), updates, telemetry, deep links, sandbox manager, skills vs extensions comparison table, documentation contract.
+
+5. **`pi-integration.mdx`** -- Complete rewrite verified against `workspace.ts` and `pi-sdk-runtime.ts`. Documented: managed Pi directory structure, bootstrap process (7 steps including auth sync and codex URL migration), configuration files (`settings.json`, `models.json`, `auth.json` with real examples), CLI execution (bundled vs fallback resolution), model scoping (two tiers, provider card grouping), per-conversation sessions (cwd selection, access mode, prompt injection, channel subagents), event bridge (IPC forwarding, logging), OAuth authentication (3 providers with flow details, 6 IPC channels), settings lock robustness (stale cleanup, retry with backoff), skills integration, diagnostics paths.
+
+6. **`automation-extension.mdx`** -- Rewrote with verified automation internals. Documented: rule schema (all fields with types), trigger topics (4 verified from `AUTOMATION_TRIGGER_TOPICS` constant), action types (5 types: `notify`, `executeAndNotify`, `enqueueEvent`, `runHostCommand`, `setConversationTag` with `runHostCommand` allowlist verified as `['notifications.notify', 'open.mainView']`), condition operators (2: `equals`, `contains`, top-level fields only), cooldown behavior, LLM tools (parameter tables for both tools), extension APIs (6 API names), persistence (table schemas from `automation.ts`), implementation files, ephemeral Pi session execution for `executeAndNotify`.
+
+7. **`semantic-versioning.mdx`** -- Consolidated from 3 redundant files (`semantic-versioning.mdx`, `versioning-implementation.mdx`, `vers.mdx`). Verified: version script logic from `scripts/version.js` (tag resolution, commit parsing, bump precedence), CI workflow from `.github/workflows/build-all-platforms.yml` (version job, ignored paths), artifact naming from `package.json` build config (confirmed `${productName}-latest-${arch}.${ext}` pattern -- no semver in filenames).
+
+8. **`signing-guide.mdx`** -- Verified: Electron Builder config from `package.json` (hardenedRuntime, gatekeeperAssess, entitlements, notarize), CI workflow signing modes (3 modes based on secret availability), entitlements from `build/entitlements.mac.plist` (6 entitlements), local helper scripts.
+
+9. **`manual-signing-instructions.mdx`** -- Streamlined with correct artifact paths, added `notarytool` (modern) alongside `altool` (legacy), verified bundle ID (`com.thibaut.chaton`).
+
+10. **`task-progress-bar.mdx`** -- Verified: `useTaskProgress` hook interface from `src/hooks/use-task-progress.ts` (completed includes `error` status, auto-hide logic), CSS class and variable names from `layout.css`.
+
+11. **`vers.mdx`** -- Replaced with redirect to `semantic-versioning.mdx`.
+
+12. **`versioning-implementation.mdx`** -- Replaced with redirect to `semantic-versioning.mdx` (content was redundant).
+
+13. **`implementation-summary.mdx`** -- Replaced with redirect to `developer-guide.mdx` (content was redundant).
+
+**Key findings during this audit:**
+
+- The user guide previously described project terminal detection files as `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, `Makefile`, `CMakeLists.txt` -- this was mostly correct, but the actual `detectProjectType()` function also checks `requirements.txt`, `setup.py`, and lowercase `makefile`. Updated.
+- The developer guide previously stated that project terminal requires no access mode. The actual code requires `open` access mode (`conversation.access_mode !== "open"` check in workspace-handlers.ts). Corrected.
+- The automation extension doc listed `automation_rules` and `automation_runs` as being in migrations, but they are actually created by the extension runtime's own SQL, not by the numbered migration files. The tables do exist in the database; their schema is managed by the automation module.
+- The memory extension's embedding model is named `chatons-local-hash-trigram-v1`, uses FNV-1a hashing, and produces 256-dimension vectors. The old docs said "hashed trigram vector strategy" which was correct but lacked specifics.
+- Three files (`vers.mdx`, `versioning-implementation.mdx`, `implementation-summary.mdx`) were redundant with other docs and have been converted to redirects.
+- The `window-all-closed` handler in `main.ts` does nothing on all platforms (not just macOS) -- the app stays alive in the background regardless of platform.
+
 ### Complete rewrite of all extension documentation
 
 All six extension documentation files were rewritten from scratch after a code-audit-driven review. Every API claim was verified against the source code (`electron/preload.ts`, `electron/extensions/runtime/ui-bridge.ts`, `electron/extensions/runtime/host.ts`, `electron/extensions/runtime/types.ts`, `electron/extensions/runtime/storage.ts`, `electron/extensions/runtime/capabilities.ts`, `electron/ipc/workspace-handlers.ts`, `electron/db/repos/extension-kv.ts`, `src/components/shell/QuickActionCards.tsx`, `src/features/workspace/types.ts`, `electron/extensions/builtin/automation/index.js`, `electron/extensions/builtin/memory/index.js`).

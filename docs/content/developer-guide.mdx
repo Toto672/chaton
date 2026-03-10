@@ -5,540 +5,430 @@ description: Architecture, implementation details, and contributor guidance for 
 
 # Chatons Developer Guide
 
-## 1. Architecture at a glance
-
-Chatons is an Electron desktop application with a React renderer and a Pi-based AI runtime.
-
-At a high level, the app is made of five layers:
-
-1. **Electron main process** for boot, IPC, persistence wiring, updates, and host integrations
-2. **React renderer** for the application UI
-3. **Pi runtime bridge** for per-conversation AI sessions
-4. **SQLite storage** for app data, caches, automations, extension state, and memory
-5. **Extension runtime** for built-in and user-installed extensions
-
-Core entry points worth knowing:
-
-- `electron/main.ts`
-- `electron/ipc/workspace.ts`
-- `electron/pi-sdk-runtime.ts`
-- `src/features/workspace/store/provider.tsx`
-- `electron/extensions/runtime.ts`
+Architecture and implementation reference for contributors. Verified against the codebase as of March 10, 2026.
 
 ---
 
-## 2. Main technology choices
+## 1. Architecture Overview
 
-Current stack in the codebase:
+Chatons is an Electron desktop application with five layers:
 
-- **Desktop shell:** Electron
-- **Renderer UI:** React + TypeScript
-- **Localization:** i18next
-- **Database:** SQLite through `better-sqlite3`
-- **AI runtime:** `@mariozechner/pi-coding-agent`
-- **Git support:** mixed approach using app logic plus Git helpers
-- **Extension host:** Chatons-specific runtime in Electron main process
+| Layer | Responsibility |
+|-------|---------------|
+| **Electron main process** | Boot, IPC, persistence, updates, host integrations, status bar |
+| **React renderer** | Application UI, state management, i18n |
+| **Pi runtime bridge** | Per-conversation AI sessions, tool execution |
+| **SQLite storage** | App data, caches, extension KV/queue, automation rules, memory |
+| **Extension runtime** | Built-in and user-installed extensions, LLM tools, channels |
 
----
+### Key Entry Points
 
-## 3. How app startup works
-
-### Main-process boot
-
-On startup, `electron/main.ts` does the following important work:
-
-1. sets the application name to `Chatons`
-2. forces Electron `userData` to a Chatons-specific directory
-3. initializes logging
-4. bootstraps the internal Pi agent directory
-5. initializes the Pi manager
-6. initializes telemetry when allowed and not in dev mode
-7. cleans up orphaned worktrees
-8. registers IPC handlers
-9. creates the main browser window
-
-### User data location
-
-Chatons overrides Electron's default user data path and uses:
-
-- `<appData>/Chatons`
-
-This matters because many runtime files are stored relative to that location.
-
-### Loading gate in the renderer
-
-`src/App.tsx` blocks the normal interface until workspace hydration is complete.
-
-While loading, it renders `LoadingSplash` instead of allowing a blank or half-initialized UI.
+| File | Purpose |
+|------|---------|
+| `electron/main.ts` | App bootstrap, window creation, IPC registration |
+| `electron/ipc/workspace.ts` | Pi bootstrap, workspace IPC, project terminal |
+| `electron/ipc/workspace-handlers.ts` | IPC handler registration (all `workspace:*` channels) |
+| `electron/pi-sdk-runtime.ts` | Per-conversation Pi session management |
+| `electron/extensions/runtime.ts` | Extension host, event dispatch, storage bridge |
+| `src/App.tsx` | Renderer entry, loading gate, app shell |
+| `src/features/workspace/store/provider.tsx` | Workspace state provider |
 
 ---
 
-## 4. Pi integration: what is actually used
+## 2. Technology Stack
 
-Chatons depends heavily on Pi, but it does **not** depend on a user manually running a global Pi install in day-to-day app usage.
-
-### Internal Pi agent directory
-
-Chatons uses a dedicated Pi directory under user data:
-
-- `<userData>/.pi/agent`
-
-`electron/ipc/workspace.ts` bootstraps that directory and ensures these files or folders exist:
-
-- `settings.json`
-- `models.json`
-- `auth.json`
-- `sessions/`
-- `worktrees/chaton/`
-- `bin/`
-- global workspace directory under `<userData>/workspace/global`
-
-### CLI execution path
-
-For Pi CLI-style commands such as model sync and skill management, Chatons prefers its internal runtime.
-
-The intended execution path is:
-
-- bundled `@mariozechner/pi-coding-agent/dist/cli.js` when available
-- otherwise fallback paths under the Chatons-managed agent area
-
-The important product-level consequence is this:
-
-- Chatons uses its own Pi runtime and config directory
-- it is not relying on a user-global shell setup as the source of truth
-
-### Configuration files that matter
-
-The main Pi files are:
-
-- `settings.json`: settings such as `enabledModels`
-- `models.json`: provider definitions and available models
-- `auth.json`: provider credentials for runtime auth
-
-### Model scoping
-
-Chatons follows Pi's scoped-model concept.
-
-The actual source of truth for model scope is:
-
-- `settings.json > enabledModels`
-
-Chatons does not keep a UI-only model scope layer. When the user stars or unstars a model, it updates actual Pi config.
-
-For more detail, see the [Pi Integration](/pi-integration) page.
+| Area | Technology |
+|------|-----------|
+| Desktop shell | Electron |
+| Renderer UI | React + TypeScript |
+| Localization | i18next (`useTranslation()`) |
+| Database | SQLite via `better-sqlite3` |
+| AI runtime | `@mariozechner/pi-coding-agent` SDK |
+| Git support | `GitService` in `electron/lib/git/` |
+| Extension host | Custom runtime in `electron/extensions/runtime/` |
+| Telemetry | Sentry (`@sentry/electron/main`), gated by user consent |
+| Status bar | macOS-only tray icon (`electron/lib/status-bar.ts`) |
+| Sandbox | `electron/lib/sandbox/sandbox-manager.ts` (Node.js and Python) |
 
 ---
 
-## 5. Provider and auth synchronization
+## 3. App Startup Sequence
 
-Chatons actively synchronizes provider credentials between `models.json` and `auth.json`.
+### Main Process (`electron/main.ts`)
 
-This happens because the current implementation supports both storage shapes and keeps them aligned.
+1. Set app name to `Chatons`
+2. Register `chatons://` protocol handler for deep links
+3. Override `userData` path to `<appData>/Chatons`
+4. Initialize Sentry telemetry (disabled in dev mode, gated by consent)
+5. On `app.whenReady()`:
+   - Bootstrap Pi agent directory (`ensurePiAgentBootstrapped()`)
+   - Initialize logging
+   - Initialize Pi manager
+   - Initialize sandbox manager
+   - Clean up orphaned worktrees
+   - Prefetch changelogs from GitHub
+   - Register IPC handlers (workspace, Pi, update)
+   - Create main browser window
+   - Flush any pending deep link URL
+6. On `before-quit`: Stop all Pi runtimes
+7. On `window-all-closed`: Do nothing (app stays alive on all platforms)
 
-Implemented behavior:
+### macOS Window Behavior
 
-- if `models.json` contains `provider.apiKey` and auth is missing, Chatons can populate `auth.json`
-- if `auth.json` contains API key credentials, Chatons can mirror them back into `models.json`
-- `auth.json` is proactively created during bootstrap if missing
+On macOS, closing the window hides it instead of quitting. The app stays in the background with a status bar icon. `Cmd+Q` or the menu "Quit" action triggers actual quit.
 
-### OpenAI vs ChatGPT provider cards
+### Renderer (`src/App.tsx`)
 
-The onboarding and Provider Settings builder show two distinct cards for OpenAI-related access. Selecting **ChatGPT** wires up the OAuth-backed `openai-codex` provider (`openai-codex-responses` against `https://chatgpt.com/backend-api`), while **OpenAI** creates the standard `openai` provider (`openai-completions` against `https://api.openai.com/v1`) and expects an API key. Both entries share the same keyUrl and background sync logic but feed different credential flows into `models.json` and `auth.json`.
+The renderer blocks the main UI behind a `LoadingSplash` component until workspace hydration completes. The loading screen shows the mascot video and rotating cat-themed messages.
 
-Provider cards are grouped by company, so vendors offering multiple backends (OpenAI, Mistral, etc.) display as a single card with the available flows revealed below it. The **Mistral** group exposes both the default `Mistral` endpoint (`https://api.mistral.ai/v1`) and the `Mistral Vibe` endpoint (`https://vibe.mistral.ai/v1`), letting the user pick the box that matches their credentials without cluttering the grid with duplicate brands.
-
-### Auth diagnostics
-
-On auth-related runtime failures such as `401` or missing credentials, Chatons appends a sanitized debug suffix to runtime error information.
-
-That suffix can include:
-
-- provider id
-- credential source
-- masked key preview
-- short fingerprint
-
-Raw keys are not logged.
-
----
-
-## 6. Per-conversation Pi runtimes
-
-Chatons does not use one giant shared AI session for the whole app.
-
-Instead, `PiSessionRuntimeManager` in `electron/pi-sdk-runtime.ts` creates a runtime per conversation.
-
-### Runtime working directory
-
-The runtime cwd is chosen in this order:
-
-1. conversation worktree if present
-2. project repository if present
-3. global workspace directory
-
-### Access mode and tool cwd
-
-The assistant access mode affects tool execution scope.
-
-Implemented behavior:
-
-- `secure` mode uses the conversation runtime cwd
-- `open` mode uses filesystem root (`/` on Unix, drive root on Windows)
-
-### Runtime prompt composition
-
-Chatons appends additional system prompt guidance at session creation time.
-
-Current prompt additions include guidance about:
-
-- thread action suggestions
-- current conversation access mode
-- how the model should behave when secure mode blocks broader filesystem context
-
-The runtime also exposes `get_access_mode` so the model can re-check the live mode instead of relying only on startup context.
-
-### Runtime event bridge
-
-Pi runtime events are forwarded into the renderer and also logged through Chatons logging infrastructure with `source: "pi"`.
+Once hydrated, `AppShell` renders the sidebar, topbar, main view, and composer. If onboarding has not been completed (no providers configured), the `OnboardingFlow` is shown instead.
 
 ---
 
-## 7. Renderer state and orchestration
+## 4. Pi Integration
 
-The main renderer state engine is the workspace store.
+Chatons uses a dedicated Pi directory: `<userData>/.pi/agent`
 
-Important files:
+This is **not** the user's global `~/.pi` directory. The app forces `PI_CODING_AGENT_DIR` to its own managed location.
 
-- `src/features/workspace/store.tsx`
-- `src/features/workspace/store/provider.tsx`
-- `src/features/workspace/store/state.ts`
-- `src/features/workspace/store/pi-events.ts`
-- `src/features/workspace/store/context.ts`
+### Bootstrap (`ensurePiAgentBootstrapped`)
 
-Responsibilities include:
+Creates the following if missing:
 
-- hydrating projects, conversations, and settings
-- tracking Pi runtime state by conversation
-- inserting optimistic user messages
-- applying runtime events to message state
-- coordinating notices and extension interactions
+| Path | Purpose |
+|------|---------|
+| `<userData>/.pi/agent/settings.json` | Pi settings (`enabledModels`, etc.) |
+| `<userData>/.pi/agent/models.json` | Provider definitions and model metadata |
+| `<userData>/.pi/agent/auth.json` | Provider credentials (API keys, OAuth tokens) |
+| `<userData>/.pi/agent/sessions/` | Pi session state |
+| `<userData>/.pi/agent/worktrees/chaton/` | Git worktree storage |
+| `<userData>/.pi/agent/bin/` | Pi binary fallback |
+| `<userData>/workspace/global` | Global workspace directory |
 
----
+Also syncs API keys between `models.json` and `auth.json`, and migrates `openai-codex` base URLs if needed.
 
-## 8. Data model and SQLite tables
+### CLI Execution
 
-Database migrations live in:
+For Pi CLI commands (model sync, skill management):
 
-- `electron/db/migrations/`
+1. Prefers bundled `@mariozechner/pi-coding-agent/dist/cli.js`
+2. Falls back to `<userData>/.pi/agent/bin/pi`
 
-### Core tables currently used
+All CLI executions force `PI_CODING_AGENT_DIR` to the managed directory.
 
-Important tables referenced by the code include:
+### Model Scoping
 
-- `projects`
-- `conversations`
-- `conversation_messages_cache`
-- `app_settings`
-- `pi_models_cache`
-- `quick_actions_usage`
-- `extension_kv`
-- `extension_queue`
-- `automation_rules`
-- `automation_runs`
-- `memory_entries`
+Source of truth: `settings.json > enabledModels`
 
-### Important conversation fields
+When a user stars/unstars a model in the UI, the actual Pi settings file is updated. This is consistent across onboarding, the composer model picker, and provider settings.
 
-A conversation currently stores, among other things:
-
-- `project_id`
-- `model_provider`
-- `model_id`
-- `thinking_level`
-- `worktree_path`
-- `access_mode`
-- runtime error state
-
-That is why model choice, worktree state, and access mode remain tied to a thread rather than being just UI state.
+For full details, see [Pi Integration](/pi-integration).
 
 ---
 
-## 9. Composer behavior
+## 5. Per-Conversation Runtimes
 
-### What the composer handles
+`PiSessionRuntimeManager` in `electron/pi-sdk-runtime.ts` creates one `PiSdkRuntime` per conversation.
 
-The current composer handles:
+### Working Directory Selection
 
-- free text input
-- attachments
-- model selection
-- thinking level
-- access mode
-- queued outgoing messages
-- suggested thread action badges
-- thread-scoped file modifications panel
+The runtime `cwd` is chosen in order:
 
-### Queueing behavior
+1. Conversation worktree path (if worktree is enabled for this thread)
+2. Project repository path (if conversation is project-linked)
+3. Global workspace directory (`<userData>/workspace/global`)
 
-If the runtime is busy, messages are not discarded.
+### Access Mode
 
-Instead, the UI queues them. The queue is visible and editable.
+| Mode | Tool cwd | Effect |
+|------|----------|--------|
+| `secure` | Conversation working directory | AI restricted to project scope |
+| `open` | Filesystem root (`/`) | AI has full access |
 
-### Suggested thread actions
+Changing access mode on an existing thread restarts that runtime.
 
-The runtime can emit `set_thread_actions`, and the renderer displays up to 4 action badges above the textarea.
+### Prompt Composition
 
-Those badges are ephemeral:
+At session creation, Chatons injects additional system prompts covering:
 
-- click one and it prefills the composer
-- send any message and they are cleared
+- Current access mode and its constraints
+- Thread action suggestion format
+- How the model should explain secure-mode limitations
 
-### Attachment pipeline
+The runtime exposes `get_access_mode` so the model can re-check the live mode.
 
-Current behavior in the composer attachment pipeline:
+### Event Bridge
 
-- images -> image payloads
-- small text files -> inline text blocks
-- binary or large content -> preview/base64-style fallback representation
+Pi runtime events are forwarded to the renderer via `pi:event` IPC channel. Events include message lifecycle, tool execution, compaction, retry, extension UI requests, and runtime status/errors. Events are also logged through the logging pipeline with `source: "pi"`.
 
----
+### Settings Lock Handling
 
-## 10. Model loading and cache behavior
-
-### Current cache strategy
-
-The hook:
-
-- tries `listPiModels()` first
-- keeps an in-memory cache with timestamps
-- can refresh via `syncPiModels()`
-- applies provider filtering from the Pi config snapshot
-
-Important defensive behavior in the implementation:
-
-- if configured providers exist but no models match, the UI falls back to all models instead of showing an empty picker
-- if cache loading returns an empty result, the hook still updates state rather than staying stuck forever in loading mode
+`settings.json.lock` files older than 5 minutes are cleaned up on startup. `SettingsManager.create()` is retried with exponential backoff (100ms, 200ms, 400ms) on lock contention.
 
 ---
 
-## 11. Worktrees: current behavior and limits
+## 6. Provider and Auth System
 
-Worktree support exists, but it should be understood as a partially mature subsystem.
+### Credential Storage
 
-### Creation model
+| File | Content |
+|------|---------|
+| `models.json` | Provider definitions, model metadata, optionally API keys |
+| `auth.json` | Canonical credential storage (API keys and OAuth tokens) |
 
-Worktrees are **not** created automatically for project conversations.
+Chatons synchronizes credentials between both files to maintain compatibility.
 
-A worktree is created only when the user explicitly enables it for that thread.
+### OAuth Providers
 
-### Implemented actions
+| Provider | Flow | Details |
+|----------|------|---------|
+| ChatGPT (`openai-codex`) | PKCE + local HTTP server on port 1455 | Browser callback handled by Pi SDK |
+| Claude Pro (`anthropic`) | PKCE, user pastes code | User copies code from claude.ai |
+| GitHub Copilot (`github-copilot`) | Device flow | User enters code on github.com |
 
-The worktree dialog supports actions such as:
+OAuth credentials are stored in `auth.json` as `{ type: "oauth", access, refresh, expires }`.
 
-- inspect worktree info
-- generate a commit message suggestion
-- commit
-- merge into the base branch
-- push
-- open in VS Code
+### Provider Cards
 
-### Limits that are real today
+Provider selection in onboarding and settings groups cards by company:
 
-Known examples from the code:
+- **OpenAI group:** "OpenAI" (API key, `api.openai.com/v1`) and "ChatGPT" (OAuth, `chatgpt.com/backend-api`)
+- **Mistral group:** "Mistral" (`api.mistral.ai/v1`) and "Mistral Vibe" (`vibe.mistral.ai/v1`)
 
-- some worktree metadata is approximate
-- ahead/behind and merged checks are not fully authoritative in all paths
-- push is currently unavailable in self-contained mode
-- commit and merge flows are implemented, but not every field or path should be treated as canonical Git truth
+### Base URL Normalization
 
----
+When saving a provider, Chatons probes multiple URL variants (`http://host:port`, with `/`, with `/v1`, with `/v1/`) and stores the first reachable one.
 
-## 12. Project terminal subsystem
+### Auth Diagnostics
 
-### How it works today
-
-The renderer asks the backend to detect runnable commands for a project conversation.
-
-Detection is heuristic and based on files such as:
-
-- `package.json`
-- `pyproject.toml`
-- `Cargo.toml`
-- `go.mod`
-- `Makefile`
-- `CMakeLists.txt`
-
-Users can also run custom commands.
-
-### Execution model
-
-A started command creates an in-memory terminal run in the Electron main process.
-
-The renderer polls for incremental output and metadata updates.
-
-Important limitation:
-
-- this is not an interactive PTY terminal
-- it is a managed process runner with streamed output
-
-### Host environment behavior
-
-Project terminal commands are deliberately run from the host environment, not through the Pi runtime helpers.
+On 401 errors, Chatons logs a sanitized debug trail (provider ID, credential source, masked key fingerprint). Raw keys are never logged.
 
 ---
 
-## 13. Extension platform overview
+## 7. Renderer State
 
-Chatons has a real extension platform with:
+### Workspace Store
 
-- a registry file
-- runtime manifest loading
-- capability-gated APIs
-- extension storage
-- extension queueing
-- main view hosting
-- optional server startup
-- optional LLM tools
+Main state management files:
 
-For the full extension reference, see:
+| File | Purpose |
+|------|---------|
+| `src/features/workspace/store.tsx` | Store hook and `WorkspaceProvider` |
+| `src/features/workspace/store/provider.tsx` | State provider implementation |
+| `src/features/workspace/store/state.ts` | State shape and initial values |
+| `src/features/workspace/store/pi-events.ts` | Pi runtime event handlers |
+| `src/features/workspace/store/context.ts` | React context |
 
-- [Extensions](/extensions)
-- [Extensions API](/extensions/api)
-- [Extensions Channels](/extensions/channels)
-- [Extensions UI Library](/extensions/ui-library)
+Responsibilities: hydrate projects/conversations/settings, track Pi runtime state per conversation, insert optimistic user messages, apply runtime events to message state, coordinate notices and extension interactions.
 
-### Built-in extensions
+### Composer Behavior
 
-The registry always includes built-in entries for:
-
-- `@chaton/automation`
-- `@chaton/memory`
-
-See also: [Automation Extension](/automation-extension)
+- **Queueing:** Messages sent while the AI is busy are queued, not dropped. Queue is visible and editable.
+- **Thread actions:** The runtime can emit `set_thread_actions` with up to 4 action badges. These appear above the textarea and clear on next send.
+- **Attachments:** Images become image payloads, small text files become inline text, binary/large files become base64 previews.
 
 ---
 
-## 14. Channel extensions
+## 8. Data Model (SQLite)
 
-Channel extensions are a documented extension profile, not a separate platform.
+Migrations live in `electron/db/migrations/`. Currently 14 migration files.
 
-They are identified by `kind: "channel"`.
+### Tables
 
-Current product rules:
+| Table | Purpose |
+|-------|---------|
+| `projects` | Imported project repositories |
+| `conversations` | Conversation metadata, model selection, access mode, worktree path |
+| `conversation_messages_cache` | Cached message payloads |
+| `app_settings` | Key-value app settings |
+| `pi_models_cache` | Cached model list from providers |
+| `quick_actions_usage` | Quick action usage tracking |
+| `extension_kv` | Extension key-value storage (JSON values) |
+| `extension_queue` | Extension job queue (queued/processing/done/dead) |
+| `automation_rules` | Automation rule definitions |
+| `automation_runs` | Automation execution history |
+| `memory_entries` | Memory system entries with embeddings |
+| `project_custom_terminal_commands` | Custom terminal commands per project |
+| `composer_drafts` | Draft messages in the composer |
 
-- enabled channel extensions make the `Channels` sidebar entry appear
-- inbound channel messages are intended for global threads only
-- channel extensions should not present themselves as standalone sidebar items
+### Key Conversation Fields
 
-For the detailed contract, see [Extensions Channels](/extensions/channels).
+Model choice, worktree state, and access mode are stored per conversation in the database -- they are persistent, not ephemeral UI state:
+
+- `project_id`, `model_provider`, `model_id`, `thinking_level`
+- `worktree_path`, `access_mode`
+- Runtime error state
 
 ---
 
-## 15. Built-in memory extension
+## 9. Project Terminal
 
-Built-in extension id: `@chaton/memory`
+Implemented in `electron/ipc/workspace.ts` (`buildDetectedProjectCommands`, `detectProjectType`) and `src/components/shell/ProjectTerminalDialog.tsx`.
 
-It provides APIs and LLM tools for:
+### Project Type Detection
 
-- upsert, search, get, update, delete, list
+`detectProjectType()` checks for:
+
+| File | Type |
+|------|------|
+| `package.json` | `node` |
+| `pyproject.toml`, `requirements.txt`, `setup.py` | `python` |
+| `Cargo.toml` | `rust` |
+| `go.mod` | `go` |
+| `CMakeLists.txt`, `Makefile`, `makefile` | `c` |
+
+### Command Generation
+
+Based on type, `buildDetectedProjectCommands()` generates commands like `npm run dev`, `cargo test`, `python manage.py runserver`, etc. Custom commands are also supported and stored per project.
+
+### Execution Model
+
+- Commands run in the host environment, **not** through Pi
+- Requires `open` access mode
+- Output is streamed live
+- Multiple concurrent runs are tracked with tabs
+- **Not** an interactive PTY terminal -- it is a managed process runner with streamed output
+
+---
+
+## 10. Extension Platform
+
+Full documentation: [Extensions](/extensions), [Extensions API](/extensions/api)
+
+### Architecture
+
+- Extensions live in `~/.chaton/extensions/<extension-id>/`
+- Built-in extensions (`@chaton/automation`, `@chaton/memory`) are bundled in `electron/extensions/builtin/`
+- Extension manifest: `chaton.extension.json`
+- Runtime: `electron/extensions/runtime/` (host, storage, types, capabilities, UI bridge, automation, memory)
+- API surface: `window.chaton.*` (not `window.chatonExtension.api.*`)
+
+### Capabilities
+
+13 capabilities: `ui.menu`, `ui.mainView`, `storage.kv`, `storage.files`, `events.subscribe`, `events.publish`, `queue.publish`, `queue.consume`, `llm.tools`, `host.notifications`, `host.conversations.read`, `host.conversations.write`, `host.projects.read`
+
+### Channel Extensions
+
+Extensions with `kind: "channel"` appear under the **Channels** sidebar entry. They bridge external messaging platforms into Chatons global threads. See [Channels](/extensions/channels).
+
+---
+
+## 11. Built-in Memory Extension
+
+Extension ID: `@chaton/memory`
+
+Implemented in `electron/extensions/runtime/memory.ts`.
+
+### Search Engine
+
+Uses a local hashed trigram vector strategy:
+
+1. Text is normalized (NFKC, lowercase, whitespace collapsed)
+2. Character trigrams are extracted
+3. Each trigram is hashed (FNV-1a) to a position in a 256-dimension vector
+4. Vectors are L2-normalized
+5. Search uses cosine similarity
+
+This is entirely offline -- no external embedding service or model download needed. It is practical for factual memory lookup but is not equivalent to a neural embedding model.
 
 ### Scopes
 
-Current scopes are:
-
-- `global`
-- `project`
-
-### Semantic search implementation
-
-The current memory search implementation is local and lightweight.
-
-It uses an embedded hashed trigram vector strategy rather than an external embedding service.
-
-That means:
-
-- no extra model download is required
-- no network dependency is required
-- retrieval is practical for factual memory lookup
-- it should not be described as equivalent to a neural embedding model
+- `global`: Personal facts, preferences, user context
+- `project`: Project-specific decisions, conventions, architecture notes
 
 ---
 
-## 16. Skills vs extensions
+## 12. Worktrees
 
-These are separate systems and should be documented that way.
+### Current State
 
-### Skills
+- Disabled by default per conversation
+- Enabled explicitly via the topbar branch icon
+- Supports commit, merge to base branch, push, and VS Code integration
+- Worktree paths are stored in the conversation database row
+- Orphaned worktrees are cleaned up on app startup
 
-Managed through Pi commands and Pi catalog logic.
+### Limitations
 
-### Extensions
-
-Managed through the Chatons extension registry and runtime.
-
-If you are building something that needs a UI, storage, events, server startup, or host APIs, you are almost certainly building an extension, not a skill.
-
----
-
-## 17. Updates and platform-specific behavior
-
-### macOS
-
-On macOS, applying an update opens the downloaded DMG in Finder.
-
-### Windows and Linux
-
-Update application remains more limited than the macOS download-and-open flow.
+- Some metadata (ahead/behind counts) is approximate
+- Push may be unavailable depending on environment
+- Should not be treated as fully authoritative Git tooling
 
 ---
 
-## 18. Telemetry and crash reporting
+## 13. Updates
 
-Chatons supports anonymous error telemetry, but it is gated by user consent.
+Implemented in `electron/lib/update/update-service.ts`.
 
-### Current behavior
-
-- telemetry is not initialized in local dev mode
-- renderer errors and unhandled rejections can be forwarded through IPC
-- sending is gated by `allowAnonymousTelemetry`
-- user consent state is persisted in sidebar settings
-
-Sentry is configured as the current telemetry backend.
+- Checks GitHub releases for the `thibautrey/chaton` repository
+- Compares against `app.getVersion()`
+- Downloads DMGs/installers to `<userData>/updates/`
+- On macOS, opens the DMG in Finder
+- Changelogs are prefetched from GitHub on startup and stored locally
 
 ---
 
-## 19. What to treat as stable and what not to overstate
+## 14. Telemetry
 
-### Stable enough to document as current product behavior
+Implemented in `electron/lib/telemetry/sentry.ts`.
 
-- internal Pi-managed runtime and config directory
-- per-conversation session runtimes
-- scoped model selection through Pi settings
-- settings, onboarding, and model sync flows
-- extension registry and manifest loading
-- built-in automation and memory extensions
-- channels page and channel extension classification
-- project terminal output runner
-
-### Areas that should be documented carefully with caveats
-
-- worktree parity with Git
-- full push flows in worktree mode
-- fully interactive terminal behavior
-- same-process extension hot reload
-- some update apply paths outside macOS
-
-When you change any of those, document both what works and what still does not.
+- Backend: Sentry
+- Not initialized in dev mode
+- Gated by `allowAnonymousTelemetry` setting (user consent required)
+- Captures: uncaught exceptions, unhandled rejections, render process crashes, unresponsive events
+- Renderer errors forwarded via IPC
+- Consent can be changed anytime in Settings > Sidebar
 
 ---
 
-## 20. Documentation contract
+## 15. Deep Links
 
-Any change that impacts current behavior, workflows, APIs, config, extension contracts, or architecture must update docs in the same change.
+Chatons registers the `chatons://` protocol.
+
+Currently supported route:
+
+```
+chatons://extensions/install/@scope/package-name
+```
+
+On macOS: handled via `open-url` event. On Windows/Linux: handled via single-instance lock and command-line argv.
+
+Pending deep links that arrive before the window is ready are queued and processed after a 1.5-second delay.
+
+---
+
+## 16. Sandbox Manager
+
+Initialized on startup. Provides sandboxed execution for Node.js and Python commands via `electron/lib/sandbox/sandbox-manager.ts`.
+
+---
+
+## 17. Skills vs Extensions
+
+| | Skills | Extensions |
+|---|--------|-----------|
+| Managed by | Pi runtime (CLI commands) | Chatons extension registry |
+| Storage | Pi skills directory | `~/.chaton/extensions/` |
+| Has UI | No | Yes (main views, menu items, quick actions) |
+| Has storage API | No | Yes (KV, files, queue) |
+| Has events | No | Yes (subscribe/publish) |
+| Has LLM tools | Yes (Pi-native) | Yes (via manifest + `apiCall`) |
+
+If you need a UI, storage, events, or host APIs, build an extension. If you need a simple tool the AI can call, a Pi skill may suffice.
+
+---
+
+## 18. Documentation Contract
+
+Any change affecting user workflows, extension APIs, configuration semantics, architecture, or technical limitations must update documentation in the same changeset.
 
 Primary docs to keep aligned:
 
 - [User Guide](/user-guide)
+- [Developer Guide](/developer-guide) (this file)
+- [Pi Integration](/pi-integration)
 - [Extensions](/extensions)
 - [Automation Extension](/automation-extension)
 - [Documentation Audit](/documentation-audit)
+
+See also: `AGENTS.md` in the repository root for maintainer-facing reference.

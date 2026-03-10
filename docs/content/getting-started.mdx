@@ -1,20 +1,70 @@
 ---
 title: Getting Started
-description: Quick orientation for Chatons users and contributors.
+description: Quick orientation for new Chatons users, contributors, and extension authors.
 ---
 
 # Getting Started
 
 Chatons is a desktop AI workspace built with Electron, React, TypeScript, SQLite, and Pi Coding Agent.
 
-## Who this documentation is for
+---
 
-- End users who want to use Chatons daily
-- Contributors who want to understand the architecture
-- Extension authors integrating custom capabilities
+## What Chatons Does
 
-## Start here
+- Threaded AI conversations with model selection and thinking-level control
+- Project-linked conversations with access to your codebase
+- Per-conversation access modes (secure or open)
+- Live file-change tracking and inline diffs
+- Optional Git worktree isolation per conversation
+- Project terminal for running commands
+- Built-in automation rules and memory system
+- Extensible via user-installed extensions and Pi skills
+- Provider management with API key and OAuth authentication
 
-- Read the [User Guide](/user-guide) for product behavior
-- Read the [Developer Guide](/developer-guide) for implementation details
-- Read the [Pi Integration](/pi-integration) page for runtime specifics
+---
+
+## First Launch
+
+On first launch, Chatons shows a short intro slideshow, then walks you through setup:
+
+1. **Provider setup** -- Choose a provider (OpenAI, Mistral, Ollama, etc.), enter your API key or authenticate with OAuth
+2. **Model scope** -- Select which models appear in your everyday model picker
+3. **Validation** -- Chatons verifies the setup works
+
+After onboarding, you land in the main workspace with sidebar, conversation panel, and composer.
+
+You can re-open onboarding at any time with `Cmd+Shift+O` (macOS) or `Ctrl+Shift+O` (Windows/Linux).
+
+---
+
+## Start Here
+
+| You are... | Read this |
+|------------|-----------|
+| A user | [User Guide](/user-guide) |
+| A developer / contributor | [Developer Guide](/developer-guide) |
+| Building an extension | [Extensions Overview](/extensions) then [Tutorial](/extensions/tutorial) |
+
+---
+
+## System Requirements
+
+- **macOS** 11+ (Intel or Apple Silicon)
+- **Windows** 10+ (64-bit)
+- **Linux** (64-bit, tested on Ubuntu 22.04+)
+- Internet connection for cloud model providers (local providers like Ollama work offline)
+
+---
+
+## Key Concepts
+
+| Concept | What it means |
+|---------|--------------|
+| **Thread** | A conversation. Can be global or linked to a project. |
+| **Project** | A local Git repository imported into Chatons. |
+| **Scoped models** | The subset of models you have starred for quick access. |
+| **Access mode** | `secure` limits the AI to the project directory. `open` gives full filesystem access. |
+| **Worktree** | Optional Git branch isolation per conversation thread. |
+| **Extension** | A user-installed add-on with its own UI, storage, and optional LLM tools. |
+| **Skill** | A Pi-managed capability installed via the Pi skills catalog. |
+| **Automation** | A rule that triggers an action when an event occurs (e.g. notify on new conversation). |

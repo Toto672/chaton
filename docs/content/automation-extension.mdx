@@ -5,291 +5,287 @@ description: Reference for the built-in automation extension in Chatons.
 
 # Automation Extension
 
-Built-in extension id: `@chaton/automation`
+Built-in extension ID: `@chaton/automation`
 
-Main implementation files:
-
-- `electron/extensions/builtin/automation/chaton.extension.json`
-- `electron/extensions/builtin/automation/index.html`
-- `electron/extensions/builtin/automation/index.js`
-- `electron/extensions/builtin/automation/components.js`
-- `electron/extensions/runtime/automation.ts`
+The automation extension lets users create rules that trigger actions when events occur in Chatons.
 
 ---
 
-## 1. What it does
+## What It Does
 
-The automation extension lets Chatons store and run simple automation rules.
+An automation rule consists of:
 
-A rule currently has:
-
-- an id
-- a name
-- an enabled flag
-- one trigger topic
-- optional conditions
-- one or more actions
-- an optional cooldown
-- timestamps
-
-The extension also records automation runs so the UI can show recent execution history.
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique rule identifier |
+| `name` | string | Human-readable rule name |
+| `enabled` | boolean | Whether the rule is active |
+| `trigger_topic` | string | Event topic that triggers this rule |
+| `conditions_json` | JSON | Optional conditions to match against the event payload |
+| `actions_json` | JSON | One or more actions to execute |
+| `cooldown_ms` | number | Minimum milliseconds between executions |
+| `last_triggered_at` | string | Timestamp of last execution |
 
 ---
 
-## 2. What users see in the app
+## User-Facing Features
 
-The extension contributes:
+The extension adds to the Chatons UI:
 
-- a sidebar entry labeled `Automatisations`
-- a main view with id `automation.main`
-- one quick action that opens the creation flow inside the main view
+- **Sidebar entry:** "Automations" (icon: `Gauge`, order: 10)
+- **Main view:** `automation.main` -- a full-page automation management screen
+- **Quick action:** `automation.create` -- opens the create-automation flow
 
-Manifest details currently shipped:
+In the automation screen, users can:
 
-- sidebar icon: `Gauge`
-- sidebar order: `10`
-- quick action id: `automation.create`
-- quick action deeplink target: `open-create-automation`
-
----
-
-## 3. Exposed extension APIs
-
-The extension currently exposes these APIs:
-
-- `automation.rules.list`
-- `automation.rules.save`
-- `automation.rules.delete`
-- `automation.runs.list`
-- `automation.schedule_task`
-- `automation.list_scheduled_tasks`
-
-These are declared in the manifest and implemented in `electron/extensions/runtime/automation.ts`.
+- List existing rules
+- Create new rules in a modal dialog
+- View recent execution history
+- Delete rules (double-click)
+- Switch between light and dark themes
 
 ---
 
-## 4. Trigger topics supported today
+## Trigger Topics
 
-The automation runtime validates triggers against a fixed allowlist.
+The runtime validates triggers against a fixed allowlist. Current supported triggers:
 
-Current supported triggers:
+| Topic | When Fired |
+|-------|------------|
+| `conversation.created` | A new conversation is created |
+| `conversation.message.received` | A new message is received in a conversation |
+| `project.created` | A new project is imported |
+| `conversation.agent.ended` | The AI finishes processing a conversation turn |
 
-- `conversation.created`
-- `conversation.message.received`
-- `project.created`
-- `conversation.agent.ended`
-
-If a caller tries to save a rule with any other trigger, the save is rejected.
+Rules with any other trigger topic are rejected on save.
 
 ---
 
-## 5. Action types supported today
-
-The runtime currently understands these action types:
-
-- `notify`
-- `enqueueEvent`
-- `runHostCommand`
-- `setConversationTag`
-
-What they mean in practice:
+## Action Types
 
 ### `notify`
 
 Shows a host notification.
 
-If no explicit title or body is provided, the runtime derives them from the event topic and payload.
+```json
+{
+  "type": "notify",
+  "title": "Automation Alert",
+  "body": "A new conversation was created."
+}
+```
+
+If `title` or `body` are omitted, they are derived from the event topic and payload.
+
+### `executeAndNotify`
+
+Runs an instruction through an ephemeral Pi session and sends the result as a notification.
+
+```json
+{
+  "type": "executeAndNotify",
+  "title": "Summary",
+  "instruction": "Summarize the latest conversation message.",
+  "model": "openai/gpt-4o"
+}
+```
+
+The instruction is executed in a temporary conversation that is created and cleaned up automatically. If a `model` key is provided, the Pi session uses that model.
 
 ### `enqueueEvent`
 
-Publishes an item into the extension queue system.
+Publishes an item into the extension queue system for downstream processing.
 
-This is useful when an automation should trigger downstream work instead of doing everything inline.
+```json
+{
+  "type": "enqueueEvent",
+  "topic": "export-jobs",
+  "payload": { "format": "markdown" }
+}
+```
 
 ### `runHostCommand`
 
-Calls a small allowlisted set of host methods.
-
-Today the allowlist is intentionally narrow:
+Calls a host method from a narrow allowlist:
 
 - `notifications.notify`
 - `open.mainView`
 
-Anything else is rejected.
+Any other method is rejected.
+
+```json
+{
+  "type": "runHostCommand",
+  "method": "notifications.notify",
+  "params": { "title": "Alert", "body": "Something happened." }
+}
+```
 
 ### `setConversationTag`
 
-This is currently a no-op placeholder. The runtime accepts it, but it does not apply a real tag mutation yet.
+Currently a **no-op placeholder**. Accepted by the runtime but does not apply any tag mutation.
 
 ---
 
-## 6. Conditions
+## Conditions
 
-Rules can include conditions.
+Rules can include conditions evaluated against the event payload.
 
-The current condition evaluator is intentionally simple.
+### Supported Operators
 
-Supported operators today:
+| Operator | Behavior |
+|----------|----------|
+| `equals` | Exact match: `payload[field] === value` |
+| `contains` | Substring match: `payload[field].includes(value)` (both must be strings) |
 
-- `equals`
-- `contains`
+### Limitations
 
-Current limitations:
+- Conditions evaluate only **top-level fields** in the event payload
+- Nested object paths are not supported
+- Malformed or unsupported conditions fail conservatively (rule does not fire)
 
-- conditions are evaluated only against top-level fields in the event payload
-- nested object-path expressions are not implemented
-- unsupported or malformed conditions fail conservatively
+### Example
+
+```json
+[
+  { "field": "projectId", "operator": "equals", "value": "my-project-uuid" }
+]
+```
 
 ---
 
-## 7. Cooldown behavior
+## Cooldown
 
-Each rule can have a cooldown in milliseconds.
+Each rule has a `cooldown_ms` field (milliseconds).
 
 When an event matches a rule:
 
-- Chatons checks the rule's `last_triggered_at`
-- if the cooldown window has not elapsed, the rule is skipped
-- otherwise it runs and updates the last-triggered timestamp
-
-Cooldown is stored as `cooldown_ms` in persistence.
+1. Check `last_triggered_at`
+2. If the cooldown window has not elapsed, skip the rule
+3. Otherwise execute the rule and update `last_triggered_at`
 
 ---
 
-## 8. LLM-callable automation tools
+## LLM-Callable Tools
 
-The extension declares capability `llm.tools` and exposes two model-callable tools inside conversations:
-
-- `automation.schedule_task`
-- `automation.list_scheduled_tasks`
-
-These are injected into Pi thread sessions and can be called by the model during a normal conversation turn.
+The extension exposes two tools that the AI can call during conversations:
 
 ### `automation.schedule_task`
 
-Purpose:
+Create or update an automation rule from natural language.
 
-- create or update a simple automation rule from natural-language instructions
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | No | Rule name (derived from instruction if omitted) |
+| `instruction` | string | Yes | Natural-language task description |
+| `trigger` | string | No | Trigger topic (inferred from instruction if omitted) |
+| `cooldown` | number | No | Cooldown in ms (inferred from instruction if omitted) |
+| `projectId` | string | No | Target project ID |
+| `modelKey` | string | No | Model to use (e.g. `openai/gpt-4o`) |
+| `notifyMessage` | string | No | Custom notification message |
+| `id` | string | No | Existing rule ID to update |
+| `conditions` | array | No | Condition array |
+| `enabled` | boolean | No | Whether the rule is enabled |
 
-Current behavior:
-
-- derives a rule name from input when needed
-- tries to infer a trigger from either the explicit trigger field or the instruction text
-- tries to infer a cooldown from the instruction when none is provided
-- stores the resulting rule as an automation record
-- creates a default `notify` action carrying the instruction text
-
-Optional fields currently supported by the tool:
-
-- `name`
-- `instruction`
-- `trigger`
-- `cooldown`
-- `projectId`
-- `modelKey`
-- `notifyMessage`
-- `id`
-- `conditions`
-- `enabled`
+When called by the AI, this creates a rule with a default `notify` action carrying the instruction text, or an `executeAndNotify` action if a model key is provided.
 
 ### `automation.list_scheduled_tasks`
 
-Purpose:
+Returns existing rules so the AI can inspect them before creating or modifying.
 
-- return existing rules so the model can inspect them before creating or updating one
-
-Supported parameter:
-
-- `limit`
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `limit` | number | No | Maximum number of rules to return |
 
 ---
 
-## 9. Persistence model
+## Extension APIs
+
+Exposed via the manifest `apis.exposes` and handled in `electron/extensions/runtime/automation.ts`:
+
+| API Name | Purpose |
+|----------|---------|
+| `automation.rules.list` | List all automation rules |
+| `automation.rules.save` | Create or update a rule |
+| `automation.rules.delete` | Delete a rule by ID |
+| `automation.runs.list` | List execution history |
+| `automation.schedule_task` | Create/update rule (LLM-callable version) |
+| `automation.list_scheduled_tasks` | List rules (LLM-callable version) |
+
+---
+
+## Persistence
 
 Automation state is stored in the Chatons SQLite database.
 
-Relevant tables used by the automation subsystem:
+### `automation_rules` table
 
-- `automation_rules`
-- `automation_runs`
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT PK | Rule identifier |
+| `name` | TEXT | Rule name |
+| `enabled` | INTEGER | 0 or 1 |
+| `trigger_topic` | TEXT | Event topic |
+| `conditions_json` | TEXT | JSON array of conditions |
+| `actions_json` | TEXT | JSON array of actions |
+| `cooldown_ms` | INTEGER | Cooldown in milliseconds |
+| `last_triggered_at` | TEXT | ISO timestamp of last trigger |
+| `created_at` | TEXT | ISO creation timestamp |
+| `updated_at` | TEXT | ISO update timestamp |
 
-Stored rule information includes:
+### `automation_runs` table
 
-- trigger topic
-- JSON conditions
-- JSON actions
-- cooldown
-- timestamps
-- last-triggered timestamp
-
-Run history includes:
-
-- rule id
-- event topic
-- serialized event payload
-- run status
-- optional error message
-- creation timestamp
-
----
-
-## 10. UI implementation style
-
-The built-in automation extension is intentionally self-contained.
-
-Its UI is not compiled as part of the main React renderer. Instead, it is served as extension-owned HTML and JavaScript.
-
-Files:
-
-- `electron/extensions/builtin/automation/index.html`
-- `electron/extensions/builtin/automation/index.js`
-- `electron/extensions/builtin/automation/components.js`
-
-This extension is also the main reference implementation for Chatons' injected extension UI helper layer.
-
-It uses:
-
-- host visual tokens
-- shared DOM helpers
-- `window.chatonUi.createModelPicker()`
-
-That makes it the best example to copy if you want a plain-HTML extension page that still looks native to Chatons.
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT PK | Run identifier |
+| `rule_id` | TEXT | Associated rule ID |
+| `event_topic` | TEXT | Event that triggered this run |
+| `event_payload_json` | TEXT | Serialized event payload |
+| `status` | TEXT | `success` or `error` |
+| `error_message` | TEXT | Error message (if failed) |
+| `created_at` | TEXT | ISO timestamp |
 
 ---
 
-## 11. Translation ownership
+## Implementation Files
 
-The automation extension owns its own labels and titles.
+| File | Purpose |
+|------|---------|
+| `electron/extensions/builtin/automation/chaton.extension.json` | Extension manifest |
+| `electron/extensions/builtin/automation/index.html` | UI entry point |
+| `electron/extensions/builtin/automation/index.js` | UI logic (plain JavaScript) |
+| `electron/extensions/builtin/automation/components.js` | Shared UI components |
+| `electron/extensions/runtime/automation.ts` | Backend: rule evaluation, action execution |
+| `electron/extensions/runtime/automation-pi-bridge.ts` | Ephemeral Pi session executor for `executeAndNotify` |
+| `electron/db/repos/automation.ts` | Database operations for rules and runs |
 
-Chatons renders extension-provided UI strings as-is.
-
-That means:
-
-- the host does not auto-translate extension labels
-- if you localize an extension, the extension must handle that itself
-
----
-
-## 12. What not to overstate
-
-A few parts of the automation system are intentionally small-scope today.
-
-Be careful not to document it as a full workflow engine.
-
-Current limits include:
-
-- fixed trigger allowlist
-- simple condition matching only
-- narrow host-command allowlist
-- `setConversationTag` is not a full implementation yet
-- most LLM-scheduled tasks currently become notification-style rules unless a broader action shape is saved explicitly through the API
-
-That still makes the feature useful, but the docs should describe it as pragmatic automation, not as a generic orchestration platform.
+The UI is self-contained plain HTML/JS (not compiled React). It uses the injected Chatons UI helpers (`window.chatonExtensionComponents`, `window.chatonUi.createModelPicker()`). It is the primary reference implementation for building native-looking extension UIs.
 
 ---
 
-## Related pages
+## Translation
 
-- [Extensions](/extensions)
+The automation extension owns its own labels. Chatons renders extension-provided strings as-is -- the host does not auto-translate extension labels. If you localize an extension, handle translation within the extension.
+
+---
+
+## Scope and Limitations
+
+The automation system is intentionally simple. Do not document it as a full workflow engine.
+
+Current limitations:
+
+- Fixed trigger allowlist (4 topics)
+- Simple condition matching (top-level fields only, 2 operators)
+- Narrow `runHostCommand` allowlist (2 methods)
+- `setConversationTag` is a no-op placeholder
+- Most LLM-scheduled tasks become notification-style rules unless a broader action is explicitly saved via the API
+- The `executeAndNotify` action creates ephemeral conversations that appear in the conversation list
+
+---
+
+## Related
+
+- [Extensions Overview](/extensions)
 - [Extensions API](/extensions/api)
 - [User Guide](/user-guide)

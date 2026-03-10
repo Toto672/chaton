@@ -5,324 +5,427 @@ description: Practical guide for everyday Chatons users.
 
 # Chatons User Guide
 
-## Audience and Scope
-This guide is for everyday Chatons users.
+This guide covers what you can do in Chatons today. No implementation details -- just product behavior.
 
-It explains what you can do in the app today, in practical terms, without internal implementation details.
+Scope baseline: current behavior observed in the codebase as of **March 10, 2026**.
 
-Scope baseline: current behavior observed in the codebase on **March 5, 2026**.
+---
 
-## 1.1 Startup Loading Screen
-During app boot (before workspace/settings hydration completes), Chatons shows a full-window loading screen instead of a white/blank screen.
+## 1. Startup
 
-It includes:
+When Chatons starts, it shows a loading screen with:
 
-- centered Chatons mascot video (`chaton-hero.webm`)
-- a funny cat-themed loading message
-- the same fade-in/fade-out message transition style used by onboarding intro copy
+- A centered mascot video (`chaton-hero.webm`)
+- Rotating cat-themed loading messages
+- Fade transitions between messages
 
-## 1. What Chatons Does
-Chatons is a desktop AI workspace that combines:
+The loading screen is displayed until workspace hydration completes. This prevents a blank or half-initialized UI.
 
-- threaded conversations
-- project-linked conversations
-- model selection and provider setup
-- automations, skills, and extensions
-- code-oriented workflows (diffs, worktrees, commit/merge helpers)
+---
 
 ## 2. First Launch (Onboarding)
-On first launch, Chatons now starts with a short full-window intro screen, then opens a separate 3-step setup flow.
 
-### Intro step (new)
-Before provider setup, Chatons shows a dedicated intro screen (not mixed with setup steps) with:
+On first launch, Chatons opens a two-part onboarding flow.
 
-- smooth transitions between slides
-- persistent Chatons mascot video (`chaton-hero.webm`) visible throughout
-- progress indicator + dots navigation
-- `Skip intro` and `Next` controls
+### Intro Slideshow
 
-The intro is designed to stay short (well under a minute) and move quickly to setup.
+Before setup, a short 4-slide intro explains what Chatons does:
 
-### Force-open onboarding shortcut
-You can force-open onboarding at any time with:
+- Slides advance with Next/dots navigation
+- A "Skip intro" button skips to setup
+- The mascot video stays visible throughout
 
-- `Cmd + Shift + O` (macOS)
-- `Ctrl + Shift + O` (Windows/Linux)
+### Step 1: Provider Setup
 
-### Step 1: Provider setup
-You choose a provider preset (for example OpenAI, Mistral, Ollama, LM Studio, etc.), then set:
+Choose a provider preset card (OpenAI, ChatGPT, Mistral, Ollama, LM Studio, etc.) and configure:
 
-- API type
-- Base URL
-- API key (optional for local providers when detected locally, and optional for `Custom`)
+- **API type** (OpenAI completions, responses, or Codex)
+- **Base URL** (auto-corrected for common variants like missing `/v1`)
+- **API key** (optional for local providers like Ollama)
 
-Provider preset cards use a transparent surface (no dark card fill) to keep labels and logos easier to read on onboarding backgrounds.
-The Mistral card displays a gold star badge to indicate it as a preferred preset.
-Clicking a provider card automatically scrolls to the provider form/API key area so you can continue setup immediately.
-When selecting `Custom`, the form stays in custom mode while you type the provider name (typing no longer exits/hides the custom fields).
-When saving provider settings, Chatons now auto-corrects common base URL variants in the background for OpenAI-compatible endpoints (for example `http://host:port`, `http://host:port/`, `http://host:port/v1`, `http://host:port/v1/`) and stores the first reachable one.
+Provider cards are grouped by company. For example:
 
-### Step 2: Model scope
-Chatons loads models and asks which ones should be available in your everyday model picker.
+- **OpenAI** group shows: "OpenAI" (API key, standard endpoint) and "ChatGPT" (OAuth, `chatgpt.com` backend)
+- **Mistral** group shows: "Mistral" (`api.mistral.ai/v1`) and "Mistral Vibe" (`vibe.mistral.ai/v1`)
 
-### Step 3: Quick validation
-Chatons runs a basic setup check before enabling the main app.
+Clicking a provider card scrolls to the configuration form automatically.
 
-## 3. Main Interface Overview
-The app has three main areas.
+### Step 2: Model Scope
 
-### Left sidebar
-Main navigation:
+Chatons loads available models from your provider and asks which ones you want in your everyday model picker. These become your "scoped" models.
 
-- `New thread`
-- `Automations`
-- `Skills`
-- `Extensions`
-- `Settings`
+### Step 3: Validation
 
-You also get:
+A basic check verifies your setup works before enabling the main interface.
 
-- a search toggle button next to the `+` action to show/hide thread search
-- thread/project organization options
-- update and changelog cards (outside dev mode)
+### Re-opening Onboarding
 
-### Main panel
-Shows either:
+- `Cmd+Shift+O` (macOS)
+- `Ctrl+Shift+O` (Windows/Linux)
 
-- conversation timeline
-- settings panel
-- skills panel
-- extensions panel
-- an extension main view (for example Automation)
-- extension main views use the full available content width and height of the main panel rather than the narrower conversation/settings column and viewport-estimated height
-- on empty-thread states, quick action cards are aligned to the conversation column width and centered within that column (not the full window), while still staying visually above the composer area
-- quick actions and the "Start the conversation" empty-state banner are shown only for truly empty threads; once a first exchange exists, they are hidden
+---
 
-### Composer (bottom)
-Used to send prompts, attach files/images, pick model, pick thinking level, and choose agent access mode.
-The composer bar and inner composer surface use translucent backgrounds with blur so conversation content remains subtly visible behind them.
+## 3. Main Interface
 
-## 4. Core Daily Workflows
+### Left Sidebar
 
-### Create a global thread
-Use `New thread` in the sidebar (or the topbar `+` button).
+Navigation items:
 
-### Import a project
-Use `Add project` in the sidebar.
+- **New thread** -- Create a global conversation
+- **Automations** -- Open the automation rules screen
+- **Skills** -- Manage Pi skills
+- **Extensions** -- Manage installed extensions
+- **Channels** -- Appears when a channel extension is installed and enabled
+- **Settings** -- App settings
 
-If the folder is not already a Git repository, Chatons initializes it automatically.
+Below the navigation:
 
-### Create a project thread
-Inside a project group, click the compose icon to create a new thread linked to that project.
+- Thread and project list with search (toggle via the search icon)
+- Update availability and changelog cards (outside dev mode)
 
-### Delete threads and projects
+### Main Panel
+
+Displays one of:
+
+- Conversation timeline
+- Settings pages
+- Skills catalog
+- Extensions management
+- An extension's main view (e.g. Automation)
+
+Extension main views use the full width and height of the main panel, not the narrower conversation column.
+
+Empty threads show quick action cards and a "Start the conversation" banner. These disappear after the first exchange.
+
+### Composer (Bottom)
+
+The composer handles:
+
+- Text input with attachments
+- Model picker (scoped models shown first, "more" to see all)
+- Thinking level selector (when the model supports it)
+- Access mode toggle (secure / open)
+- Queued message indicator
+- Thread-scoped file modifications summary
+
+The composer and its toolbar use translucent backgrounds with blur so conversation content remains subtly visible behind them.
+
+---
+
+## 4. Conversations
+
+### Create a Global Thread
+
+Click **New thread** in the sidebar or the `+` button in the topbar.
+
+### Import a Project
+
+Click **Add project** in the sidebar and select a folder. If it is not already a Git repository, Chatons initializes one automatically.
+
+### Create a Project Thread
+
+Inside a project group in the sidebar, click the compose icon to create a thread linked to that project.
+
+### Delete Threads and Projects
+
 Deletion uses a two-click confirmation pattern for safety.
 
-## 5. Conversation Experience
+---
 
-### Model picker
-The model chip in the composer lets you:
+## 5. Model Picker
 
-- use scoped models by default
-- click `more` to show all models
-- star/unstar models to add/remove them from scoped models
+The model chip in the composer opens the model picker:
 
-The same scoped-model picker behavior is now reused in onboarding and provider/model settings, so model scope toggling is consistent across setup and daily usage.
+- **Default view:** Shows scoped (starred) models only
+- **"More" action:** Reveals all available models with a text filter
+- **Star/unstar:** Click the star to add or remove a model from your scoped set
 
-### Thinking level
-If the selected model supports reasoning levels, a thinking-level chip appears.
+Starring and unstarring updates the actual Pi configuration (`settings.json > enabledModels`), not just UI state. This is consistent across onboarding, settings, and the composer.
 
-### Agent access mode
-You can switch per conversation:
+---
 
-- `secure`: constrained behavior
-- `open`: broader file/command access behavior
-- a friendly comparison popup is shown above the `secure` / `open` buttons in the composer, with short non-technical guidance for when to use each mode
+## 6. Thinking Level
 
-If you change mode on an existing thread, Chatons restarts that conversation runtime.
+If the selected model supports reasoning levels, a thinking-level chip appears next to the model picker. Click to cycle through available levels.
 
-### Sending while AI is busy
-If the agent is already processing or still starting up, pressing send queues your message instead of dropping it.
-This also applies while Chatons is still tracking pending runtime commands for that conversation.
-In that state, the send button shows a queue icon (instead of text) to keep the composer compact.
+---
 
-### Stop current execution
-A stop button appears while the agent is processing.
+## 7. Access Mode
 
-## 6. Attachments in Composer
-You can add files using `+` or drag-and-drop.
+Each conversation has an access mode:
 
-Current behavior:
+- **Secure:** The AI can only access files within the project directory (or global workspace for non-project threads)
+- **Open:** The AI has full filesystem and command access
 
-- images: sent as image payloads
-- small text-like files: included as readable text
-- other/binary files: included as base64 preview text
+A comparison popup explains when to use each mode. Changing the access mode on an existing thread restarts that conversation's runtime.
+
+---
+
+## 8. Sending Messages
+
+### While the AI Is Working
+
+If the AI is processing or the runtime is still starting, pressing send **queues** your message instead of dropping it. The send button shows a queue icon during this state. Queued messages are visible and editable.
+
+### Stop Button
+
+A stop button appears while the AI is processing. Click to cancel the current execution.
+
+### Attachments
+
+Add files via the `+` button or drag-and-drop:
+
+- **Images:** Sent as image payloads
+- **Small text files:** Included as readable text
+- **Binary/large files:** Included as base64 preview
 
 Attachments can be removed before sending.
 
-## 7. Live Change Tracking (Code Workflows)
-When a conversation has activity and thread-scoped changes are detected, Chatons shows a modifications panel above the composer with:
+---
 
-- changed files count
-- added/removed lines
-- inline per-file diffs
-- change-to-change navigation
+## 9. Suggested Thread Actions
 
-This gives you a continuous view of what changed during the thread.
+The AI can suggest up to 4 clickable action badges above the composer. These are ephemeral:
 
-Chatons also records compact file-change summaries directly in the conversation timeline after tool executions. Each row shows:
+- Click one to prefill the composer with that action
+- Send any message and the badges clear
 
-- `Modifié <path> +<added> -<removed>`
+---
 
-Click a timeline row to expand the inline diff for that file directly in the thread.
+## 10. Live File-Change Tracking
 
-These timeline rows are thread-scoped deltas (changes relative to thread start baseline), so they track what changed during the current conversation rather than whole-repository totals.
-Timeline summaries are incremental: each row shows only files that changed since the previous tool execution snapshot. Pure Git state transitions that do not introduce new content changes (for example stage/commit cleanup effects) are not surfaced as new "Modifié" rows. To reduce false positives from concurrent work in other threads, Chatons only surfaces these timeline file-change rows when the change is associated with a recent `edit` tool execution in the same thread.
+When a conversation modifies files, Chatons shows a modifications panel above the composer with:
 
-## 8. Worktree Tools
-For project threads, worktree is **disabled by default**.
+- Changed files count
+- Added/removed line counts
+- Inline per-file diffs
+- Navigation between changes
 
-Use the topbar worktree icon (`branch` icon) to toggle it for the current thread.
+Changes are thread-scoped deltas (relative to the thread start baseline).
 
-When enabled, the icon changes color (green) to indicate active worktree mode.
-Click the icon again to disable worktree for that thread.
+### Timeline Diff Rows
 
-After activation, `Manage worktree` actions are available.
+After tool executions, the conversation timeline shows compact file-change summaries:
 
-From this dialog you can:
+```
+Modified path/to/file.ts +12 -3
+```
 
-- inspect worktree status fields
-- generate a commit message suggestion
-- commit
-- merge to main
-- push
+Click a row to expand the inline diff. These are incremental -- each row shows only files changed since the previous tool execution snapshot. Pure Git state transitions (like staging/committing without content changes) are not surfaced as new rows. Only changes associated with recent `edit` tool executions in the same thread are shown.
 
-You can also open the worktree in VS Code if VS Code is detected.
+---
 
-## 9. Automations (User View)
-The `Automations` sidebar entry opens a dedicated automation screen.
+## 11. Worktree Mode
 
-You can:
+For project threads, worktree mode is **disabled by default**.
 
-- list automation rules
-- create a new rule in a modal
-- set trigger, action type, cooldown, and request text
-- view recent execution history
-- delete a rule by double-clicking it
-- ask the model in a thread to program an automation task when the Automation extension tools are available in that thread
-- use the Automation screen in both light and dark app themes with matching surfaces, cards, and modal styling
+### Enable Worktree
 
-## 10. Skills (User View)
-The `Skills` panel supports:
+Click the branch icon in the topbar. The icon turns green when active. Click again to disable.
 
-- listing installed skills
-- searching/filtering skills
-- installing skills from catalog
-- uninstalling installed skills
-- a redesigned premium library UI with hero summary cards, richer catalog cards, and clearer install/discovery sections aligned with the rest of Chatons visual language
+### Worktree Actions
 
-## 11. Extensions (User View)
-The `Extensions` panel supports:
+When enabled, a "Manage worktree" dialog provides:
 
-- listing installed extensions
-- browsing extension catalog
-- install / enable / disable / remove actions
-- health check action
-- viewing extension logs
-- opening the user extensions folder from the app
-- builtin extensions such as `@chaton/automation` are bundled with the application and do not appear in that user folder
-- the old builtin example and Qwen helper extensions are no longer part of the bundled codebase
-- restarting the app when needed
-- a redesigned premium management UI with summary stats, elevated cards, clearer status pills, and a more polished discovery/install flow consistent with the rest of the app
+- Worktree status inspection
+- AI-generated commit message suggestion
+- Commit
+- Merge to main branch
+- Push
+- Open in VS Code (if detected)
 
-### Channel extensions
-Some extensions can act as external messaging bridges, for example Telegram or WhatsApp-style integrations.
+### Limitations
 
-Their role is to import messages received outside Chatons into Chatons conversations.
-Current product rule: these imported messages are handled as **global threads** only, not project threads.
+- Some worktree metadata is approximate
+- Ahead/behind counts are not authoritative in all cases
+- Push may be unavailable in some configurations
 
-If at least one Channel extension is installed and enabled, Chatons shows a dedicated `Channels` entry in the sidebar, below `Extensions`.
-This screen lists your installed channel integrations and lets you open each integration's configuration view.
+---
 
-A Telegram Channel extension can be installed as a user extension and configured from this screen.
-It currently supports bot configuration, model selection through the Chatons model selector, status inspection, polling diagnostics, and test sends.
+## 12. Project Terminal
 
-Channel extensions do not appear individually as their own sidebar entries.
+For project conversations, a terminal button opens a command runner dialog.
 
-Depending on the extension, a Channel integration can also mirror Chatons replies back to the external platform.
-For example, the Telegram Channel extension can now create or reuse a Chatons global thread, apply the selected model to that thread, import inbound messages, and send Chatons replies back to Telegram.
-Connection, authentication, and sync status are extension-specific and usually exposed in the extension's own screen.
+### Command Detection
 
-## 11.1 Memory extension
-Chatons now includes a built-in `Memory` extension.
+Chatons detects runnable commands based on project files:
 
-What it does:
+| File | Project Type | Commands Detected |
+|------|-------------|-------------------|
+| `package.json` | Node | `npm run start/dev/test/build/lint/preview` |
+| `manage.py` | Python | `python manage.py runserver` |
+| `app.py` / `main.py` | Python | `python app.py` / `python main.py` |
+| `Cargo.toml` | Rust | `cargo run`, `cargo build`, `cargo test` |
+| `go.mod` | Go | `go run .`, `go build`, `go test ./...` |
+| `Makefile` / `CMakeLists.txt` | C/C++ | `make`, `cmake --build .` |
 
-- stores memories internally in Chatons local SQLite database
-- supports two memory scopes:
-  - `global`: personal facts, preferences, and long-lived user context
-  - `project`: project-specific context, decisions, conventions, and useful facts
-- exposes internal tools so the model can store, retrieve, update, and delete memories during normal conversations
-- includes a lightweight local semantic search engine embedded directly in Chatons, so no external embedding service is required
+You can also run custom commands.
 
-Practical use cases:
+### How It Works
 
-- remember user language/tone preferences globally
-- remember personal profile/context that helps personalize replies
-- remember project conventions, architecture decisions, or recurring instructions per project
+- Commands run in the host environment (not through the Pi runtime)
+- Output is streamed live to a popup
+- Multiple runs display as tabs
+- Requires **open** access mode
+- This is a managed process runner, **not** an interactive PTY terminal
 
-Current note:
+---
 
-- the current local semantic search is intentionally lightweight and fully offline; it is designed to be small and functional rather than state-of-the-art
+## 13. Automations
 
-## 12. Settings (User View)
-Settings sections currently available:
+The **Automations** sidebar entry opens a dedicated screen where you can:
 
-- `General`: app-level Pi settings fields (theme etc.)
-- `Behaviors`: default behavior prompt automatically prepended
-- `Sidebar`: sidebar display options
-- `Sidebar`: also includes `Allow anonymous crash/error details` toggle (can be changed anytime)
-- `Language`: French / English
-- `Providers & Models`: provider config and model scoping
-- `Sessions`: open sessions folder
-- `Pi`: command output panel
-- `Diagnostics`: runtime checks and paths
+- List existing automation rules
+- Create new rules with trigger, action, cooldown, and instruction
+- View recent execution history
+- Delete rules (double-click)
+- Ask the AI to create an automation during a conversation
 
-## 12.1 Crash/Log Consent Card
-After onboarding, Chatons can show a small bottom-right consent card asking whether you authorize anonymous crash/error details to improve Chatons.
+See [Automation Extension](/automation-extension) for technical details.
 
-- `Allow`: enables anonymous telemetry
-- `No thanks`: keeps telemetry disabled
+---
 
-## 13. macOS Window Close vs Quit
-On macOS, closing the Chatons window does not quit the app. The app keeps running in the background (menu bar/tray behavior).
+## 14. Skills
 
-- Close window (`red dot`): hides the window, app stays running
-- `Quitter` (menu bar/tray) or `Cmd + Q`: actually quits the app
+The **Skills** panel lets you:
 
-This prompt is shown once per user choice, and the setting remains editable later in `Settings > Sidebar`.
+- List installed skills
+- Search and filter available skills
+- Install skills from the catalog
+- Uninstall installed skills
 
-## 13. Updates and Changelog
+Skills are managed through the Pi runtime, not through the Chatons extension system.
+
+---
+
+## 15. Extensions
+
+The **Extensions** panel lets you:
+
+- List installed extensions
+- Browse the extension catalog
+- Install, enable, disable, and remove extensions
+- Run health checks
+- View extension logs
+- Open the extensions folder
+
+Built-in extensions (`@chaton/automation`, `@chaton/memory`) are bundled with the app and do not appear in the user extensions folder.
+
+### Channels
+
+Some extensions act as messaging bridges (e.g. Telegram). These are identified by `kind: "channel"` in their manifest. When at least one channel extension is enabled, a **Channels** entry appears in the sidebar. Inbound channel messages create global threads only, not project threads.
+
+---
+
+## 16. Memory
+
+The built-in **Memory** extension stores context that persists across conversations.
+
+### Scopes
+
+- **Global:** Personal preferences, facts, and user context (applies across all projects)
+- **Project:** Project-specific conventions, decisions, and architecture notes
+
+### How It Works
+
+- The AI can store, search, update, and delete memories during conversations
+- Uses a lightweight local semantic search (hashed trigram vectors) -- no external embedding service needed
+- Stored in the local SQLite database
+
+### Use Cases
+
+- Remember your preferred language or coding style
+- Remember project architecture decisions
+- Store recurring instructions the AI should follow
+
+---
+
+## 17. Settings
+
+Available settings sections:
+
+| Section | What It Controls |
+|---------|-----------------|
+| **General** | Theme and app-level preferences |
+| **Behaviors** | Default behavior prompt prepended to every conversation |
+| **Sidebar** | Sidebar display options, anonymous telemetry toggle |
+| **Language** | French / English |
+| **Providers & Models** | Provider configuration and model scoping |
+| **Sessions** | Open the sessions folder |
+| **Pi** | Pi command output panel |
+| **Diagnostics** | Runtime paths and checks |
+
+---
+
+## 18. Telemetry Consent
+
+After onboarding, a consent card may appear in the bottom-right:
+
+- **Allow:** Enables anonymous crash/error telemetry (via Sentry)
+- **No thanks:** Keeps telemetry disabled
+
+The setting is persisted and can be changed later in **Settings > Sidebar**.
+
+Telemetry is never initialized in development mode.
+
+---
+
+## 19. macOS Window Behavior
+
+On macOS, closing the window does **not** quit Chatons. The app continues running in the background with a status bar icon.
+
+- **Close window** (red dot): Hides the window
+- **Quit** (menu bar or `Cmd+Q`): Actually quits the app
+- **Click status bar icon:** Shows the window again
+
+On all platforms, closing all windows keeps the app running in the background.
+
+---
+
+## 20. Updates and Changelog
+
 Outside development mode:
 
-- update availability is shown in sidebar
-- download progress is displayed
-- changelog card appears for unseen version
-- if local changelog files are unavailable (or Electron bridge is unavailable), a built-in fallback changelog is shown
-- if no downloaded installer exists yet, update apply shows an actionable message instead of crashing
+- Update availability is shown in the sidebar
+- Download progress is displayed
+- A changelog card appears for new versions
+- On macOS, applying an update opens the downloaded DMG in Finder
+- If the changelog is unavailable locally, a built-in fallback is shown
+- If no installer has been downloaded yet, a helpful message is shown instead of failing
 
-## 14. Notifications
-If the app window is not focused, Chatons can show a desktop notification when a conversation action completes.
+---
 
-## 15. Current Product Notes
-Important practical notes for users today:
+## 21. Deep Links
 
-- Some advanced worktree actions are still evolving and may show partial/limited behavior depending on environment.
-- Extensions in the catalog can require restart and/or extra setup to become fully usable.
-- Model/skills/settings Pi commands use Chatons internal Pi runtime and config directory under Chatons data. They do not require a user-global `~/.pi` Node setup.
-- Provider model lists are refreshed from the internal Pi `--list-models` command and synced into Chatons `models.json` when model sync runs.
-- On API authorization failures (for example `401`), Chatons logs a safe auth diagnostic trail (provider + masked key fingerprint) in runtime error details to help troubleshooting without exposing raw API keys.
-- The log console now includes Pi runtime events (`source = pi`) such as runtime status changes and runtime errors, in addition to Electron/frontend logs.
-- When a message send fails (for example model request returning `401`), Chatons now shows an in-app notice in the composer area so the failure is visible immediately; auth failures explicitly ask you to verify provider API keys.
+Chatons registers the `chatons://` protocol. Currently supported:
 
-For technical details and extension authoring, use the developer guide.
+```
+chatons://extensions/install/@scope/package-name
+```
+
+This opens Chatons and triggers the extension install flow.
+
+---
+
+## 22. Notifications
+
+When the app window is not focused, Chatons shows desktop notifications when conversation actions complete. Clicking a notification brings the window to the foreground.
+
+---
+
+## 23. Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+Shift+O` / `Ctrl+Shift+O` | Re-open onboarding |
+| `Cmd+Q` | Quit (macOS) |
+
+---
+
+## 24. Known Limitations
+
+- Worktree push may not work in all environments
+- Extensions require an app restart after install to fully load
+- OAuth tokens are not auto-refreshed when they expire -- re-authenticate via Settings > Providers & Models
+- The project terminal is a process runner, not an interactive shell
+- Model/skills/settings commands use the internal Pi runtime, not a user-global `~/.pi` install
