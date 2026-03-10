@@ -1472,6 +1472,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         id: conversationId,
         projectId: null,
         title: "Nouveau fil",
+        titleSource: "placeholder",
         modelProvider: options?.modelProvider ?? null,
         modelId: options?.modelId ?? null,
         thinkingLevel: options?.thinkingLevel ?? null,
@@ -1519,6 +1520,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         id: conversationId,
         projectId,
         title: `New - ${project.name}`,
+        titleSource: "placeholder",
         modelProvider: options?.modelProvider ?? null,
         modelId: options?.modelId ?? null,
         thinkingLevel: options?.thinkingLevel ?? null,
@@ -1782,12 +1784,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         };
       }
 
-      const titreActuel = conversation.title.trim();
-      const titreParDefaut =
-        /^Nouveau\s+fil(?:\s*[-–—:\s]*)?/i.test(titreActuel) ||
-        /^New\s*[-–—:\s]*/i.test(titreActuel);
-      const titreVide = titreActuel.length === 0;
-      if (!titreParDefaut && !titreVide) {
+      if (conversation.title_source !== "placeholder") {
         return { ok: true as const, skipped: true as const };
       }
 
@@ -1796,6 +1793,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         db,
         conversationId,
         titreDeterministe,
+        "auto-deterministic",
       );
       if (!updatedDeterministe) {
         return {
@@ -1838,6 +1836,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         db,
         conversationId,
         titreAffine,
+        "auto-ai",
       );
       if (!updatedAffine) {
         return {

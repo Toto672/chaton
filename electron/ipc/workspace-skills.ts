@@ -23,19 +23,27 @@ type ExternalSkillEntry = {
   documentation?: string;
   dependencies?: string[];
   createdAt?: string;
-  sourceRepository?: 'skills.sh' | 'cloudhub' | 'unknown';
+  sourceRepository?: 'skills.sh' | 'cloudhub' | 'npm-pi';
+  packageName?: string;
+  packageVersion?: string;
+  installSource?: string;
 };
 
 const SKILLS_CACHE_PATH = path.join(app.getPath("userData"), "skills-catalog-cache.json");
 const SKILLS_CACHE_TTL_MS = 1000 * 60 * 30;
 
-function normalizeExternalSkill(entry: unknown, source: 'skills.sh' | 'cloudhub' = 'skills.sh'): ExternalSkillEntry | null {
+function normalizeExternalSkill(entry: unknown, source: 'skills.sh' | 'cloudhub' | 'npm-pi' = 'skills.sh'): ExternalSkillEntry | null {
   if (!entry || typeof entry !== "object") return null;
   const e = entry as Record<string, unknown>;
+  const packageName = typeof e.packageName === "string" ? e.packageName : undefined;
+  const packageVersion = typeof e.packageVersion === "string" ? e.packageVersion : undefined;
+  const installSource = typeof e.installSource === "string" ? e.installSource : undefined;
   const skillSource =
     (typeof e.source === "string" && e.source) ||
     (typeof e.slug === "string" && e.slug) ||
     (typeof e.id === "string" && e.id) ||
+    installSource ||
+    packageName ||
     "";
   if (!skillSource) return null;
   
@@ -86,6 +94,9 @@ function normalizeExternalSkill(entry: unknown, source: 'skills.sh' | 'cloudhub'
     documentation,
     dependencies,
     sourceRepository: source,
+    packageName,
+    packageVersion,
+    installSource,
   };
 }
 
@@ -332,6 +343,140 @@ const DEFAULT_SKILLS: ExternalSkillEntry[] = [
   },
 ];
 
+const PI_PACKAGES_SEARCH_API = "https://registry.npmjs.org/-/v1/search";
+const PI_PACKAGES_MANIFEST_API = "https://registry.npmjs.org/";
+const PI_PACKAGES_PAGE_SIZE = 250;
+const PI_PACKAGES_MAX_PAGES = 8;
+
+async function fetchPiSkillsFromNpm(): Promise<ExternalSkillEntry[]> {
+  const allObjects: Array<Record<string, unknown>> = [];
+
+  for (let from = 0; from < PI_PACKAGES_PAGE_SIZE * PI_PACKAGES_MAX_PAGES; from += PI_PACKAGES_PAGE_SIZE) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    try {
+      const url = `${PI_PACKAGES_SEARCH_API}?text=${encodeURIComponent("keywords:pi-package")}&size=${PI_PACKAGES_PAGE_SIZE}&from=${from}`;
+      const response = await fetch(url, {
+        headers: { accept: "application/json" },
+        signal: controller.signal,
+      });
+      if (!response.ok) break;
+      const json = (await response.json()) as { objects?: Array<Record<string, unknown>>; total?: number };
+      const objects = Array.isArray(json.objects) ? json.objects : [];
+      allObjects.push(...objects);
+      if (objects.length < PI_PACKAGES_PAGE_SIZE || allObjects.length >= (typeof json.total === "number" ? json.total : 0)) {
+        break;
+      }
+    } catch {
+      break;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  const packageEntries = allObjects
+    .map((obj) => (obj && typeof obj === "object" ? (obj.package as Record<string, unknown> | undefined) : undefined))
+    .filter((pkg): pkg is Record<string, unknown> => Boolean(pkg && typeof pkg.name === "string"));
+
+  const results: ExternalSkillEntry[] = [];
+
+  for (const pkg of packageEntries) {
+    const packageName = pkg.name as string;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(`${PI_PACKAGES_MANIFEST_API}${encodeURIComponent(packageName)}`, {
+        headers: { accept: "application/json" },
+        signal: controller.signal,
+      });
+      if (!response.ok) continue;
+      const manifest = (await response.json()) as Record<string, unknown>;
+      const distTags = (manifest["dist-tags"] as Record<string, unknown> | undefined) ?? {};
+      const latest = typeof distTags.latest === "string" ? distTags.latest : undefined;
+      if (!latest) continue;
+      const versions = (manifest.versions as Record<string, Record<string, unknown>> | undefined) ?? {};
+      const latestManifest = versions[latest];
+      if (!latestManifest || typeof latestManifest !== "object") continue;
+      const pi = (latestManifest.pi as Record<string, unknown> | undefined) ?? {};
+      const piSkills = Array.isArray(pi.skills) ? pi.skills : [];
+      if (piSkills.length === 0) continue;
+
+      const pkgKeywords = Array.isArray(latestManifest.keywords)
+        ? (latestManifest.keywords as unknown[]).filter((k): k is string => typeof k === "string")
+        : [];
+      const links = (pkg.links as Record<string, unknown> | undefined) ?? {};
+      const repository =
+        (typeof links.repository === "string" && links.repository) ||
+        (typeof links.homepage === "string" && links.homepage) ||
+        undefined;
+      const documentation =
+        (typeof links.homepage === "string" && links.homepage) ||
+        (typeof links.npm === "string" && links.npm) ||
+        undefined;
+      const author =
+        typeof pkg.publisher === "object" && pkg.publisher && typeof (pkg.publisher as Record<string, unknown>).username === "string"
+          ? ((pkg.publisher as Record<string, unknown>).username as string)
+          : typeof pkg.author === "string"
+            ? (pkg.author as string)
+            : undefined;
+      const description = typeof pkg.description === "string" ? pkg.description : "Pi skill package";
+      const publishedAt = typeof pkg.date === "string" ? pkg.date : undefined;
+      const score = (objScore: unknown): number | undefined => typeof objScore === "number" ? objScore : undefined;
+
+      const searchObject = allObjects.find((entry) => {
+        const p = entry.package as Record<string, unknown> | undefined;
+        return p?.name === packageName;
+      });
+      const downloads = searchObject && typeof searchObject.downloads === "object"
+        ? score((searchObject.downloads as Record<string, unknown>).monthly)
+        : undefined;
+      const qualityScore = searchObject && typeof searchObject.score === "object"
+        ? score((searchObject.score as Record<string, unknown>).final)
+        : undefined;
+      const syntheticStars = qualityScore ? Math.round(qualityScore * 100) : undefined;
+
+      for (const skillPath of piSkills) {
+        if (typeof skillPath !== "string") continue;
+        const titleBase = skillPath.split("/").filter(Boolean).pop()?.replace(/\.md$/i, "") || packageName;
+        const skillId = titleBase === "SKILL" ? packageName : `${packageName}:${titleBase}`;
+        const normalized = normalizeExternalSkill({
+          source: skillId,
+          title: formatPackageSkillTitle(packageName, titleBase),
+          description,
+          author,
+          installs: downloads,
+          stars: syntheticStars,
+          keywords: pkgKeywords,
+          repository,
+          documentation,
+          dependencies: Array.isArray(latestManifest.dependencies) ? latestManifest.dependencies : undefined,
+          createdAt: publishedAt,
+          updatedAt: publishedAt,
+          packageName,
+          packageVersion: latest,
+          installSource: packageName,
+        }, 'npm-pi');
+        if (normalized) results.push(normalized);
+      }
+    } catch {
+      continue;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  return results;
+}
+
+function formatPackageSkillTitle(packageName: string, skillPathLeaf: string): string {
+  const cleanPackage = packageName.replace(/^@/, "").split("/").pop() || packageName;
+  const cleanLeaf = skillPathLeaf.replace(/^SKILL$/i, "").replace(/[-_]+/g, " ").trim();
+  if (!cleanLeaf) {
+    return cleanPackage.replace(/^pi-/, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return `${cleanPackage.replace(/^pi-/, "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}: ${cleanLeaf.replace(/\b\w/g, (c) => c.toUpperCase())}`;
+}
+
 async function fetchSkillsCatalogFromWeb() {
   const skillsShEndpoints = [
     "https://skills.sh/api/skills",
@@ -345,7 +490,7 @@ async function fetchSkillsCatalogFromWeb() {
     "https://cloudhub.dev/api/skills",
   ];
 
-  const results: { entries: ExternalSkillEntry[]; source: 'skills.sh' | 'cloudhub' }[] = [];
+  const results: { entries: ExternalSkillEntry[]; source: 'skills.sh' | 'cloudhub' | 'npm-pi' }[] = [];
 
   // Fetch from skills.sh
   for (const endpoint of skillsShEndpoints) {
@@ -412,6 +557,15 @@ async function fetchSkillsCatalogFromWeb() {
         console.debug(`Failed to fetch from ${endpoint}:`, error instanceof Error ? error.message : String(error));
       }
     }
+  }
+
+  try {
+    const npmEntries = await fetchPiSkillsFromNpm();
+    if (npmEntries.length > 0) {
+      results.push({ entries: npmEntries, source: 'npm-pi' });
+    }
+  } catch (error) {
+    console.debug(`Failed to fetch Pi skills from npm:`, error instanceof Error ? error.message : String(error));
   }
 
   // Merge results, removing duplicates by source identifier

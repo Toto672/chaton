@@ -1129,6 +1129,10 @@
     @apply bg-[#1a2a40] text-[#f0f5ff];
   }
 
+  .dark .ep-extension-logs-pre {
+    @apply border-[#30415e] bg-[#08101a] text-[#dbe6fb];
+  }
+
   .dark .ep-modal {
     @apply bg-[#0f1520] shadow-[0_24px_60px_rgba(0,0,0,0.5)];
   }

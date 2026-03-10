@@ -362,7 +362,7 @@ export const workspaceIpc = {
       stars?: number;
       highlighted?: boolean;
     }>;
-    source: "remote" | "cache";
+    source: "remote" | "cache" | "fallback" | "skills.sh" | "cloudhub" | "npm-pi" | "hybrid";
     updatedAt: string;
   }> => getApi().listSkillsCatalog(),
   getSkillsMarketplace: (): Promise<{
@@ -381,6 +381,9 @@ export const workspaceIpc = {
       lastUpdated?: string;
       featured?: boolean;
       popularity?: string;
+      installSource?: string;
+      packageName?: string;
+      packageVersion?: string;
     }>;
     new?: Array<{
       source: string;
@@ -396,6 +399,9 @@ export const workspaceIpc = {
       lastUpdated?: string;
       featured?: boolean;
       popularity?: string;
+      installSource?: string;
+      packageName?: string;
+      packageVersion?: string;
     }>;
     trending?: Array<{
       source: string;
@@ -411,6 +417,9 @@ export const workspaceIpc = {
       lastUpdated?: string;
       featured?: boolean;
       popularity?: string;
+      installSource?: string;
+      packageName?: string;
+      packageVersion?: string;
     }>;
     byCategory?: Array<{
       name: string;
@@ -429,10 +438,13 @@ export const workspaceIpc = {
         lastUpdated?: string;
         featured?: boolean;
         popularity?: string;
+        installSource?: string;
+        packageName?: string;
+        packageVersion?: string;
       }>;
     }>;
     updatedAt?: string;
-    source?: "remote" | "cache";
+    source?: "remote" | "cache" | "fallback" | "skills.sh" | "cloudhub" | "npm-pi" | "hybrid";
     message?: string;
   }> => getApi().getSkillsMarketplace(),
   getSkillsMarketplaceFiltered: (options: {
@@ -448,7 +460,29 @@ export const workspaceIpc = {
     limit?: number;
   }): Promise<{
     ok: boolean;
-    results?: any[];
+    results?: Array<{
+      source: string;
+      title: string;
+      description: string;
+      author?: string;
+      installs?: number;
+      stars?: number;
+      highlighted?: boolean;
+      category?: string;
+      tags?: string[];
+      language?: string;
+      lastUpdated?: string;
+      createdAt?: string;
+      featured?: boolean;
+      popularity?: string;
+      repository?: string;
+      documentation?: string;
+      dependencies?: string[];
+      installSource?: string;
+      packageName?: string;
+      packageVersion?: string;
+      rating?: { average: number; count: number };
+    }>;
     total?: number;
     returned?: number;
     message?: string;

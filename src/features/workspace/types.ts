@@ -16,10 +16,13 @@ export type Project = {
   isArchived: boolean
 }
 
+export type ConversationTitleSource = 'placeholder' | 'auto-deterministic' | 'auto-ai' | 'manual'
+
 export type Conversation = {
   id: string
   projectId: string | null
   title: string
+  titleSource: ConversationTitleSource
   status: ConversationStatus
   isRelevant: boolean
   createdAt: string

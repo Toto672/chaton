@@ -128,6 +128,36 @@
   ensureMemoryStyles();
 
   var app = document.getElementById("app");
+  if (!app) {
+    throw new Error("memory root #app not found");
+  }
+
+  function showFatalError(message) {
+    document.body.innerHTML = "";
+    var wrapper = ui.el("div", "ce-mem");
+    wrapper.style.minHeight = "100vh";
+    wrapper.style.display = "flex";
+    wrapper.style.alignItems = "center";
+    wrapper.style.justifyContent = "center";
+    wrapper.style.padding = "24px";
+
+    var card = ui.el("div", "ce-mem-detail-card");
+    card.style.display = "block";
+    card.style.maxWidth = "720px";
+
+    var title = ui.el("h2", "ce-mem-detail-title", "Impossible de charger la vue Memoire");
+    var body = ui.el(
+      "p",
+      "ce-mem-detail-meta",
+      String(message || "Une erreur inconnue est survenue."),
+    );
+
+    card.appendChild(title);
+    card.appendChild(body);
+    wrapper.appendChild(card);
+    document.body.appendChild(wrapper);
+  }
+
   var state = {
     entries: [],
     projects: [],
@@ -491,7 +521,14 @@
     };
   }
 
-  var refs = buildShell();
+  var refs;
+  try {
+    refs = buildShell();
+  } catch (error) {
+    console.error("[memory] failed to build shell", error);
+    showFatalError(error && error.message ? error.message : String(error));
+    return;
+  }
 
   // --- Render functions ---
 
@@ -682,7 +719,13 @@
       "projects.list",
       {},
     );
-    state.projects = res.ok ? res.data || [] : [];
+    if (!res || !res.ok) {
+      throw new Error(
+        (res && res.error && res.error.message) ||
+          "Impossible de charger la liste des projets.",
+      );
+    }
+    state.projects = res.data || [];
     clearChildren(refs.createProject);
     var empty = ui.el("option", "", "Aucun");
     empty.value = "";
@@ -713,7 +756,14 @@
       res = await call("memory.list", payload);
     }
 
-    state.entries = res.ok ? res.data || [] : [];
+    if (!res || !res.ok) {
+      throw new Error(
+        (res && res.error && res.error.message) ||
+          "Impossible de charger les entrees memoire.",
+      );
+    }
+
+    state.entries = res.data || [];
 
     // If selected entry no longer exists, deselect
     if (state.selected) {
@@ -849,5 +899,8 @@
   });
 
   // Initial load
-  loadProjects().then(loadAll);
+  loadProjects().then(loadAll).catch(function (error) {
+    console.error("[memory] initial load failed", error);
+    showFatalError(error && error.message ? error.message : String(error));
+  });
 })();

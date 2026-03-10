@@ -31,6 +31,9 @@ type ExternalSkill = {
   repository?: string;
   documentation?: string;
   dependencies?: string[];
+  installSource?: string;
+  packageName?: string;
+  packageVersion?: string;
   rating?: { average: number; count: number };
 };
 
@@ -285,8 +288,9 @@ export function PiSkillsMainPanel() {
 
   const installExternalSkill = async (skill: ExternalSkill) => {
     setBusySkill(skill.source);
+    const installSource = (skill as ExternalSkill & { installSource?: string }).installSource || skill.source;
     const result = await workspaceIpc.runPiCommand("install", {
-      source: skill.source,
+      source: installSource,
     });
     if (!result.ok) {
       setNotice(

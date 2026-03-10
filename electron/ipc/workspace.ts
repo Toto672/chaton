@@ -432,6 +432,7 @@ function mapConversation(c: DbConversation) {
     id: c.id,
     projectId: c.project_id,
     title: c.title,
+    titleSource: c.title_source,
     status: c.status,
     isRelevant: Boolean(c.is_relevant),
     createdAt: c.created_at,

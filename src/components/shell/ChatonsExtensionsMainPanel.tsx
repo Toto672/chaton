@@ -5,6 +5,7 @@ import {
   RefreshCw,
   Search,
   Square,
+  X,
   Zap,
 } from "lucide-react";
 
@@ -43,6 +44,7 @@ export function ChatonsExtensionsMainPanel() {
   const [installMessage, setInstallMessage] = useState<string | null>(null);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const [logsById, setLogsById] = useState<Record<string, string>>({});
+  const [activeLogsExtensionId, setActiveLogsExtensionId] = useState<string | null>(null);
   const [updatesAvailable, setUpdatesAvailable] = useState<
     Array<{ id: string; currentVersion: string; latestVersion: string }>
   >([]);
@@ -157,17 +159,17 @@ export function ChatonsExtensionsMainPanel() {
   };
 
   const handleShowLogs = async (item: ChatonsExtension) => {
-    // Toggle: if logs are already shown, hide them; otherwise fetch and show
-    if (logsById[item.id]) {
-      setLogsById((prev) => {
-        const next = { ...prev };
-        delete next[item.id];
-        return next;
-      });
-    } else {
+    if (activeLogsExtensionId === item.id) {
+      setActiveLogsExtensionId(null);
+      return;
+    }
+
+    if (!logsById[item.id]) {
       const result = await workspaceIpc.getExtensionLogs(item.id);
       setLogsById((prev) => ({ ...prev, [item.id]: result.content ?? "" }));
     }
+
+    setActiveLogsExtensionId(item.id);
   };
 
   const handleRemove = async (item: ChatonsExtension) => {
@@ -468,6 +470,13 @@ export function ChatonsExtensionsMainPanel() {
       return haystack.includes(normalized);
     });
   }, [extensions, query]);
+  const activeLogsExtension = useMemo(
+    () => extensions.find((extension) => extension.id === activeLogsExtensionId) ?? null,
+    [activeLogsExtensionId, extensions],
+  );
+  const activeLogsContent = activeLogsExtensionId
+    ? (logsById[activeLogsExtensionId] ?? "")
+    : "";
 
   return (
     <>
@@ -779,25 +788,6 @@ export function ChatonsExtensionsMainPanel() {
                               <div className="ep-card-desc">
                                 {extension.description}
                               </div>
-                              {logsById[extension.id] ? (
-                                <div className="ep-log-container">
-                                  <div className="ep-log-header">
-                                    <span className="ep-log-title">{t("Logs")}</span>
-                                    <button
-                                      type="button"
-                                      className="ep-log-close"
-                                      onClick={() => void handleShowLogs(extension)}
-                                      aria-label={t("Fermer les logs")}
-                                      title={t("Fermer")}
-                                    >
-                                      ×
-                                    </button>
-                                  </div>
-                                  <pre className="ep-log-box">
-                                    {logsById[extension.id]}
-                                  </pre>
-                                </div>
-                              ) : null}
                             </div>
                             <div className="ep-card-actions">
                               <button
@@ -924,25 +914,6 @@ export function ChatonsExtensionsMainPanel() {
                                 {t("Serveur en cours de démarrage...")}
                               </div>
                             )}
-                            {logsById[extension.id] ? (
-                              <div className="ep-log-container">
-                                <div className="ep-log-header">
-                                  <span className="ep-log-title">{t("Logs")}</span>
-                                  <button
-                                    type="button"
-                                    className="ep-log-close"
-                                    onClick={() => void handleShowLogs(extension)}
-                                    aria-label={t("Fermer les logs")}
-                                    title={t("Fermer")}
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                                <pre className="ep-log-box">
-                                  {logsById[extension.id]}
-                                </pre>
-                              </div>
-                            ) : null}
                           </div>
                           <div className="ep-card-actions">
                             <button
@@ -1018,6 +989,45 @@ export function ChatonsExtensionsMainPanel() {
           )}
         </div>
       </div>
+
+      {activeLogsExtension ? (
+        <div
+          className="project-terminal-sheet-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setActiveLogsExtensionId(null);
+            }
+          }}
+        >
+          <div
+            className="project-terminal-sheet ep-extension-logs-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("Logs")}
+          >
+            <div className="project-terminal-header ep-extension-logs-header">
+              <div>
+                <div className="extension-modal-title">{t("Logs")}</div>
+                <div className="project-terminal-subtitle">{activeLogsExtension.name}</div>
+              </div>
+              <button
+                type="button"
+                className="sidebar-icon-button"
+                onClick={() => setActiveLogsExtensionId(null)}
+                aria-label={t("Fermer les logs")}
+                title={t("Fermer")}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="ep-extension-logs-body">
+              <pre className="ep-extension-logs-pre">
+                {activeLogsContent || t("Aucun log trouvé")}
+              </pre>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showNpmLoginModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

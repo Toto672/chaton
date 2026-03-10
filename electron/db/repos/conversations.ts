@@ -1,9 +1,12 @@
 import type Database from 'better-sqlite3'
 
+export type ConversationTitleSource = 'placeholder' | 'auto-deterministic' | 'auto-ai' | 'manual'
+
 export type DbConversation = {
   id: string
   project_id: string | null
   title: string
+  title_source: ConversationTitleSource
   status: 'active' | 'done' | 'archived'
   is_relevant: number
   created_at: string
@@ -40,6 +43,7 @@ export function insertConversation(
     id: string
     projectId?: string | null
     title: string
+    titleSource?: ConversationTitleSource
     isRelevant?: boolean
     modelProvider?: string | null
     modelId?: string | null
@@ -52,13 +56,14 @@ export function insertConversation(
   const now = new Date().toISOString()
   db.prepare(
     `INSERT INTO conversations(
-      id, project_id, title, status, is_relevant, created_at, updated_at, last_message_at,
+      id, project_id, title, title_source, status, is_relevant, created_at, updated_at, last_message_at,
       pi_session_file, model_provider, model_id, thinking_level, last_runtime_error, worktree_path, access_mode, channel_extension_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, ?, ?, ?)`
   ).run(
     params.id,
     params.projectId ?? null,
     params.title,
+    params.titleSource ?? 'placeholder',
     'active',
     params.isRelevant === false ? 0 : 1,
     now,
@@ -86,15 +91,28 @@ export function deleteConversationById(db: Database.Database, id: string): boole
   return result.changes > 0
 }
 
-export function updateConversationTitle(db: Database.Database, id: string, title: string): boolean {
+export function updateConversationTitle(
+  db: Database.Database,
+  id: string,
+  title: string,
+  titleSource?: ConversationTitleSource,
+): boolean {
   const now = new Date().toISOString()
-  const result = db
-    .prepare(
-      `UPDATE conversations
-       SET title = ?, updated_at = ?
-       WHERE id = ?`,
-    )
-    .run(title, now, id)
+  const result = titleSource
+    ? db
+        .prepare(
+          `UPDATE conversations
+           SET title = ?, title_source = ?, updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(title, titleSource, now, id)
+    : db
+        .prepare(
+          `UPDATE conversations
+           SET title = ?, updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(title, now, id)
   return result.changes > 0
 }
 

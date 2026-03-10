@@ -426,7 +426,7 @@ declare global {
           stars?: number;
           highlighted?: boolean;
         }>;
-        source: "remote" | "cache";
+        source: "remote" | "cache" | "fallback" | "skills.sh" | "cloudhub" | "npm-pi" | "hybrid";
         updatedAt: string;
       }>;
       getSkillsMarketplace: () => Promise<{
@@ -445,6 +445,9 @@ declare global {
           lastUpdated?: string;
           featured?: boolean;
           popularity?: string;
+          installSource?: string;
+          packageName?: string;
+          packageVersion?: string;
         }>;
         new?: Array<{
           source: string;
@@ -460,6 +463,9 @@ declare global {
           lastUpdated?: string;
           featured?: boolean;
           popularity?: string;
+          installSource?: string;
+          packageName?: string;
+          packageVersion?: string;
         }>;
         trending?: Array<{
           source: string;
@@ -475,6 +481,9 @@ declare global {
           lastUpdated?: string;
           featured?: boolean;
           popularity?: string;
+          installSource?: string;
+          packageName?: string;
+          packageVersion?: string;
         }>;
         byCategory?: Array<{
           name: string;
@@ -493,10 +502,13 @@ declare global {
             lastUpdated?: string;
             featured?: boolean;
             popularity?: string;
+            installSource?: string;
+            packageName?: string;
+            packageVersion?: string;
           }>;
         }>;
         updatedAt?: string;
-        source?: "remote" | "cache";
+        source?: "remote" | "cache" | "fallback" | "skills.sh" | "cloudhub" | "npm-pi" | "hybrid";
         message?: string;
       }>;
       getSkillsMarketplaceFiltered: (options: {
@@ -526,6 +538,9 @@ declare global {
           lastUpdated?: string;
           featured?: boolean;
           popularity?: string;
+          installSource?: string;
+          packageName?: string;
+          packageVersion?: string;
         }>;
         total?: number;
         returned?: number;
