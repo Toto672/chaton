@@ -211,7 +211,39 @@ The runtime manager also supports ephemeral subagents for channel message ingest
 
 ---
 
-## 8. Event Bridge
+## 8. Local Provider Detection
+
+Chatons can detect locally running providers during onboarding and provider setup.
+
+### Ollama
+
+| Check | Method |
+|-------|--------|
+| Binary installed | `command -v ollama` (Unix) / `where ollama` (Windows) |
+| API running | `GET http://127.0.0.1:11434/api/tags` |
+| Default base URL | `http://localhost:11434/v1` |
+
+### LM Studio
+
+| Check | Method |
+|-------|--------|
+| App installed | Checks platform-specific paths (see below) |
+| API running | `GET http://127.0.0.1:1234/v1/models` |
+| Default base URL | `http://localhost:1234/v1` |
+
+LM Studio app paths:
+
+- macOS: `/Applications/LM Studio.app`
+- Windows: `%LOCALAPPDATA%\Programs\LM Studio`
+- Linux: `~/LM-Studio` or `~/Applications/LM-Studio`
+
+### VS Code
+
+Detected via `which code` (macOS/Linux) or `where code` (Windows). Used for the worktree "Open in VS Code" integration, not for provider setup.
+
+---
+
+## 9. Event Bridge
 
 Pi runtime events are forwarded to the renderer via the `pi:event` IPC channel and broadcast to all browser windows.
 
@@ -228,7 +260,7 @@ Events are also routed through the logging pipeline with `source: "pi"`.
 
 ---
 
-## 9. OAuth Authentication
+## 10. OAuth Authentication
 
 ### Supported Flows
 
@@ -255,7 +287,7 @@ OAuth tokens are **not** auto-refreshed when they expire. If a token expires dur
 
 ---
 
-## 10. Settings Lock Robustness
+## 11. Settings Lock Robustness
 
 Pi uses `settings.json.lock` to prevent concurrent modifications.
 
@@ -266,7 +298,7 @@ Chatons implements:
 
 ---
 
-## 11. Skills Integration
+## 12. Skills Integration
 
 Skills are managed through Pi CLI commands, not through the Chatons extension runtime.
 
@@ -281,7 +313,7 @@ This is one of the clearest examples of the distinction between Pi-managed skill
 
 ---
 
-## 12. Diagnostics
+## 13. Diagnostics
 
 Settings > Diagnostics surfaces:
 
@@ -308,7 +340,7 @@ jq . ~/Library/Application\ Support/Chatons/.pi/agent/settings.json > /dev/null
 
 ---
 
-## 13. Source Files
+## 14. Source Files
 
 The authoritative source for Pi integration lives in:
 
@@ -321,7 +353,7 @@ The authoritative source for Pi integration lives in:
 
 ---
 
-## 14. What Is Safe to Rely On
+## 15. What Is Safe to Rely On
 
 These behaviors are clearly implemented and stable:
 

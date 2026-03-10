@@ -14,6 +14,62 @@ Related:
 
 ---
 
+## March 10, 2026 (Session 2)
+
+### Gap analysis and documentation of 14 previously undocumented features
+
+A systematic gap analysis compared all IPC handler registrations, React components, and TypeScript types against existing documentation. 14 gaps were identified and documented across 3 files.
+
+**Analysis methodology:**
+
+- Extracted all 60+ `ipcMain.handle()` registrations from `electron/ipc/workspace-handlers.ts`
+- Cross-referenced every IPC channel against existing documentation
+- Examined all React components referenced in sidebar, main view, and assistant mode
+- Read all TypeScript type definitions for undocumented UI state (AppMode, AssistantView, SidebarSettings)
+- Verified each feature's implementation in source before documenting
+
+**Significant gaps found and documented:**
+
+1. **Assistant Mode** (entirely undocumented) -- A complete second UI mode with its own sidebar, onboarding flow (3 steps: channel selection, personalization, confirmation), and dashboard. Dashboard includes: time-based greeting with user name, channel status (online/offline), 4 quick actions, recent activity (5 conversations), memory insights (5 entries from `@chaton/memory`), automations summary (from `@chaton/automation`). Verified in: `AssistantMainView.tsx`, `AssistantOnboarding.tsx`, `AssistantDashboard.tsx`, `StatusHeader.tsx`, `QuickActions.tsx`, `ChannelsStatus.tsx`, `RecentActivity.tsx`, `MemoryInsights.tsx`, `AutomationsSummary.tsx`, `SidebarModeSwitcher.tsx`.
+
+2. **Conversation List Management** (undocumented) -- Three controls in `SortFilterPopover.tsx`: organize (by project / chronological, default: project), sort (created / updated), show (all / relevant). Plus a toggleable search bar. Verified in `SortFilterPopover.tsx`, `Sidebar.tsx`, `SidebarSettings` type.
+
+3. **Thinking Level** (barely mentioned) -- Models can declare `supportsThinking` and `thinkingLevels` arrays. UI shows a thinking-level chip in the composer when available. Levels: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`. Stored per conversation. Verified in `ThreadModelControls.tsx`, `global.d.ts` types, `store/context.ts`.
+
+4. **Local Provider Detection** (undocumented) -- Ollama detection: binary check + API at `127.0.0.1:11434/api/tags`. LM Studio detection: platform-specific app paths + API at `127.0.0.1:1234/v1/models`. VS Code detection: `which code`/`where code`. Verified in `workspace-handlers.ts` (lines ~1160-1250).
+
+5. **Skills Marketplace** (undocumented) -- Full marketplace with featured/new/trending/category sections, advanced filtering (category, language, min installs, sort by), skill preview modals with documentation/repository links, and star rating system (1-5 stars + text reviews). Verified in `PiSkillsMainPanel.tsx` (600+ lines) and `workspace-handlers.ts` IPC handlers.
+
+6. **Extension Marketplace** (undocumented) -- Structured marketplace with npm catalog integration, featured/new/trending/category sections, update checking with badge notifications, batch update, deep link install scrolling. Verified in `ChatonsExtensionsMainPanel.tsx` and `electron/extensions/manager.ts`.
+
+7. **Performance Tracing** (undocumented) -- `tracing:start`/`tracing:stop` IPC handlers using Electron's `contentTracing` API. Verified in `workspace-handlers.ts`.
+
+8. **Conversation Success Chime** (undocumented) -- Audio notification on conversation completion. 24% volume, 1.5s cooldown, configurable in Settings > Audio. Verified in `conversation-success-chime.ts` and `AudioSection.tsx`.
+
+9. **Composer Drafts** (undocumented) -- Drafts persisted to `composer_drafts` SQLite table. Keyed by conversation ID, `draft:<projectId>`, or `"global"`. Survive app restarts. Verified in `workspace-handlers.ts` (lines ~2404-2470) and `Composer.tsx`.
+
+10. **Quick Action Usage Tracking** (undocumented) -- Decay-scored ranking with 14-day half-life. `quick_actions_usage` table. Scope filtering (`always`, `global-thread`, `project-thread`, `global-or-no-thread`). Verified in `QuickActionCards.tsx`.
+
+11. **Logging System** (undocumented) -- `LogManager` class: JSON-line logs at `<userData>/logs/chaton-*.log`, 1MB rotation, 5-file cap, console.log/warn/error/debug capture, 3 sources (electron/pi/frontend), 4 levels. Verified in `log-manager.ts`.
+
+12. **Sandbox Manager Details** (undocumented methods) -- 6 methods: `executeNodeCommand`, `executeNpmCommand`, `executePythonCommand`, `executePipCommand`, `checkNodeAvailability`, `checkPythonAvailability`. Verified in `sandbox-manager.ts`.
+
+13. **Extension Update Notifications** (undocumented) -- Badge count on sidebar, `extensions:checkUpdates`, `extensions:updateAll`. Verified in `ChatonsExtensionsMainPanel.tsx` and `workspace-handlers.ts`.
+
+14. **Internationalization** (undocumented) -- i18next with French default, English fallback. Language persistence via `settings:getLanguagePreference`/`settings:updateLanguagePreference` in `app_settings` table. Verified in `src/lib/i18n.ts` and `workspace-handlers.ts`.
+
+**Files updated:**
+
+- `docs/content/user-guide.mdx` -- Added: Assistant Mode (section 3-4), Conversation List Management, expanded Thinking Level, Local Provider Detection, Composer Drafts, expanded Skills (marketplace, filtering, ratings, keyboard shortcuts), expanded Extensions (marketplace, updates, deep link install), Audio settings, Language settings. Renumbered all sections (now 26 sections, up from 24).
+
+- `docs/content/developer-guide.mdx` -- Added: App Modes (section 2a with assistant mode architecture, dashboard components table, onboarding settings), Sandbox Manager (6 methods with IPC channels), Logging System (format, storage, rotation, capture mechanism), Performance Tracing (contentTracing API), Local Provider Detection (Ollama, LM Studio, VS Code), Internationalization (setup, translation pattern, persistence), Composer Drafts (key format, IPC channels), Conversation Completion Chime (implementation details), Quick Action Usage Tracking (decay algorithm, scope filtering), Skills Marketplace (data sources, structure, metadata), Extension Marketplace (data sources, update flow), Performance Monitor (debug API). Renumbered sections (now 28 sections, up from 18).
+
+- `docs/content/pi-integration.mdx` -- Added: Local Provider Detection section (7a) with Ollama, LM Studio, and VS Code detection details.
+
+- `docs/content/documentation-audit.mdx` -- This entry.
+
+---
+
 ## March 10, 2026
 
 ### Complete rewrite of all non-extension documentation

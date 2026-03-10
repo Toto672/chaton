@@ -50,6 +50,19 @@ Provider cards are grouped by company. For example:
 
 Clicking a provider card scrolls to the configuration form automatically.
 
+### Local Provider Detection
+
+Chatons can auto-detect local providers:
+
+| Provider | Detection | API Check | Default Base URL |
+|----------|-----------|-----------|-----------------|
+| **Ollama** | `command -v ollama` (Unix) / `where ollama` (Windows) | `GET http://127.0.0.1:11434/api/tags` | `http://localhost:11434/v1` |
+| **LM Studio** | Checks for app installation path per platform | `GET http://127.0.0.1:1234/v1/models` | `http://localhost:1234/v1` |
+
+LM Studio app paths checked: `/Applications/LM Studio.app` (macOS), `%LOCALAPPDATA%\Programs\LM Studio` (Windows), `~/LM-Studio` or `~/Applications/LM-Studio` (Linux).
+
+VS Code is also detected (via `which code` / `where code`) for the worktree "Open in VS Code" feature.
+
 ### Step 2: Model Scope
 
 Chatons loads available models from your provider and asks which ones you want in your everyday model picker. These become your "scoped" models.
@@ -65,7 +78,61 @@ A basic check verifies your setup works before enabling the main interface.
 
 ---
 
-## 3. Main Interface
+## 3. App Modes
+
+Chatons has two modes, switchable via a toggle at the bottom of the sidebar:
+
+| Mode | Icon | Purpose |
+|------|------|---------|
+| **Workspace** | Monitor | Conversations, projects, coding |
+| **Assistant** | Cat | Dashboard, memory, automations, channels overview |
+
+The mode switcher is always visible below the sidebar content.
+
+---
+
+## 4. Assistant Mode
+
+Assistant mode provides a high-level overview of your AI assistant's activity.
+
+### Assistant Onboarding
+
+On first entry, assistant mode shows its own onboarding flow (separate from provider onboarding):
+
+1. **Welcome screen** -- Explains the assistant concept
+2. **Step 1: Channel** -- Select or install a channel extension (e.g. Telegram). Optional; can be skipped.
+3. **Step 2: Personalize** -- Set a name for the assistant (default: "Chaton") and optionally your own name
+4. **Step 3: Complete** -- Confirmation
+
+### Dashboard
+
+After onboarding, the assistant dashboard shows:
+
+- **Greeting** -- Time-based greeting ("Good morning", etc.) with your name if set
+- **Status indicator** -- Online (green dot) if any channel is connected; offline (gray dot) otherwise
+- **Quick actions** -- 4 buttons: Talk to assistant, Schedule task, View memory, Settings
+- **Channel status** -- List of installed channels with connection state and config buttons
+- **Recent activity** -- 5 most recent conversations with relative timestamps, clickable to open
+- **Memory insights** -- Preview of the 5 most recent global memories with a "View all" link
+- **Automations summary** -- List of automation rules with triggers, and a link to manage
+
+### Assistant Sidebar
+
+In assistant mode, the sidebar navigation changes to:
+
+| Entry | View |
+|-------|------|
+| Home | Dashboard |
+| Conversations | Switches back to workspace mode |
+| Memory | Full memory browser |
+| Automations | Full automation rules browser |
+| Channels | Channel extensions list with configure buttons |
+
+---
+
+## 5. Workspace Mode
+
+Workspace mode is the default. This is where conversations, projects, and coding happen.
 
 ### Left Sidebar
 
@@ -81,7 +148,20 @@ Navigation items:
 Below the navigation:
 
 - Thread and project list with search (toggle via the search icon)
+- Sort/filter/organize options (via a popover)
 - Update availability and changelog cards (outside dev mode)
+
+### Conversation List Management
+
+A sort/filter popover (accessible from the sidebar header) provides three controls:
+
+| Control | Options | Default |
+|---------|---------|---------|
+| **Organize** | By project (grouped under project headers) / Chronological (flat list) | By project |
+| **Sort by** | Created / Updated | Created |
+| **Show** | All conversations / Relevant only | All |
+
+Additionally, a **search bar** (toggled by the search icon) lets you filter conversations by title text.
 
 ### Main Panel
 
@@ -112,7 +192,7 @@ The composer and its toolbar use translucent backgrounds with blur so conversati
 
 ---
 
-## 4. Conversations
+## 6. Conversations
 
 ### Create a Global Thread
 
@@ -132,7 +212,7 @@ Deletion uses a two-click confirmation pattern for safety.
 
 ---
 
-## 5. Model Picker
+## 7. Model Picker
 
 The model chip in the composer opens the model picker:
 
@@ -144,13 +224,23 @@ Starring and unstarring updates the actual Pi configuration (`settings.json > en
 
 ---
 
-## 6. Thinking Level
+## 8. Thinking Level
 
-If the selected model supports reasoning levels, a thinking-level chip appears next to the model picker. Click to cycle through available levels.
+If the selected model supports reasoning/thinking levels, a thinking-level chip appears next to the model picker in the composer.
+
+### Available Levels
+
+Models may support any subset of: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`. The chip only appears if the model advertises at least one thinking level.
+
+### Behavior
+
+- Click the chip to open a dropdown with available levels
+- The selected thinking level is stored per conversation
+- Changing the thinking level does not restart the runtime
 
 ---
 
-## 7. Access Mode
+## 9. Access Mode
 
 Each conversation has an access mode:
 
@@ -161,7 +251,7 @@ A comparison popup explains when to use each mode. Changing the access mode on a
 
 ---
 
-## 8. Sending Messages
+## 10. Sending Messages
 
 ### While the AI Is Working
 
@@ -179,11 +269,13 @@ Add files via the `+` button or drag-and-drop:
 - **Small text files:** Included as readable text
 - **Binary/large files:** Included as base64 preview
 
-Attachments can be removed before sending.
+### Composer Drafts
+
+Typed text in the composer is automatically saved to the database per conversation (or per project for draft threads). Drafts survive app restarts. When you switch between conversations, your unsent text is preserved and restored.
 
 ---
 
-## 9. Suggested Thread Actions
+## 11. Suggested Thread Actions
 
 The AI can suggest up to 4 clickable action badges above the composer. These are ephemeral:
 
@@ -192,7 +284,7 @@ The AI can suggest up to 4 clickable action badges above the composer. These are
 
 ---
 
-## 10. Live File-Change Tracking
+## 12. Live File-Change Tracking
 
 When a conversation modifies files, Chatons shows a modifications panel above the composer with:
 
@@ -215,7 +307,7 @@ Click a row to expand the inline diff. These are incremental -- each row shows o
 
 ---
 
-## 11. Worktree Mode
+## 13. Worktree Mode
 
 For project threads, worktree mode is **disabled by default**.
 
@@ -242,7 +334,7 @@ When enabled, a "Manage worktree" dialog provides:
 
 ---
 
-## 12. Project Terminal
+## 14. Project Terminal
 
 For project conversations, a terminal button opens a command runner dialog.
 
@@ -271,7 +363,7 @@ You can also run custom commands.
 
 ---
 
-## 13. Automations
+## 15. Automations
 
 The **Automations** sidebar entry opens a dedicated screen where you can:
 
@@ -285,39 +377,111 @@ See [Automation Extension](/automation-extension) for technical details.
 
 ---
 
-## 14. Skills
+## 16. Skills
 
-The **Skills** panel lets you:
+The **Skills** panel manages Pi skills -- tools that extend the AI's capabilities during conversations.
 
-- List installed skills
-- Search and filter available skills
-- Install skills from the catalog
-- Uninstall installed skills
+### Two Views
+
+| View | Purpose |
+|------|---------|
+| **Marketplace** | Browse, search, filter, and install skills |
+| **Installed** | Manage skills you have already installed |
+
+### Marketplace
+
+The marketplace organizes skills into sections:
+
+- **Featured** (curated selection)
+- **Recently Added** (new skills)
+- **Trending** (popular and recommended skills)
+- **By Category** (AI & ML, Web & APIs, Code Quality, Version Control, Testing & Debug, CI/CD & Deployment)
+
+### Filtering
+
+Click the **Filters** button (or `Ctrl/Cmd+F`) to open the advanced filter panel:
+
+| Filter | Options |
+|--------|---------|
+| **Category** | AI & ML, Web & APIs, Code Quality, etc. |
+| **Language** | TypeScript, Python, JavaScript, Go, Rust, Bash |
+| **Min. installations** | Numeric threshold |
+| **Sort by** | Trending, Installations, Stars, Recent, Rating |
+
+### Skill Preview
+
+Click **Preview** on any skill card to see:
+
+- Full description
+- Documentation and repository links
+- Dependencies
+- Category and language
+- Install/star counts
+- Community ratings with star display
+
+### Ratings
+
+Users can rate skills (1-5 stars) with an optional text review. Average ratings and review counts are shown on skill cards and in the preview.
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl/Cmd+K` | Focus search bar |
+| `Ctrl/Cmd+F` | Toggle filters panel |
 
 Skills are managed through the Pi runtime, not through the Chatons extension system.
 
 ---
 
-## 15. Extensions
+## 17. Extensions
 
-The **Extensions** panel lets you:
+The **Extensions** panel manages Chatons extensions -- more powerful integrations than skills, with UI, storage, events, and host API access.
 
-- List installed extensions
-- Browse the extension catalog
-- Install, enable, disable, and remove extensions
-- Run health checks
-- View extension logs
-- Open the extensions folder
+### Three Views
 
-Built-in extensions (`@chaton/automation`, `@chaton/memory`) are bundled with the app and do not appear in the user extensions folder.
+| View | Purpose |
+|------|---------|
+| **Marketplace** | Browse, search, and install extensions |
+| **Installed** | Manage installed extensions: enable, disable, remove, view logs |
+| **Updates** | Shows extensions with available updates |
+
+### Marketplace
+
+Like skills, the extension marketplace shows featured, new, trending, and categorized extensions. Each card shows the extension name, description, author, and install/update actions.
+
+### Update Notifications
+
+When extension updates are available:
+
+- A badge with the update count appears on the Extensions sidebar entry
+- The Updates view lists all updatable extensions with version numbers
+- An **Update All** button applies all updates at once
+
+### Extension Actions
+
+For installed extensions:
+
+- **Enable/disable toggle:** Enables or disables the extension
+- **Remove:** Uninstalls the extension
+- **View logs:** Shows runtime logs from the extension
+- **Health check:** Runs and displays the health status
+- **Server status:** Shows whether the extension server is ready (for extensions with servers)
+- **Publish:** Publish to npm (requires stored npm token)
+
+### Deep Link Install
+
+Opening a `chatons://extensions/install/@scope/package-name` URL triggers the extension marketplace to scroll to and highlight the matching extension.
 
 ### Channels
 
 Some extensions act as messaging bridges (e.g. Telegram). These are identified by `kind: "channel"` in their manifest. When at least one channel extension is enabled, a **Channels** entry appears in the sidebar. Inbound channel messages create global threads only, not project threads.
 
+Built-in extensions (`@chaton/automation`, `@chaton/memory`) are bundled with the app and do not appear in the user extensions folder.
+
 ---
 
-## 16. Memory
+## 18. Memory
 
 The built-in **Memory** extension stores context that persists across conversations.
 
@@ -340,24 +504,33 @@ The built-in **Memory** extension stores context that persists across conversati
 
 ---
 
-## 17. Settings
+## 19. Settings
 
 Available settings sections:
 
 | Section | What It Controls |
 |---------|-----------------|
-| **General** | Theme and app-level preferences |
+| **General** | Theme (system / light / dark) |
+| **Audio** | Conversation completion chime (enabled by default) |
 | **Behaviors** | Default behavior prompt prepended to every conversation |
 | **Sidebar** | Sidebar display options, anonymous telemetry toggle |
-| **Language** | French / English |
+| **Language** | French / English (default: French, fallback: English) |
 | **Providers & Models** | Provider configuration and model scoping |
 | **Sessions** | Open the sessions folder |
 | **Pi** | Pi command output panel |
 | **Diagnostics** | Runtime paths and checks |
 
+### Audio
+
+Chatons plays a short chime sound when a conversation action completes. This can be toggled in **Settings > Audio**. The chime has a 1.5-second cooldown to prevent rapid-fire playback. Volume is fixed at 24%.
+
+### Language
+
+The app ships with French and English translations. The default language is French with English as the fallback. Language preference is stored in the database and persists across sessions.
+
 ---
 
-## 18. Telemetry Consent
+## 20. Telemetry Consent
 
 After onboarding, a consent card may appear in the bottom-right:
 
@@ -370,7 +543,7 @@ Telemetry is never initialized in development mode.
 
 ---
 
-## 19. macOS Window Behavior
+## 21. macOS Window Behavior
 
 On macOS, closing the window does **not** quit Chatons. The app continues running in the background with a status bar icon.
 
@@ -382,7 +555,7 @@ On all platforms, closing all windows keeps the app running in the background.
 
 ---
 
-## 20. Updates and Changelog
+## 22. Updates and Changelog
 
 Outside development mode:
 
@@ -395,7 +568,7 @@ Outside development mode:
 
 ---
 
-## 21. Deep Links
+## 23. Deep Links
 
 Chatons registers the `chatons://` protocol. Currently supported:
 
@@ -407,22 +580,26 @@ This opens Chatons and triggers the extension install flow.
 
 ---
 
-## 22. Notifications
+## 24. Notifications
 
 When the app window is not focused, Chatons shows desktop notifications when conversation actions complete. Clicking a notification brings the window to the foreground.
 
 ---
 
-## 23. Keyboard Shortcuts
+## 25. Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
 | `Cmd+Shift+O` / `Ctrl+Shift+O` | Re-open onboarding |
 | `Cmd+Q` | Quit (macOS) |
+| `Ctrl/Cmd+K` | Focus skills search bar (in Skills panel) |
+| `Ctrl/Cmd+F` | Toggle skills filters panel (in Skills panel) |
+| `Enter` | Send message (in composer) |
+| `Shift+Enter` | New line (in composer) |
 
 ---
 
-## 24. Known Limitations
+## 26. Known Limitations
 
 - Worktree push may not work in all environments
 - Extensions require an app restart after install to fully load

@@ -35,7 +35,57 @@ Chatons is an Electron desktop application with five layers:
 
 ---
 
-## 2. Technology Stack
+## 2. App Modes
+
+Chatons has two UI modes, defined in `src/features/workspace/types.ts`:
+
+```
+type AppMode = 'workspace' | 'assistant'
+type AssistantView = 'home' | 'conversations' | 'memory' | 'automations' | 'channels'
+```
+
+The mode is toggled by `SidebarModeSwitcher` (bottom of sidebar). Default mode is `workspace`.
+
+### Workspace Mode
+
+Traditional coding-focused view: sidebar with conversations/projects, main panel with conversation timeline or settings, composer.
+
+### Assistant Mode
+
+Dashboard-focused view with a different sidebar and main panel. Routed by `AssistantMainView.tsx`:
+
+| View | Component | Purpose |
+|------|-----------|---------|
+| `home` | `AssistantDashboard` | Overview: greeting, quick actions, channel status, recent activity, memory insights, automations summary |
+| `conversations` | Switches to workspace mode | N/A |
+| `memory` | `AssistantMemoryView` | Full memory browser |
+| `automations` | `AssistantAutomationsView` | Full automation rules browser |
+| `channels` | `AssistantChannelsView` | Channel extension list with config |
+
+### Assistant Onboarding
+
+Separate from provider onboarding. Gated by `assistantOnboardingCompleted` setting. Three steps:
+
+1. Channel selection (loads marketplace, identifies channel extensions by category/tags)
+2. Personalization (assistant name, user name)
+3. Confirmation
+
+Stored settings: `assistantName`, `assistantUserName`, `assistantChannelId`, `assistantOnboardingCompleted`.
+
+### Dashboard Components
+
+| Component | Data Source |
+|-----------|------------|
+| `StatusHeader` | Time-based greeting + channel connected count |
+| `QuickActions` | 4 hardcoded actions (talk, schedule, memory, settings) |
+| `ChannelsStatus` | Extension list filtered by `kind: "channel"`, queries `channelStatus` from UI entries |
+| `RecentActivity` | 5 most recent conversations sorted by `lastMessageAt` |
+| `MemoryInsights` | Calls `memory.list` on `@chaton/memory` extension, shows 5 entries |
+| `AutomationsSummary` | Calls `automation.list_scheduled_tasks` on `@chaton/automation`, shows rules |
+
+---
+
+## 3. Technology Stack
 
 | Area | Technology |
 |------|-----------|
@@ -52,7 +102,7 @@ Chatons is an Electron desktop application with five layers:
 
 ---
 
-## 3. App Startup Sequence
+## 4. App Startup Sequence
 
 ### Main Process (`electron/main.ts`)
 
@@ -85,7 +135,7 @@ Once hydrated, `AppShell` renders the sidebar, topbar, main view, and composer. 
 
 ---
 
-## 4. Pi Integration
+## 5. Pi Integration
 
 Chatons uses a dedicated Pi directory: `<userData>/.pi/agent`
 
@@ -126,7 +176,7 @@ For full details, see [Pi Integration](/pi-integration).
 
 ---
 
-## 5. Per-Conversation Runtimes
+## 6. Per-Conversation Runtimes
 
 `PiSessionRuntimeManager` in `electron/pi-sdk-runtime.ts` creates one `PiSdkRuntime` per conversation.
 
@@ -167,7 +217,7 @@ Pi runtime events are forwarded to the renderer via `pi:event` IPC channel. Even
 
 ---
 
-## 6. Provider and Auth System
+## 7. Provider and Auth System
 
 ### Credential Storage
 
@@ -205,7 +255,7 @@ On 401 errors, Chatons logs a sanitized debug trail (provider ID, credential sou
 
 ---
 
-## 7. Renderer State
+## 8. Renderer State
 
 ### Workspace Store
 
@@ -229,7 +279,7 @@ Responsibilities: hydrate projects/conversations/settings, track Pi runtime stat
 
 ---
 
-## 8. Data Model (SQLite)
+## 9. Data Model (SQLite)
 
 Migrations live in `electron/db/migrations/`. Currently 14 migration files.
 
@@ -261,7 +311,7 @@ Model choice, worktree state, and access mode are stored per conversation in the
 
 ---
 
-## 9. Project Terminal
+## 10. Project Terminal
 
 Implemented in `electron/ipc/workspace.ts` (`buildDetectedProjectCommands`, `detectProjectType`) and `src/components/shell/ProjectTerminalDialog.tsx`.
 
@@ -291,7 +341,7 @@ Based on type, `buildDetectedProjectCommands()` generates commands like `npm run
 
 ---
 
-## 10. Extension Platform
+## 11. Extension Platform
 
 Full documentation: [Extensions](/extensions), [Extensions API](/extensions/api)
 
@@ -313,7 +363,7 @@ Extensions with `kind: "channel"` appear under the **Channels** sidebar entry. T
 
 ---
 
-## 11. Built-in Memory Extension
+## 12. Built-in Memory Extension
 
 Extension ID: `@chaton/memory`
 
@@ -338,7 +388,7 @@ This is entirely offline -- no external embedding service or model download need
 
 ---
 
-## 12. Worktrees
+## 13. Worktrees
 
 ### Current State
 
@@ -356,7 +406,7 @@ This is entirely offline -- no external embedding service or model download need
 
 ---
 
-## 13. Updates
+## 14. Updates
 
 Implemented in `electron/lib/update/update-service.ts`.
 
@@ -368,7 +418,7 @@ Implemented in `electron/lib/update/update-service.ts`.
 
 ---
 
-## 14. Telemetry
+## 15. Telemetry
 
 Implemented in `electron/lib/telemetry/sentry.ts`.
 
@@ -381,7 +431,7 @@ Implemented in `electron/lib/telemetry/sentry.ts`.
 
 ---
 
-## 15. Deep Links
+## 16. Deep Links
 
 Chatons registers the `chatons://` protocol.
 
@@ -397,13 +447,281 @@ Pending deep links that arrive before the window is ready are queued and process
 
 ---
 
-## 16. Sandbox Manager
+## 17. Sandbox Manager
 
 Initialized on startup. Provides sandboxed execution for Node.js and Python commands via `electron/lib/sandbox/sandbox-manager.ts`.
 
+### Available Methods
+
+| Method | Purpose |
+|--------|---------|
+| `executeNodeCommand(command, args, cwd, timeout)` | Run a Node.js command |
+| `executeNpmCommand(args, cwd)` | Run an npm command |
+| `executePythonCommand(args, cwd, timeout)` | Run a Python command |
+| `executePipCommand(args, cwd)` | Run a pip command |
+| `checkNodeAvailability()` | Returns `{ available, version }` |
+| `checkPythonAvailability(cwd)` | Returns Python availability info |
+| `cleanup()` | Releases both sandbox environments |
+
+IPC channels: `sandbox:executeNodeCommand`, `sandbox:executeNpmCommand`, `sandbox:executePythonCommand`, `sandbox:executePipCommand`, `sandbox:checkNodeAvailability`, `sandbox:checkPythonAvailability`, `sandbox:cleanup`.
+
+Internally delegates to `NodeSandbox` and `PythonSandbox` classes.
+
 ---
 
-## 17. Skills vs Extensions
+## 18. Logging System
+
+Implemented in `electron/lib/logging/log-manager.ts`.
+
+### Log Format
+
+Each log entry is a JSON line:
+
+```json
+{
+  "timestamp": "2026-03-10T14:30:00.000Z",
+  "source": "electron",
+  "level": "info",
+  "message": "Session started",
+  "data": {}
+}
+```
+
+Sources: `electron`, `pi`, `frontend`. Levels: `info`, `warn`, `error`, `debug`.
+
+### Storage
+
+- Directory: `<userData>/logs/`
+- Filename pattern: `chaton-YYYY-MM-DDTHH-MM-SS-SSSZ.log`
+- Max file size: 1 MB (then rotates to a new file)
+- Max log files: 5 (oldest are deleted on startup)
+
+### How It Works
+
+- On initialization, `captureConsoleLogs()` wraps `console.log/warn/error/debug` to capture all main-process output
+- Logs are buffered in memory (flushed every 10 entries or on shutdown)
+- Pi runtime events are logged with `source: "pi"`
+- Renderer errors are forwarded via IPC with `source: "frontend"`
+
+### IPC Channels
+
+| Channel | Purpose |
+|---------|---------|
+| `logs:getLogs` | Read recent log entries (default: last 100) |
+| `logs:clearLogs` | Delete current log file and clear buffer |
+| `logs:getLogFilePath` | Return current log file path |
+
+---
+
+## 19. Performance Tracing
+
+`tracing:start` and `tracing:stop` IPC handlers use Electron's `contentTracing` API to capture Chrome-level performance traces.
+
+- `tracing:start` begins recording with default trace categories
+- `tracing:stop` stops recording and returns the path to the trace file
+- The trace file can be loaded in `chrome://tracing` for analysis
+- Only one tracing session can be active at a time
+
+Useful for diagnosing renderer performance issues, animation jank, or IPC bottlenecks.
+
+---
+
+## 20. Local Provider Detection
+
+Chatons can detect locally running AI providers during onboarding.
+
+### Ollama Detection (`ollama:detect`)
+
+1. Check binary: `command -v ollama` (Unix) / `where ollama` (Windows)
+2. Check API: `GET http://127.0.0.1:11434/api/tags`
+3. Returns `{ installed, apiRunning, baseUrl: "http://localhost:11434/v1" }`
+
+### LM Studio Detection (`lmstudio:detect`)
+
+1. Check app path per platform:
+   - macOS: `/Applications/LM Studio.app`
+   - Windows: `%LOCALAPPDATA%\Programs\LM Studio`
+   - Linux: `~/LM-Studio` or `~/Applications/LM-Studio`
+2. Check API: `GET http://127.0.0.1:1234/v1/models`
+3. Returns `{ installed, apiRunning, baseUrl: "http://localhost:1234/v1" }`
+
+### VS Code Detection (`vscode:detect`)
+
+Checks for `code` binary via `which code` (macOS/Linux) or `where code` (Windows). Used for the worktree "Open in VS Code" integration.
+
+---
+
+## 21. Internationalization (i18n)
+
+### Setup
+
+- Library: i18next with `react-i18next`
+- Configuration: `src/lib/i18n.ts`
+- Default language: `fr` (French)
+- Fallback language: `en` (English)
+
+### Translation Pattern
+
+Source strings are in French. English translations are provided in the `en` resource block. Both languages share the same keys.
+
+```tsx
+const { t } = useTranslation()
+// t('Nouvelle conversation') -> "New conversation" (en) / "Nouvelle conversation" (fr)
+```
+
+### Language Persistence
+
+Language preference is stored in the SQLite `app_settings` table via:
+
+- `settings:getLanguagePreference` (read)
+- `settings:updateLanguagePreference` (write)
+
+The preference persists across app restarts.
+
+---
+
+## 22. Composer Drafts
+
+Draft messages are persisted to the `composer_drafts` SQLite table.
+
+### Key Format
+
+- Active conversation: keyed by conversation ID
+- Draft project thread: keyed by `draft:<projectId>`
+- Global draft: keyed by `"global"`
+
+### IPC Channels
+
+| Channel | Purpose |
+|---------|---------|
+| `composer:saveDraft` | Save draft (key, content) |
+| `composer:getDraft` | Load draft by key |
+| `composer:getAllDrafts` | Load all drafts |
+| `composer:deleteDraft` | Delete draft by key |
+
+Drafts are saved automatically as the user types and restored when switching between conversations.
+
+---
+
+## 23. Conversation Completion Chime
+
+Implemented in `src/lib/audio/conversation-success-chime.ts`.
+
+- Plays a `.wav` file at 24% volume when a conversation action completes
+- 1.5-second cooldown between plays (prevents rapid-fire)
+- Controlled by `enableConversationChime` setting (default: `true`)
+- Configurable in Settings > Audio
+- Silently fails if browser autoplay policy blocks audio
+
+---
+
+## 24. Quick Action Usage Tracking
+
+Quick action cards (shown in empty conversations) are ordered by a decay-scored usage ranking.
+
+### Algorithm
+
+- Each usage is recorded in the `quick_actions_usage` table
+- Score decays exponentially with a 14-day half-life
+- `decayedScore = storedScore * exp(-ln(2) * elapsed / HALF_LIFE_MS)`
+- Higher-scored actions appear first
+
+### IPC
+
+- `quickActions:recordUse` -- Record a usage event
+- `quickActions:listUsage` -- Read usage data for all actions
+
+### Scope Filtering
+
+Quick actions declare a `scope` that controls when they appear:
+
+| Scope | When Shown |
+|-------|------------|
+| `always` | Always visible |
+| `global-thread` | Only in global (non-project) threads |
+| `project-thread` | Only in project threads |
+| `global-or-no-thread` | In global threads or when no conversation is selected |
+
+---
+
+## 25. Skills Marketplace
+
+The skills marketplace is a structured catalog accessible from the Skills panel.
+
+### Data Sources
+
+| IPC Channel | Purpose |
+|-------------|---------|
+| `skills:listCatalog` | Full skill catalog |
+| `skills:getMarketplace` | Curated marketplace (featured, new, trending, by category) |
+| `skills:getMarketplaceFiltered` | Filtered marketplace with query, category, language, sort |
+| `skills:getRatings` | All ratings (optionally filtered by skill) |
+| `skills:addRating` | Submit a rating (1-5 stars + optional review) |
+| `skills:getAverageRating` | Average rating for a specific skill |
+
+### Marketplace Structure
+
+```typescript
+{
+  featured: ExternalSkill[]   // Curated selection (max 6)
+  new: ExternalSkill[]        // Recently added (max 8)
+  trending: ExternalSkill[]   // Popular/recommended (max 8)
+  byCategory: Array<{ name: string; count: number; items: ExternalSkill[] }>
+}
+```
+
+### Skill Metadata
+
+Each `ExternalSkill` includes: `source`, `title`, `description`, `author`, `installs`, `stars`, `category`, `tags`, `language`, `lastUpdated`, `featured`, `popularity` (`new` | `trending` | `popular` | `recommended`), `repository`, `documentation`, `dependencies`, `rating`.
+
+---
+
+## 26. Extension Marketplace
+
+The extension marketplace follows a similar structure to the skills marketplace.
+
+### Data Sources
+
+| Function | Purpose |
+|----------|---------|
+| `listChatonsExtensionCatalog()` | Raw catalog entries from npm registry + bundled entries |
+| `getExtensionMarketplace()` | Structured marketplace (featured, new, trending, by category) |
+| `getExtensionMarketplaceAsync()` | Async version with fresh npm catalog fetch |
+| `checkForExtensionUpdates()` | Compare installed versions against catalog |
+| `updateAllChatonsExtensions()` | Batch-update all extensions |
+
+### Marketplace Structure
+
+Same shape as skills marketplace: `featured`, `new`, `trending`, `byCategory`.
+
+### Extension Catalog Entries
+
+Each entry includes: `id`, `name`, `version`, `description`, `author`, `category`, `tags`, `featured`, `popularity`, `lastUpdated`, `npmUrl`, `iconUrl`.
+
+### Update Flow
+
+1. `extensions:checkUpdates` compares installed versions against the catalog
+2. Returns `{ id, currentVersion, latestVersion }[]`
+3. UI shows update count badge on the Extensions sidebar entry
+4. Individual or batch update via `extensions:update` / `extensions:updateAll`
+
+---
+
+## 27. Performance Monitor
+
+A debug-only performance monitor is available at `window.__perf`:
+
+```javascript
+window.__perf.enable()   // Start recording
+window.__perf.disable()  // Stop recording
+window.__perf.report()   // Print performance report
+```
+
+Implemented in `src/features/workspace/store/perf-monitor.ts`. Records component render counts and can be used to diagnose UI performance issues.
+
+---
+
+## 28. Skills vs Extensions
 
 | | Skills | Extensions |
 |---|--------|-----------|
@@ -418,7 +736,7 @@ If you need a UI, storage, events, or host APIs, build an extension. If you need
 
 ---
 
-## 18. Documentation Contract
+## 29. Documentation Contract
 
 Any change affecting user workflows, extension APIs, configuration semantics, architecture, or technical limitations must update documentation in the same changeset.
 
