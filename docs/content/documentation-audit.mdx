@@ -14,6 +14,44 @@ Related:
 
 ---
 
+## March 10, 2026
+
+### Complete rewrite of Channel Extensions documentation
+
+The channel extensions documentation (`docs/content/extensions/channels.mdx`) was rewritten from scratch after a code-audit-driven review.
+
+**Approach:** Attempted to build a channel extension by following only the existing documentation, identified every gap and inaccuracy, then examined the source code (`electron/extensions/runtime/host.ts`, `electron/ipc/workspace-handlers.ts`, `electron/preload.ts`, `electron/extensions/runtime/ui-bridge.ts`, `src/components/extensions/BackgroundChannelExtensions.tsx`) to fill all knowledge gaps.
+
+**Critical gaps found in the previous documentation:**
+
+1. **No working code example.** The old doc was entirely theoretical -- no developer could build a channel extension from it alone.
+2. **Host channel APIs undocumented.** `channels.upsertGlobalThread`, `channels.ingestMessage`, `channels.reportStatus`, and `channels.getStatus` were mentioned by name but had zero parameter signatures, return types, or code examples.
+3. **No explanation of how to call host methods.** The actual calling pattern (`window.chaton.extensionHostCall(extensionId, method, params)`) was never shown.
+4. **Manifest filename confusion.** The old doc referenced `manifest.json` in section 4 but the actual file is `chaton.extension.json`.
+5. **`apis.exposes` without implementation.** The manifest example listed `channel.connect`, `channel.disconnect`, etc. as exposed APIs but never showed how to implement the handlers.
+6. **No explanation of message ingestion.** The most important feature (sending external messages into Chatons and getting AI replies) was never explained.
+7. **Background iframe behavior undocumented.** Channel extensions run in hidden background iframes automatically, a critical behavior for polling-based integrations.
+8. **Thread mapping was manual.** The doc suggested manual mapping persistence, but the host manages mappings automatically under `channel.threadMappings`.
+9. **Missing `host.conversations.write` requirement.** The old manifest example did not include this capability, which is required for all channel operations.
+10. **Subagent behavior undocumented.** The host runs an ephemeral Pi subagent for message ingestion, with steering for concurrent messages -- none of this was described.
+
+**What the new documentation includes:**
+
+- **Complete working example** (PingChat) with 5 files of copy-paste-ready code
+- **Full API reference** for all 6 host channel methods with parameter tables, response shapes, and code examples
+- **Architecture diagram** showing the message flow between external service, extension, and host
+- **Step-by-step walkthrough** of the message processing pipeline
+- **Mapping key strategy guide** with concrete examples for different platform types
+- **Storage, queue, status reporting, and LLM tools** sections with practical code
+- **Development workflow and debugging** guide with common mistakes table
+- **Current limitations** section that is honest about constraints
+
+**Files changed:**
+- `docs/content/extensions/channels.mdx` -- Complete rewrite
+- `docs/content/documentation-audit.mdx` -- This entry
+
+---
+
 ## March 9, 2026
 
 ### Group vendor cards + split OpenAI/Mistral flows

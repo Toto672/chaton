@@ -1,364 +1,1179 @@
 ---
-title: Extensions Channels
-description: Channel and messaging reference for Chatons extensions.
+title: Channel Extensions
+description: Build a messaging bridge between Chatons and an external platform.
 ---
 
 # Channel Extensions
 
-This document defines the current Chatons contract for channel-style extensions.
+Build a bridge between Chatons and an external messaging platform.
 
-A channel extension is a bridge between Chatons and an external messaging system.
+A channel extension receives messages from an external service (Telegram, Slack, WhatsApp, email, SMS, etc.), routes them into Chatons conversations, and optionally sends AI-generated replies back.
 
-Examples:
+**Prerequisites:** You should be familiar with the [Extensions overview](/extensions) and the [Extensions Tutorial](/extensions/tutorial) before building a channel extension.
 
-- Telegram bot integrations
-- WhatsApp-style bridges
-- Slack or Discord direct-message bridges
-- email or SMS relay style integrations
-
-The goal is straightforward:
-
-- receive external messages
-- map them into Chatons conversations
-- optionally send Chatons replies back to the external system
-
-Important current product rule:
-
-- inbound channel messages are routed into global threads only
-- channel extensions must not create or target project conversations
-
-In database terms, the target conversation should have `project_id = null`.
-
-Related pages:
-
-- [Extensions](/extensions) -- Overview and concepts
-- [Extensions API](/extensions/api) -- API reference
+**Reference:** See the [Extensions API](/extensions/api) for the full SDK reference.
 
 ---
 
-## 1. How channel extensions fit into Chatons
+## Table of Contents
 
-A channel extension is not a separate platform.
-
-It is a specialized profile built on top of the existing Chatons extension system.
-
-It is identified by the manifest field:
-
-- `kind: "channel"`
-
-Current product behavior tied to that classification:
-
-- channel extensions do not appear as their own standalone sidebar entries
-- if at least one enabled channel extension exists, Chatons shows a dedicated `Channels` sidebar item
-- that screen lists the installed channel integrations
-- from there, the user opens each extension's own configuration or status view
-
-So today, `channel` is best understood as:
-
-- a documented extension category
-- plus some host UI behavior
-- not a wholly separate runtime subsystem
+1. [Complete Working Example](#complete-working-example)
+2. [How Channel Extensions Work](#how-channel-extensions-work)
+3. [Host Channel API Reference](#host-channel-api-reference)
+4. [Step-by-Step Walkthrough](#step-by-step-walkthrough)
+5. [Routing Model](#routing-model)
+6. [Storage and State Management](#storage-and-state-management)
+7. [Queue and Retry Strategy](#queue-and-retry-strategy)
+8. [Status Reporting](#status-reporting)
+9. [Optional LLM Tools](#optional-llm-tools)
+10. [UI Expectations](#ui-expectations)
+11. [Development Workflow](#development-workflow)
+12. [Debugging](#debugging)
+13. [Current Limitations](#current-limitations)
 
 ---
 
-## 2. Responsibilities of a channel extension
+## Complete Working Example
 
-A channel extension owns the bridge logic for its external platform.
+This example builds a channel extension for a hypothetical messaging app called "PingChat". It polls a REST API for new messages, injects them into Chatons, and sends the AI reply back.
 
-Typical responsibilities include:
+### Project Structure
 
-- authenticating to the provider
-- polling or receiving inbound messages
-- identifying the remote thread or remote user
-- mapping that remote identity to a Chatons conversation
-- injecting inbound messages into Chatons
-- optionally forwarding Chatons replies back to the provider
-- storing mapping state and cursors
-- handling retries, deduplication, and delivery failure behavior
+```
+~/.chaton/extensions/@yourname/chatons-channel-pingchat/
+├── chaton.extension.json
+├── package.json
+├── index.html
+├── style.css
+└── app.js
+```
 
-Current non-goals in the documented V1 shape:
+### Step 1: Create the Directory
 
-- project-thread routing
-- repo-aware routing
-- multi-project dispatch
-- a full host-managed webhook contract
-- a built-in universal attachment synchronization spec
+```bash
+mkdir -p ~/.chaton/extensions/@yourname/chatons-channel-pingchat
+cd ~/.chaton/extensions/@yourname/chatons-channel-pingchat
+```
 
----
-
-## 3. Routing model
-
-### Global threads only
-
-Inbound messages from a channel extension must end up in non-project conversations.
-
-Rules:
-
-- create or reuse a conversation with `project_id = null`
-- do not attach channel traffic to project conversations
-- if an extension discovers an invalid mapping to a project conversation, it should treat that as bad state and move back to a global-thread strategy instead of writing into the project thread
-
-### Suggested identity mapping
-
-Most channel integrations need a stable mapping between remote platform identities and Chatons conversations.
-
-A practical shape is:
-
-- `channelId`: extension-local or provider-local channel identifier
-- `remoteThreadId`: remote conversation or chat id
-- `remoteUserId`: remote sender id
-- `chatonsConversationId`: Chatons conversation id
-
-Recommended uniqueness strategies:
-
-- `(extensionId, remoteThreadId)` for shared chat systems
-- `(extensionId, remoteUserId)` for DM-style systems
-
-Persistence options:
-
-- extension KV storage
-- extension-owned files under `~/.chaton/extensions/data/<extensionId>/`
-
----
-
-## 4. Recommended manifest shape
-
-Channel extensions use the standard extension manifest.
-
-Minimal recommended example:
+### Step 2: Create `chaton.extension.json`
 
 ```json
 {
-  "id": "@user/chatons-channel-telegram",
-  "name": "Telegram Channel",
+  "id": "@yourname/chatons-channel-pingchat",
+  "name": "PingChat Channel",
   "version": "1.0.0",
+  "description": "Bridge between PingChat and Chatons",
   "kind": "channel",
   "capabilities": [
     "ui.mainView",
     "storage.kv",
-    "queue.publish",
-    "queue.consume",
-    "events.subscribe",
-    "events.publish",
-    "host.notifications",
-    "host.conversations.read"
+    "host.conversations.read",
+    "host.conversations.write",
+    "host.notifications"
   ],
   "ui": {
     "mainViews": [
       {
-        "viewId": "telegram.main",
-        "title": "Telegram",
-        "webviewUrl": "chaton-extension://@user/chatons-channel-telegram/index.html",
+        "viewId": "pingchat.main",
+        "title": "PingChat",
+        "webviewUrl": "chaton-extension://@yourname/chatons-channel-pingchat/index.html",
         "initialRoute": "/"
       }
     ]
-  },
-  "apis": {
-    "exposes": [
-      { "name": "channel.connect", "version": "1.0.0" },
-      { "name": "channel.disconnect", "version": "1.0.0" },
-      { "name": "channel.status", "version": "1.0.0" },
-      { "name": "channel.receive", "version": "1.0.0" },
-      { "name": "channel.send", "version": "1.0.0" }
-    ]
   }
 }
 ```
 
-Notes:
+**Key manifest fields for channel extensions:**
 
-- `kind: "channel"` is the key classification field
-- `ui.mainView` is strongly recommended for setup, auth, status, and diagnostics
-- channel extensions should not rely on `ui.menuItems` to create their own sidebar entry
-- `storage.kv` is strongly recommended for mappings and connection state
-- queue capabilities are strongly recommended when robust delivery matters
-- `llm.tools` is optional and should only be added if the model genuinely needs direct bridge actions
+- **`kind: "channel"`** classifies this extension as a channel. Chatons groups channel extensions under a dedicated "Channels" sidebar entry instead of creating separate sidebar items for each one.
+- **`host.conversations.write`** is required. Without it, the extension cannot create conversations or ingest messages.
+- **`host.conversations.read`** is needed to read conversation messages (optional but useful).
+- **`storage.kv`** stores your configuration state (API keys, connection status, etc.).
 
----
-
-## 5. Recommended channel APIs
-
-The host does not rigidly enforce these names, but this is the recommended contract for channel-style extensions.
-
-### `channel.connect`
-
-Purpose:
-
-- authenticate or configure the integration
-
-Example result:
+### Step 3: Create `package.json`
 
 ```json
 {
-  "connected": true,
-  "account": {
-    "id": "bot-123",
-    "label": "My Telegram Bot"
+  "name": "@yourname/chatons-channel-pingchat",
+  "version": "1.0.0",
+  "description": "PingChat channel extension for Chatons",
+  "license": "MIT"
+}
+```
+
+### Step 4: Create `index.html`
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PingChat Channel</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="ce-page">
+    <div class="ce-page-header">
+      <div class="ce-page-title-group">
+        <h1 class="ce-page-title">PingChat Channel</h1>
+        <p class="ce-page-description">
+          Connect your PingChat account to receive and reply to messages through Chatons.
+        </p>
+      </div>
+    </div>
+
+    <!-- Configuration card -->
+    <div class="ce-card">
+      <div class="ce-card__body">
+        <h2 class="ce-section-title">Configuration</h2>
+        <div class="ce-field">
+          <label class="ce-label" for="apiUrl">PingChat API URL</label>
+          <input id="apiUrl" type="text" placeholder="https://api.pingchat.example.com">
+          <div class="ce-help">The base URL for the PingChat API.</div>
+        </div>
+        <div class="ce-field">
+          <label class="ce-label" for="apiToken">API Token</label>
+          <input id="apiToken" type="password" placeholder="Enter your API token">
+          <div class="ce-help">Get this from PingChat Settings > API Keys.</div>
+        </div>
+        <div class="ce-toolbar">
+          <button id="saveBtn" class="chaton-ui-button chaton-ui-button--primary">
+            Save Configuration
+          </button>
+          <button id="testBtn" class="chaton-ui-button">
+            Test Connection
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connection status card -->
+    <div class="ce-card">
+      <div class="ce-card__body">
+        <h2 class="ce-section-title">Status</h2>
+        <div class="ce-list">
+          <div class="ce-list-row">
+            <div class="ce-list-row__main">
+              <div class="ce-list-row__content">
+                <span class="ce-list-row__title">Connection</span>
+                <span id="statusText" class="ce-list-row__meta">Not configured</span>
+              </div>
+            </div>
+            <span id="statusBadge" class="chaton-ui-badge chaton-ui-badge--secondary">
+              Offline
+            </span>
+          </div>
+          <div class="ce-list-row">
+            <div class="ce-list-row__main">
+              <div class="ce-list-row__content">
+                <span class="ce-list-row__title">Polling</span>
+                <span id="pollingText" class="ce-list-row__meta">Inactive</span>
+              </div>
+            </div>
+            <button id="togglePolling" class="chaton-ui-button">Start</button>
+          </div>
+          <div class="ce-list-row">
+            <div class="ce-list-row__main">
+              <div class="ce-list-row__content">
+                <span class="ce-list-row__title">Messages processed</span>
+                <span id="msgCount" class="ce-list-row__meta">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Activity log card -->
+    <div class="ce-card">
+      <div class="ce-card__body">
+        <h2 class="ce-section-title">Recent Activity</h2>
+        <div id="activityLog" class="ce-list">
+          <div class="ce-empty">No activity yet. Start polling to begin.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+```
+
+### Step 5: Create `style.css`
+
+```css
+/* The chaton UI styles are injected automatically via chatonExtensionComponents.
+   Add only custom styles here. */
+
+#activityLog {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.activity-entry {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ce-border, #eee);
+  font-size: 13px;
+}
+
+.activity-entry:last-child {
+  border-bottom: none;
+}
+
+.activity-time {
+  color: var(--ce-muted, #999);
+  font-size: 12px;
+}
+
+.activity-direction {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.activity-direction.inbound {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.activity-direction.outbound {
+  background: #dcfce7;
+  color: #166534;
+}
+```
+
+### Step 6: Create `app.js`
+
+This is the core of the channel extension. It demonstrates all three host channel APIs.
+
+```javascript
+(function () {
+  'use strict';
+
+  var EXTENSION_ID = '@yourname/chatons-channel-pingchat';
+
+  // Ensure the injected UI styles are available
+  if (window.chatonExtensionComponents) {
+    window.chatonExtensionComponents.ensureStyles();
+  }
+
+  // ---- State ----
+  var state = {
+    apiUrl: '',
+    apiToken: '',
+    connected: false,
+    polling: false,
+    pollTimer: null,
+    lastCursor: null,
+    messageCount: 0,
+    activityLog: [],
+  };
+
+  // ---- DOM refs ----
+  var refs = {
+    apiUrl: document.getElementById('apiUrl'),
+    apiToken: document.getElementById('apiToken'),
+    saveBtn: document.getElementById('saveBtn'),
+    testBtn: document.getElementById('testBtn'),
+    statusText: document.getElementById('statusText'),
+    statusBadge: document.getElementById('statusBadge'),
+    pollingText: document.getElementById('pollingText'),
+    togglePolling: document.getElementById('togglePolling'),
+    msgCount: document.getElementById('msgCount'),
+    activityLog: document.getElementById('activityLog'),
+  };
+
+  // =========================================================================
+  // Host Channel API helpers
+  //
+  // Channel extensions talk to the Chatons host via:
+  //   window.chaton.extensionHostCall(extensionId, method, params)
+  //
+  // The host provides these channel-specific methods:
+  //   - channels.upsertGlobalThread  (create or reuse a conversation)
+  //   - channels.ingestMessage       (send a message into a conversation)
+  //   - channels.reportStatus        (report connection health to the UI)
+  //   - channels.getStatus           (read back the last reported status)
+  //   - conversations.list           (list all conversations)
+  //   - conversations.getMessages    (read messages from a conversation)
+  // =========================================================================
+
+  /**
+   * Create or reuse a Chatons global conversation for a remote thread.
+   *
+   * @param {string} mappingKey - Stable identifier for this remote thread
+   *   (e.g. "pingchat:room:42" or "pingchat:user:alice"). The host stores
+   *   the mapping in KV under 'channel.threadMappings' automatically.
+   * @param {string} title - Display title for the conversation.
+   * @param {string} [modelKey] - Optional model key (e.g. "openai/gpt-4o").
+   *   If omitted, the user's default model is used.
+   * @returns {Promise<{ok, data: {created, conversation}}>}
+   */
+  function upsertThread(mappingKey, title, modelKey) {
+    return window.chaton.extensionHostCall(EXTENSION_ID, 'channels.upsertGlobalThread', {
+      mappingKey: mappingKey,
+      title: title || 'PingChat',
+      modelKey: modelKey || null,
+    });
+  }
+
+  /**
+   * Inject an external message into a Chatons conversation and get an AI reply.
+   *
+   * The host runs an ephemeral Pi subagent against the conversation's history,
+   * generates a reply, and stores both the user message and assistant reply
+   * in the conversation's message cache.
+   *
+   * @param {string} conversationId - The Chatons conversation ID.
+   * @param {string} message - The text message from the external user.
+   * @param {string} [idempotencyKey] - Optional deduplication key. If the same
+   *   key is sent twice, the second call is a no-op (returns {reply: null}).
+   * @param {object} [metadata] - Optional metadata stored alongside the
+   *   deduplication record.
+   * @returns {Promise<{ok, data: {reply}}>} - reply is the AI-generated response text.
+   */
+  function ingestMessage(conversationId, message, idempotencyKey, metadata) {
+    return window.chaton.extensionHostCall(EXTENSION_ID, 'channels.ingestMessage', {
+      conversationId: conversationId,
+      message: message,
+      idempotencyKey: idempotencyKey || null,
+      metadata: metadata || null,
+    });
+  }
+
+  /**
+   * Report the extension's connection status to the Chatons UI.
+   *
+   * This status is shown in the Channels view. Call it whenever your
+   * connection state changes (connected, disconnected, error, etc.).
+   *
+   * @param {object} status
+   * @param {boolean} status.configured - Whether the extension has valid config.
+   * @param {boolean} status.connected - Whether the extension is actively connected.
+   * @param {string} [status.lastActivity] - ISO timestamp of last message.
+   * @param {string[]} [status.issues] - List of current problems.
+   * @param {string} [status.info] - Free-form info string.
+   */
+  function reportStatus(status) {
+    return window.chaton.extensionHostCall(EXTENSION_ID, 'channels.reportStatus', status);
+  }
+
+  /**
+   * Show a notification in the Chatons UI.
+   */
+  function notify(title, body) {
+    return window.chaton.extensionHostCall(EXTENSION_ID, 'notifications.notify', {
+      title: title,
+      body: body,
+    });
+  }
+
+  // ---- Storage helpers ----
+
+  function loadConfig() {
+    return window.chaton.extensionStorageKvGet(EXTENSION_ID, 'config').then(function (result) {
+      if (result && result.ok && result.data) {
+        var config = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+        state.apiUrl = config.apiUrl || '';
+        state.apiToken = config.apiToken || '';
+        state.lastCursor = config.lastCursor || null;
+        state.messageCount = config.messageCount || 0;
+        refs.apiUrl.value = state.apiUrl;
+        refs.apiToken.value = state.apiToken;
+      }
+    });
+  }
+
+  function saveConfig() {
+    return window.chaton.extensionStorageKvSet(EXTENSION_ID, 'config', {
+      apiUrl: state.apiUrl,
+      apiToken: state.apiToken,
+      lastCursor: state.lastCursor,
+      messageCount: state.messageCount,
+    });
+  }
+
+  // ---- UI helpers ----
+
+  function updateStatusDisplay() {
+    var isConfigured = state.apiUrl && state.apiToken;
+    if (!isConfigured) {
+      refs.statusText.textContent = 'Not configured - enter API URL and token above';
+      refs.statusBadge.textContent = 'Offline';
+      refs.statusBadge.className = 'chaton-ui-badge chaton-ui-badge--secondary';
+    } else if (state.connected) {
+      refs.statusText.textContent = 'Connected to ' + state.apiUrl;
+      refs.statusBadge.textContent = 'Online';
+      refs.statusBadge.className = 'chaton-ui-badge chaton-ui-badge--default';
+    } else {
+      refs.statusText.textContent = 'Configured but not connected';
+      refs.statusBadge.textContent = 'Offline';
+      refs.statusBadge.className = 'chaton-ui-badge chaton-ui-badge--secondary';
+    }
+
+    refs.pollingText.textContent = state.polling ? 'Active (every 5s)' : 'Inactive';
+    refs.togglePolling.textContent = state.polling ? 'Stop' : 'Start';
+    refs.msgCount.textContent = String(state.messageCount);
+
+    // Report status to the Chatons host UI
+    reportStatus({
+      configured: !!(state.apiUrl && state.apiToken),
+      connected: state.connected,
+      lastActivity: state.activityLog.length > 0
+        ? state.activityLog[0].time
+        : null,
+      issues: state.connected ? [] : ['Not connected to PingChat'],
+    });
+  }
+
+  function addActivity(direction, text) {
+    var entry = {
+      time: new Date().toISOString(),
+      direction: direction,
+      text: text,
+    };
+    state.activityLog.unshift(entry);
+    if (state.activityLog.length > 50) state.activityLog.pop();
+    renderActivity();
+  }
+
+  function renderActivity() {
+    if (state.activityLog.length === 0) {
+      refs.activityLog.innerHTML =
+        '<div class="ce-empty">No activity yet. Start polling to begin.</div>';
+      return;
+    }
+    refs.activityLog.innerHTML = state.activityLog
+      .map(function (entry) {
+        var dirClass = entry.direction === 'inbound' ? 'inbound' : 'outbound';
+        var label = entry.direction === 'inbound' ? 'IN' : 'OUT';
+        var timeStr = new Date(entry.time).toLocaleTimeString();
+        return (
+          '<div class="activity-entry">' +
+          '<span class="activity-direction ' + dirClass + '">' + label + '</span>' +
+          '<span>' + escapeHtml(entry.text) + '</span>' +
+          ' <span class="activity-time">' + timeStr + '</span>' +
+          '</div>'
+        );
+      })
+      .join('');
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // ---- PingChat API simulation ----
+  // In a real extension, these would call an actual external API.
+
+  function pingchatFetch(endpoint) {
+    // Simulated API - replace with real fetch() calls in production
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        if (endpoint === '/api/status') {
+          resolve({ ok: true, status: 'connected' });
+        } else if (endpoint === '/api/messages') {
+          // Simulate occasional incoming messages
+          if (Math.random() < 0.3) {
+            resolve({
+              ok: true,
+              messages: [
+                {
+                  id: 'msg-' + Date.now(),
+                  threadId: 'thread-general',
+                  senderName: 'Alice',
+                  text: 'Hello from PingChat! (' + new Date().toLocaleTimeString() + ')',
+                },
+              ],
+              cursor: 'cursor-' + Date.now(),
+            });
+          } else {
+            resolve({ ok: true, messages: [], cursor: state.lastCursor });
+          }
+        } else if (endpoint.startsWith('/api/reply')) {
+          resolve({ ok: true, delivered: true });
+        } else {
+          resolve({ ok: false, error: 'Unknown endpoint' });
+        }
+      }, 200);
+    });
+  }
+
+  function sendReplyToPingChat(threadId, replyText) {
+    return pingchatFetch('/api/reply?thread=' + threadId).then(function (result) {
+      if (result.ok) {
+        addActivity('outbound', 'Reply to ' + threadId + ': ' + replyText.substring(0, 80));
+      }
+      return result;
+    });
+  }
+
+  // =========================================================================
+  // Core bridge logic: poll -> upsert thread -> ingest message -> send reply
+  // =========================================================================
+
+  function pollForMessages() {
+    if (!state.polling || !state.apiUrl || !state.apiToken) return;
+
+    pingchatFetch('/api/messages').then(function (result) {
+      if (!result.ok || !result.messages) return;
+
+      state.lastCursor = result.cursor || state.lastCursor;
+
+      // Process each inbound message
+      var chain = Promise.resolve();
+      result.messages.forEach(function (msg) {
+        chain = chain.then(function () {
+          return processInboundMessage(msg);
+        });
+      });
+
+      return chain;
+    }).catch(function (err) {
+      console.error('[PingChat] Poll error:', err);
+      addActivity('inbound', 'Poll error: ' + err.message);
+    });
+  }
+
+  /**
+   * The core message processing pipeline:
+   * 1. Upsert a Chatons conversation for this remote thread
+   * 2. Ingest the message (Chatons runs a subagent and returns a reply)
+   * 3. Send the reply back to PingChat
+   */
+  function processInboundMessage(msg) {
+    var mappingKey = 'pingchat:thread:' + msg.threadId;
+    var title = 'PingChat - ' + (msg.senderName || msg.threadId);
+
+    addActivity('inbound', msg.senderName + ': ' + msg.text);
+
+    // Step 1: Upsert a global thread for this remote conversation
+    return upsertThread(mappingKey, title)
+      .then(function (result) {
+        if (!result.ok) {
+          console.error('[PingChat] upsertThread failed:', result);
+          addActivity('inbound', 'Error: could not create conversation');
+          return null;
+        }
+
+        var conversationId = result.data.conversation.id;
+        var wasCreated = result.data.created;
+
+        if (wasCreated) {
+          addActivity('inbound', 'Created new conversation: ' + title);
+        }
+
+        // Step 2: Ingest the message and get an AI reply
+        return ingestMessage(conversationId, msg.text, msg.id);
+      })
+      .then(function (result) {
+        if (!result) return; // upsertThread failed
+        if (!result.ok) {
+          console.error('[PingChat] ingestMessage failed:', result);
+          addActivity('inbound', 'Error: could not ingest message');
+          return;
+        }
+
+        state.messageCount++;
+        saveConfig();
+        updateStatusDisplay();
+
+        // Step 3: Send the AI reply back to PingChat
+        var reply = result.data && result.data.reply;
+        if (reply) {
+          return sendReplyToPingChat(msg.threadId, reply);
+        }
+      })
+      .catch(function (err) {
+        console.error('[PingChat] Processing error:', err);
+        addActivity('inbound', 'Processing error: ' + err.message);
+      });
+  }
+
+  // ---- Polling control ----
+
+  function startPolling() {
+    if (state.polling) return;
+    if (!state.apiUrl || !state.apiToken) {
+      notify('PingChat', 'Please configure API URL and token first.');
+      return;
+    }
+
+    state.polling = true;
+    state.connected = true;
+    updateStatusDisplay();
+    addActivity('inbound', 'Polling started');
+
+    // Poll immediately, then every 5 seconds
+    pollForMessages();
+    state.pollTimer = setInterval(pollForMessages, 5000);
+  }
+
+  function stopPolling() {
+    state.polling = false;
+    state.connected = false;
+    if (state.pollTimer) {
+      clearInterval(state.pollTimer);
+      state.pollTimer = null;
+    }
+    updateStatusDisplay();
+    addActivity('inbound', 'Polling stopped');
+  }
+
+  // ---- Event handlers ----
+
+  refs.saveBtn.addEventListener('click', function () {
+    state.apiUrl = refs.apiUrl.value.trim();
+    state.apiToken = refs.apiToken.value.trim();
+    saveConfig().then(function () {
+      notify('PingChat', 'Configuration saved.');
+      updateStatusDisplay();
+    });
+  });
+
+  refs.testBtn.addEventListener('click', function () {
+    if (!state.apiUrl || !state.apiToken) {
+      notify('PingChat', 'Please enter API URL and token first.');
+      return;
+    }
+    pingchatFetch('/api/status').then(function (result) {
+      if (result.ok) {
+        notify('PingChat', 'Connection test successful!');
+        state.connected = true;
+      } else {
+        notify('PingChat', 'Connection test failed: ' + (result.error || 'Unknown error'));
+        state.connected = false;
+      }
+      updateStatusDisplay();
+    });
+  });
+
+  refs.togglePolling.addEventListener('click', function () {
+    if (state.polling) {
+      stopPolling();
+    } else {
+      startPolling();
+    }
+  });
+
+  // ---- Initialization ----
+
+  loadConfig().then(function () {
+    updateStatusDisplay();
+    renderActivity();
+
+    // Auto-start polling if previously configured
+    if (state.apiUrl && state.apiToken) {
+      startPolling();
+    }
+  });
+})();
+```
+
+### Test It
+
+1. Save all files
+2. Restart Chatons
+3. Go to **Channels** in the sidebar (it appears when channel extensions are installed)
+4. Click **Configure** next to "PingChat Channel"
+5. Enter any URL and token (the example simulates the API)
+6. Click **Save Configuration**, then **Start** polling
+7. Watch simulated messages arrive and AI replies get generated
+
+---
+
+## How Channel Extensions Work
+
+A channel extension bridges an external messaging platform and Chatons. Here is the lifecycle:
+
+```
+External Service                     Your Extension                      Chatons Host
+     |                                    |                                   |
+     |--- new message ------------------>|                                   |
+     |                                    |-- upsertGlobalThread ----------->|
+     |                                    |<-- { conversation } ------------|
+     |                                    |                                   |
+     |                                    |-- ingestMessage ---------------->|
+     |                                    |   (host runs Pi subagent)        |
+     |                                    |<-- { reply } -------------------|
+     |                                    |                                   |
+     |<-- send reply --------------------|                                   |
+     |                                    |                                   |
+     |                                    |-- reportStatus ----------------->|
+     |                                    |   (UI shows connection health)   |
+```
+
+### What the Host Does Automatically
+
+When you call `channels.ingestMessage`, the host:
+
+1. Validates the conversation exists and is a global thread (not project-linked)
+2. Checks the idempotency key (if provided) to skip duplicate messages
+3. Runs an ephemeral Pi subagent against the conversation's message history
+4. Generates an AI reply using the conversation's selected model
+5. Stores both the user message and the assistant reply in the conversation's message cache
+6. Returns the reply text to your extension
+
+When you call `channels.upsertGlobalThread`, the host:
+
+1. Checks if a conversation already exists for that mapping key
+2. If it exists and is still a global thread, returns it
+3. If not, creates a new global conversation with the specified title and model
+4. Stores the mapping in KV under `channel.threadMappings` automatically
+
+### Background Execution
+
+Channel extensions with `kind: "channel"` get a special behavior: Chatons automatically loads their main view in a hidden background iframe when the app starts. This means your polling or WebSocket logic keeps running even when the user has not opened the extension's UI.
+
+You do not need to implement a server process just to keep polling alive. Your `index.html` + `app.js` is enough.
+
+---
+
+## Host Channel API Reference
+
+Channel extensions call host methods through `window.chaton.extensionHostCall()`. This function is available in all extension webviews.
+
+```javascript
+window.chaton.extensionHostCall(extensionId, method, params)
+```
+
+- **extensionId**: Your extension's ID (must match manifest `id`)
+- **method**: The host method name (e.g. `'channels.upsertGlobalThread'`)
+- **params**: An object with the method's parameters
+- **Returns**: A Promise resolving to `{ ok: true, data: ... }` or `{ ok: false, error: { code, message } }`
+
+### `channels.upsertGlobalThread`
+
+Create or reuse a global (non-project) conversation for a remote thread.
+
+**Required capability:** `host.conversations.write`
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `mappingKey` | string | Yes | Stable identifier for the remote thread (e.g. `"telegram:chat:12345"`). The host uses this to find or create the conversation. |
+| `title` | string | No | Display title for the conversation. Defaults to `"Nouveau fil"`. |
+| `modelKey` | string | No | Model to use, formatted as `"provider/modelId"` (e.g. `"openai/gpt-4o"`). Defaults to the user's default model. |
+
+**Response:**
+
+```javascript
+{
+  ok: true,
+  data: {
+    created: true,       // false if conversation already existed
+    conversation: {
+      id: "uuid-...",
+      projectId: null,   // always null for channel conversations
+      title: "PingChat - Alice",
+      updatedAt: "2026-03-10T12:00:00.000Z",
+      lastMessageAt: "2026-03-10T12:00:00.000Z",
+      modelProvider: "openai",
+      modelId: "gpt-4o",
+      thinkingLevel: null,
+    }
   }
 }
 ```
 
-### `channel.disconnect`
+**Example:**
 
-Purpose:
+```javascript
+var result = await window.chaton.extensionHostCall(
+  EXTENSION_ID,
+  'channels.upsertGlobalThread',
+  {
+    mappingKey: 'telegram:chat:12345',
+    title: 'Telegram - Alice',
+    modelKey: 'openai/gpt-4o',
+  }
+);
 
-- clear local connection state and stop bridge activity
-
-Example result:
-
-```json
-{
-  "disconnected": true
+if (result.ok) {
+  var conversationId = result.data.conversation.id;
+  console.log('Using conversation:', conversationId);
+  console.log('Was newly created:', result.data.created);
 }
 ```
 
-### `channel.status`
+**How mapping works:** The host stores `{ mappingKey -> conversationId }` in your extension's KV storage under the key `channel.threadMappings`. You do not need to manage this mapping yourself.
 
-Purpose:
+### `channels.ingestMessage`
 
-- report health and connection state
+Send an external message into a Chatons conversation and receive an AI-generated reply.
 
-Example result:
+**Required capability:** `host.conversations.write`
 
-```json
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `conversationId` | string | Yes | Chatons conversation ID (from `upsertGlobalThread`). |
+| `message` | string | Yes | The text message from the external user. |
+| `idempotencyKey` | string | No | Deduplication key. If the same key is sent again, the call is a no-op and returns `{ reply: null }`. Use the external message ID for this. |
+| `metadata` | object | No | Arbitrary metadata stored alongside the deduplication record. |
+
+**Response:**
+
+```javascript
 {
-  "connected": true,
-  "provider": "telegram",
-  "account": {
-    "id": "bot-123",
-    "label": "My Telegram Bot"
-  },
-  "counters": {
-    "mappedThreads": 12,
-    "pendingInbound": 0,
-    "pendingOutbound": 1,
-    "deadLetters": 0
-  },
-  "lastInboundAt": "2026-03-06T06:10:00.000Z"
+  ok: true,
+  data: {
+    reply: "Hello! How can I help you today?"  // AI-generated reply, or null
+  }
 }
 ```
 
-### `channel.receive`
+**Example:**
 
-Purpose:
+```javascript
+var result = await window.chaton.extensionHostCall(
+  EXTENSION_ID,
+  'channels.ingestMessage',
+  {
+    conversationId: 'uuid-...',
+    message: 'Hello from Telegram!',
+    idempotencyKey: 'telegram-msg-42',
+  }
+);
 
-- accept or normalize inbound provider payloads before bridge ingestion
+if (result.ok && result.data.reply) {
+  // Send the AI reply back to the external platform
+  await sendToTelegram(chatId, result.data.reply);
+}
+```
 
-In some implementations this can be an internal helper API rather than a user-facing action.
+**What happens internally:**
 
-### `channel.send`
+1. The host validates the conversation is a global thread
+2. If `idempotencyKey` was seen before, returns `{ reply: null }` immediately
+3. If a subagent is already processing a previous message for this conversation, the new message is steered into the same subagent run
+4. Otherwise, a fresh ephemeral Pi subagent runs against the conversation's history
+5. The user message and the assistant reply are appended to the conversation's message cache
+6. The reply text is returned
 
-Purpose:
+### `channels.reportStatus`
 
-- send a reply from Chatons back to the external platform
+Report the extension's connection health to the Chatons UI.
 
-A typical payload includes:
+**Required capability:** `host.conversations.write`
 
-- `conversationId`
-- message text
-- any provider-specific delivery metadata you need
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `configured` | boolean | Yes | Whether the extension has valid configuration. |
+| `connected` | boolean | Yes | Whether the extension is actively connected. |
+| `lastActivity` | string | No | ISO timestamp of the last processed message. |
+| `issues` | string[] | No | Array of current problem descriptions. |
+| `info` | string | No | Free-form informational string. |
+
+**Example:**
+
+```javascript
+await window.chaton.extensionHostCall(EXTENSION_ID, 'channels.reportStatus', {
+  configured: true,
+  connected: true,
+  lastActivity: new Date().toISOString(),
+  issues: [],
+  info: 'Polling every 5 seconds',
+});
+```
+
+The reported status is displayed in the Channels view. The green/gray connection dot next to your extension reflects the `connected` field.
+
+There is also a convenience method available on the SDK:
+
+```javascript
+await window.chatonExtension.api.host.channels.reportStatus({
+  configured: true,
+  connected: true,
+  lastActivity: new Date().toISOString(),
+});
+```
+
+### `channels.getStatus`
+
+Read back the last status you reported.
+
+**No special capability required.**
+
+```javascript
+var result = await window.chaton.extensionHostCall(
+  EXTENSION_ID,
+  'channels.getStatus'
+);
+// result.data is the status object, or null if never reported
+```
+
+### `conversations.list`
+
+List all conversations (useful for diagnostics).
+
+**Required capability:** `host.conversations.read`
+
+```javascript
+var result = await window.chaton.extensionHostCall(
+  EXTENSION_ID,
+  'conversations.list'
+);
+// result.data is an array of conversation objects
+```
+
+### `conversations.getMessages`
+
+Read messages from a specific conversation.
+
+**Required capability:** `host.conversations.read`
+
+```javascript
+var result = await window.chaton.extensionHostCall(
+  EXTENSION_ID,
+  'conversations.getMessages',
+  { conversationId: 'uuid-...' }
+);
+// result.data is an array of { id, role, payloadJson, createdAt, updatedAt }
+```
+
+### `notifications.notify`
+
+Show a notification in the Chatons UI.
+
+**Required capability:** `host.notifications`
+
+```javascript
+await window.chaton.extensionHostCall(EXTENSION_ID, 'notifications.notify', {
+  title: 'PingChat',
+  body: 'New message received',
+});
+```
 
 ---
 
-## 6. Host methods useful to channel extensions
+## Step-by-Step Walkthrough
 
-The current runtime exposes generic bridge-style host methods that channel extensions can build on.
+### The Message Processing Pipeline
 
-Examples referenced by the current platform docs:
+When an external message arrives, a channel extension follows this sequence:
 
-- `channels.upsertGlobalThread`
-- `channels.ingestMessage`
-- `conversations.getMessages`
+**1. Receive the external message**
 
-What that means in practice:
+Your extension is responsible for getting messages from the external platform. Options:
 
-- the host can help with Chatons-side conversation creation and ingestion
-- provider-specific polling, webhook handling, mapping policy, and outbound delivery still belong to the extension
+- **Polling**: Use `setInterval` to periodically call the external API. Since channel extension main views run in background iframes, this works reliably.
+- **WebSocket**: Open a WebSocket connection in your `app.js`. The background iframe keeps the connection alive.
+- **Server process**: For webhook-based integrations, declare a `server.start` in your manifest to run a local HTTP server that receives webhooks.
 
----
+**2. Map the remote thread to a Chatons conversation**
 
-## 7. Queue and retry strategy
+Call `channels.upsertGlobalThread` with a stable mapping key. The key should uniquely identify the remote thread:
 
-For real channel integrations, queue support is strongly recommended.
+```javascript
+// For group chats, use the thread/channel ID
+var mappingKey = 'slack:channel:C0123456';
 
-Why:
+// For DMs, use the remote user ID
+var mappingKey = 'telegram:user:789012';
+```
 
-- inbound delivery may need retries
-- outbound delivery may fail temporarily
-- webhook or poll bursts should not require all work to finish inline
+**3. Ingest the message**
 
-The Chatons extension queue gives you:
+Call `channels.ingestMessage` with the conversation ID and the message text. The host runs an AI model against the conversation's history and returns a reply.
 
-- persistent storage
-- at-least-once semantics
-- retry behavior
-- dead-letter handling
+**4. Send the reply back**
 
-That is a good fit for bridge-style integrations as long as your extension code is written to be idempotent.
+If the ingestion returns a reply (it can be `null` if deduplicated), send it back to the external platform using your own API client.
 
----
+**5. Report your status**
 
-## 8. Storage strategy
+Call `channels.reportStatus` periodically or when your connection state changes. This updates the Channels view in the Chatons UI.
 
-A channel extension usually needs to keep several kinds of state.
+### Choosing a Mapping Key Strategy
 
-Typical examples:
+The mapping key determines how remote conversations map to Chatons threads.
 
-- auth tokens
-- remote-to-local conversation mappings
-- sync cursors
-- deduplication ids
-- webhook or polling metadata
+| Strategy | Key Format | Use Case |
+|----------|------------|----------|
+| Per-thread | `provider:thread:THREAD_ID` | Group chats, channels |
+| Per-user | `provider:user:USER_ID` | Direct messages |
+| Per-room+user | `provider:room:ROOM_ID:user:USER_ID` | Per-user threads within a room |
 
-Recommended storage split:
-
-- use KV storage for compact structured state
-- use sandboxed files for larger provider-specific blobs if needed
+Choose the strategy that matches your external platform's conversation model.
 
 ---
 
-## 9. UI expectations
+## Routing Model
 
-A channel extension should usually ship a main view for:
+### Global Threads Only
 
-- authentication
-- setup
-- connection status
-- diagnostics
-- mapping inspection or repair
+Channel messages must go into global conversations (`projectId = null`). The host enforces this:
 
-Remember that Chatons hosts extension main views in a full-width main-panel container, so you can design a proper admin-style page instead of squeezing into the conversation column.
+- `channels.upsertGlobalThread` always creates conversations with `projectId = null`
+- `channels.ingestMessage` rejects messages to project-linked conversations
 
----
+This is a deliberate design constraint. Channel traffic should not interfere with project-specific conversations.
 
-## 10. Optional model-callable tools
+### Thread Mapping Persistence
 
-A channel extension can expose `llm.tools`, but this is optional.
+The host automatically stores thread mappings in your extension's KV storage under the key `channel.threadMappings`. You do not need to manage this mapping yourself.
 
-Use it only when the model should be able to trigger extension-owned bridge behavior intentionally.
-
-### Recommended: Configuration Status Tool
-
-**All channel extensions should implement a status tool** so users can verify configuration without navigating the extension UI.
-
-In assistant mode, users can ask: "Is my Telegram channel configured?" and get an instant response.
-
-To implement:
-
-1. Add `llm.tools` to capabilities
-2. Define a `{channel_id}_get_status` tool in `llm.tools[]`
-3. Implement the handler to return `{ configured, connected, issues?, lastActivity? }`
-
-Example manifest addition:
+The stored shape is:
 
 ```json
 {
-  "capabilities": [..., "llm.tools"],
+  "pingchat:thread:general": {
+    "chatonsConversationId": "uuid-...",
+    "modelKey": "openai/gpt-4o",
+    "updatedAt": "2026-03-10T12:00:00.000Z"
+  },
+  "pingchat:thread:support": {
+    "chatonsConversationId": "uuid-...",
+    "modelKey": null,
+    "updatedAt": "2026-03-10T12:01:00.000Z"
+  }
+}
+```
+
+If you need to inspect or repair mappings, read them directly from KV:
+
+```javascript
+var result = await window.chaton.extensionStorageKvGet(
+  EXTENSION_ID,
+  'channel.threadMappings'
+);
+var mappings = result.ok && result.data ? result.data : {};
+```
+
+---
+
+## Storage and State Management
+
+Channel extensions should store state in KV storage. Common keys to manage:
+
+| Key | Purpose | Example |
+|-----|---------|---------|
+| `config` | API credentials, connection settings | `{ apiUrl, apiToken }` |
+| `channel.threadMappings` | Thread-to-conversation mapping (host-managed) | Automatic |
+| `lastCursor` | Sync cursor for polling | `"cursor-abc123"` |
+| `stats` | Message counters, metrics | `{ totalMessages: 42 }` |
+
+**Important:** KV values are stored as JSON objects. You do not need to stringify them before calling `extensionStorageKvSet`.
+
+```javascript
+// Store an object directly
+await window.chaton.extensionStorageKvSet(EXTENSION_ID, 'config', {
+  apiUrl: 'https://api.example.com',
+  token: 'abc123',
+});
+
+// Read it back
+var result = await window.chaton.extensionStorageKvGet(EXTENSION_ID, 'config');
+if (result.ok && result.data) {
+  var config = result.data; // Already an object
+}
+```
+
+---
+
+## Queue and Retry Strategy
+
+For production channel integrations, use the extension queue for reliable message processing:
+
+```javascript
+// Publish inbound messages to a queue for processing
+await window.chaton.extensionQueueEnqueue(
+  EXTENSION_ID,
+  'inbound-messages',
+  { threadId: msg.threadId, text: msg.text, messageId: msg.id }
+);
+
+// Consume and process messages with retry
+var messages = await window.chaton.extensionQueueConsume(
+  EXTENSION_ID,
+  'inbound-messages',
+  'worker-1',
+  { limit: 5 }
+);
+
+for (var i = 0; i < messages.length; i++) {
+  var job = messages[i];
+  try {
+    await processInboundMessage(job.payload);
+    await window.chaton.extensionQueueAck(EXTENSION_ID, job.id);
+  } catch (err) {
+    // Retry later
+    await window.chaton.extensionQueueNack(EXTENSION_ID, job.id, null, err.message);
+  }
+}
+```
+
+The queue provides:
+
+- **At-least-once delivery** - messages are retried if not acknowledged
+- **Dead-letter handling** - repeatedly failing messages go to a dead-letter queue
+- **Persistence** - queue state survives app restarts
+
+This is strongly recommended when your external platform has strict delivery requirements.
+
+---
+
+## Status Reporting
+
+Call `channels.reportStatus` whenever your connection state changes. The Chatons Channels view reads this to show a connection indicator (green dot = connected, gray = offline).
+
+```javascript
+// On successful connection
+reportStatus({ configured: true, connected: true });
+
+// On connection failure
+reportStatus({
+  configured: true,
+  connected: false,
+  issues: ['Connection refused: api.example.com:443'],
+});
+
+// On configuration change
+reportStatus({
+  configured: false,
+  connected: false,
+  issues: ['API token not configured'],
+});
+```
+
+Call `reportStatus` at these points:
+
+1. After loading configuration (to set initial state)
+2. After a successful connection test
+3. When polling starts or stops
+4. When an error occurs
+5. Periodically during normal operation (optional)
+
+---
+
+## Optional LLM Tools
+
+A channel extension can optionally expose tools to the AI model. This is useful for letting the user check channel status from within a conversation.
+
+### Status Tool Example
+
+Add to your manifest:
+
+```json
+{
+  "capabilities": ["llm.tools", "...other capabilities..."],
   "llm": {
     "tools": [
       {
-        "name": "telegram_get_status",
-        "description": "Get the configuration status of the Telegram channel. Use this to verify if the channel is properly set up and connected.",
+        "name": "pingchat_get_status",
+        "description": "Get the connection status of the PingChat channel.",
         "parameters": {
           "type": "object",
           "properties": {},
@@ -366,76 +1181,141 @@ Example manifest addition:
         }
       }
     ]
+  },
+  "apis": {
+    "exposes": [
+      { "name": "pingchat_get_status", "version": "1.0.0" }
+    ]
   }
 }
 ```
 
-Example handler:
+Then handle the tool call in your `app.js`:
 
 ```javascript
-const { api } = window.chatonExtension;
+// Register the tool handler via the extension call system
+// The host routes LLM tool calls through the extension's exposed APIs
+window.addEventListener('message', function (event) {
+  var data = event && event.data;
+  if (!data || data.type !== 'chaton.extension.apiCall') return;
+  if (data.apiName !== 'pingchat_get_status') return;
 
-api.llm.tools.onCall('telegram_get_status', async () => {
-  const isConfigured = state.config.token && state.config.token.trim().length > 0;
-  const isConnected = state.config.connected === true;
-  
-  return {
-    configured: isConfigured,
-    connected: isConnected,
-    lastActivity: state.config.lastInboundAt || null,
-    issues: [
-      !isConfigured ? 'Bot token not configured' : null,
-      isConfigured && !isConnected ? 'Not currently connected' : null,
-    ].filter(Boolean)
+  var response = {
+    configured: !!(state.apiUrl && state.apiToken),
+    connected: state.connected,
+    polling: state.polling,
+    messagesProcessed: state.messageCount,
+    lastActivity: state.activityLog.length > 0
+      ? state.activityLog[0].time
+      : null,
   };
+
+  // Reply to the host
+  window.parent.postMessage({
+    type: 'chaton.extension.apiCallResponse',
+    callId: data.callId,
+    result: response,
+  }, '*');
 });
 ```
 
-**Benefits:**
-
-- Users can check channel status in assistant mode without leaving the conversation
-- Assistant can proactively guide users through configuration
-- Consistent status reporting across all channels
-- See [Channel Configuration Status System](../CHANNEL_CONFIG_STATUS_SYSTEM.md) for detailed guide
-
-### Optional: Other Bridge Actions
-
-Beyond the status tool, a channel can expose additional actions as LLM tools if the model genuinely needs to trigger bridge behavior:
-
-- `channel_send_message` - send a message to the external platform
-- `channel_refresh_mappings` - rebuild local mappings
-- `channel_reconnect` - force reconnection
-
-If you do add these:
-
-- declare capability `llm.tools`
-- add each tool to `llm.tools[]`
-- add the matching API in `apis.exposes[]`
+With this, users can ask the AI: "Is my PingChat channel connected?" and get an instant answer without navigating away from the conversation.
 
 ---
 
-## 11. Recommended development workflow
+## UI Expectations
 
-Because runtime reload behavior is still conservative, the practical workflow for channel extension development is:
+A channel extension should ship a main view for:
 
-1. create or update the extension under `~/.chaton/extensions/<id>`
-2. validate the manifest
-3. restart Chatons
-4. inspect the extension in the Channels page
-5. test inbound and outbound behavior
-6. inspect extension logs under `~/.chaton/extensions/logs/` when something goes wrong
+- **Configuration** - API credentials, connection settings
+- **Connection status** - online/offline indicator, last activity
+- **Diagnostics** - recent activity log, error messages
+- **Mapping inspection** - which remote threads map to which conversations
+
+Use the built-in CSS classes (`.ce-page`, `.ce-card`, `.ce-field`, etc.) for a look that is consistent with the Chatons UI. These styles are automatically injected into your webview.
+
+Your main view runs inside an iframe. In normal use, it runs as a hidden background iframe for polling. When the user clicks "Configure" in the Channels view, the same iframe is displayed in a slide-over sheet.
 
 ---
 
-## 12. What to describe carefully in docs
+## Development Workflow
 
-When documenting channel integrations, do not oversell them as a fully host-managed messaging framework.
+1. Create the extension folder:
+   ```bash
+   mkdir -p ~/.chaton/extensions/@yourname/chatons-channel-myapp
+   ```
 
-Current reality:
+2. Create the manifest (`chaton.extension.json`) with `kind: "channel"`
 
-- channel behavior is built on the normal extension platform
-- routing is global-thread only
-- provider-specific bridge logic remains extension-owned
-- queueing and storage are provided by the host, but policy and delivery logic stay in the extension
+3. Create the UI files (`index.html`, `app.js`, `style.css`)
 
-That is a strong foundation, but it is intentionally not a universal messaging abstraction layer yet.
+4. Restart Chatons
+
+5. Open the **Channels** view in the sidebar - your extension should appear
+
+6. Click **Configure** to open your extension's main view
+
+7. Test the message flow end-to-end
+
+8. Check the browser DevTools console (F12) for errors
+
+9. After any file changes, restart Chatons to reload
+
+### Common Development Mistakes
+
+| Mistake | Fix |
+|---------|-----|
+| Extension does not appear in Channels | Verify `kind: "channel"` is in the manifest |
+| `extensionHostCall` returns unauthorized | Add `host.conversations.write` to capabilities |
+| Messages fail to ingest | Check conversation is global (not project-linked) |
+| Polling stops when navigating away | This should not happen - channel iframes run in background. Check for JS errors. |
+| Duplicate messages processed | Use `idempotencyKey` in `ingestMessage` |
+
+---
+
+## Debugging
+
+### Check the Console
+
+Press **F12** in Chatons to open DevTools. Your extension's `console.log()` output from the background iframe appears here.
+
+### Check Extension Logs
+
+Extension runtime logs are written to:
+
+```
+~/.chaton/extensions/logs/
+```
+
+Look for files matching your extension ID.
+
+### Inspect Thread Mappings
+
+```javascript
+// In your extension's app.js or via DevTools console
+var result = await window.chaton.extensionStorageKvGet(
+  '@yourname/chatons-channel-pingchat',
+  'channel.threadMappings'
+);
+console.log('Thread mappings:', result.data);
+```
+
+### Validate Your Manifest
+
+```bash
+# Check JSON syntax
+cat ~/.chaton/extensions/@yourname/chatons-channel-pingchat/chaton.extension.json | python3 -m json.tool > /dev/null
+```
+
+---
+
+## Current Limitations
+
+Be aware of these constraints when building channel extensions:
+
+- **Global threads only.** Channel messages cannot target project conversations. This is enforced by the host.
+- **Restart required after changes.** Modifying extension files requires restarting Chatons for changes to take effect. Hot reload is not fully reliable.
+- **No host-managed webhooks.** The host does not provide a webhook receiver. If your external platform pushes via webhooks, you need to run a local server process (via `server.start` in the manifest) or use an external relay.
+- **No attachment sync.** The current contract does not include a built-in attachment or media synchronization spec. Handle media in your own bridge logic.
+- **No project routing.** Multi-project dispatch is not supported. All channel messages go to global threads.
+- **Sequential subagent execution.** If a second message arrives while the subagent is processing a previous message for the same conversation, the new message is steered into the running subagent rather than queued separately. This means replies may be combined.
