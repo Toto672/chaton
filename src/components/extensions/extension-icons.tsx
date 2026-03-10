@@ -49,41 +49,48 @@ const ICONS: Record<string, IconComponent> = {
 };
 
 /**
- * Try to resolve a local extension icon from the static extension-icons directory.
- * Returns a path to either .svg or .png version of the icon.
+ * Resolve the static icon bundled with the app for a given extension ID.
+ * Used as a fallback when no explicit URL is provided.
  */
-function tryStaticIcon(extensionId?: string): string | null {
-  if (!extensionId) return null;
-
-  // Normalize extension ID to filename format: @scope/name -> @scope-name
+function staticIconPath(extensionId: string): string {
   const normalized = extensionId.replace(/\//g, "-");
-
-  // Try .svg first, then .png
-  // Browser will handle 404 gracefully by falling back to lucide icons
-  const svgPath = `/extension-icons/${normalized}.svg`;
-  return svgPath;
+  return `/extension-icons/${normalized}.svg`;
 }
 
+/**
+ * Resolve an extension icon for display.
+ *
+ * Priority:
+ *  1. Named lucide-react icon (used by manifest sidebar menu items)
+ *  2. Explicit image URL or data-URL (local data-URL for installed,
+ *     CDN URL for marketplace)
+ *  3. Static icon bundled with the app (/extension-icons/)
+ *  4. Puzzle fallback
+ *
+ * @param iconName - An icon identifier: lucide name, data-URL, HTTP URL, or
+ *                   relative path from the manifest.
+ * @param extensionId - The extension ID, used to look up bundled static icons.
+ */
 export function getExtensionIcon(
   iconName?: string | null,
   extensionId?: string,
 ): IconValue {
   const normalized = typeof iconName === "string" ? iconName.trim() : "";
 
-  // Named lucide-react icons are used by manifest menu items.
+  // 1. Named lucide-react icon from manifest menu items
   if (ICONS[normalized]) return { kind: "svg", Component: ICONS[normalized] };
 
-  // Prefer static marketplace icons bundled with the app (works for both marketplace and installed).
-  if (extensionId) {
-    const staticPath = tryStaticIcon(extensionId);
-    if (staticPath) return { kind: "image", src: staticPath };
-  }
-
-  // Fall back to explicit image URLs resolved by the backend for installed extensions.
+  // 2. Explicit image: data-URL (local installed), HTTP URL (marketplace CDN),
+  //    or absolute path
   if (/^(data:image\/|https?:\/\/|\/)/i.test(normalized)) {
     return { kind: "image", src: normalized };
   }
 
-  // Final fallback to puzzle icon if nothing else works
+  // 3. Bundled static icon for this extension ID
+  if (extensionId) {
+    return { kind: "image", src: staticIconPath(extensionId) };
+  }
+
+  // 4. Final fallback
   return { kind: "svg", Component: Puzzle };
 }

@@ -336,7 +336,7 @@ function isNpmCatalogCacheFresh(cache: NpmCatalogCache | null): boolean {
   return Date.now() - updated < NPM_CATALOG_TTL_MS
 }
 
-const CHATONS_CATALOG_URL = 'https://www.chatons.ai/extensions-catalog.json'
+const CHATONS_CATALOG_URL = 'https://marketplace.chatons.ai/api/extensions'
 
 function checkNpmLoginStatus(): { loggedIn: boolean; username?: string } {
   try {
@@ -421,7 +421,7 @@ function normalizeChatonsCatalogEntry(
   const author = typeof entry.author === 'string' ? entry.author : undefined
   const keywords = Array.isArray(entry.keywords) ? (entry.keywords as string[]) : []
   const iconUrl = typeof entry.iconUrl === 'string' && entry.iconUrl
-    ? `https://www.chatons.ai${entry.iconUrl}`
+    ? entry.iconUrl
     : undefined
 
   // Determine popularity from recency
