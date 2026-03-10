@@ -1,77 +1,51 @@
 ---
 title: Extensions Tutorial
-description: Build your first Chatons extension in 30 minutes with this complete working example.
+description: Build a working Chatons extension from scratch. Copy-paste and it works.
 ---
 
-# Chatons Extensions Tutorial
+# Extensions Tutorial
 
-**Goal:** Build your first extension in 30 minutes.
+Build your first extension in 30 minutes. This tutorial creates a real, working note-taking extension.
 
-**Related:** See [Extensions](/extensions) for overview, [Extensions API](/extensions/api) for reference.
+**Prerequisites:** Chatons installed and running, basic HTML/CSS/JavaScript knowledge.
+
+**Reference:** [Extensions API](/extensions/api) for the full method reference.
 
 ---
 
 ## Table of Contents
 
-1. [Before You Start](#before-you-start)
-2. [Complete Working Example](#complete-working-example)
-3. [Step-by-Step Walkthrough](#step-by-step-walkthrough)
+1. [Project Structure](#project-structure)
+2. [Step-by-Step Build](#step-by-step-build)
+3. [How It Works](#how-it-works)
 4. [Common Patterns](#common-patterns)
-5. [Debugging Extensions](#debugging-extensions)
-6. [Testing Your Extension](#testing-your-extension)
-7. [Performance Best Practices](#performance-best-practices)
-8. [Security Considerations](#security-considerations)
-9. [Publishing Your Extension](#publishing-your-extension)
+5. [Debugging](#debugging)
+6. [Performance Tips](#performance-tips)
+7. [Security](#security)
+8. [Next Steps](#next-steps)
 
 ---
 
-## Before You Start
-
-### Prerequisites
-
-- Chatons installed and running
-- Basic HTML/CSS/JavaScript knowledge
-- npm installed (optional, for dependencies)
-- A code editor (VS Code recommended)
-
-### Key Concepts
-
-- **Extension ID:** Unique identifier like `@username/chatons-my-ext`
-- **Manifest:** `chaton.extension.json` file that describes your extension
-- **Webview:** Your extension's UI runs in an isolated webview
-- **Capabilities:** Permissions your extension needs (storage, events, etc.)
-- **SDK:** JavaScript API your extension uses to talk to Chatons
-
-### Development Workflow
-
-1. Create folder in `~/.chaton/extensions/`
-2. Create `chaton.extension.json` manifest
-3. Create `index.html` for UI
-4. Test by restarting Chatons
-5. Iterate and test
-6. Publish to npm (optional)
-
----
-
-## Complete Working Example
-
-This is a real, working extension you can build right now. **Copy-paste and it works.**
-
-### Project Structure
+## Project Structure
 
 ```
-~/.chaton/extensions/my-notes-extension/
+~/.chaton/extensions/@yourname/chatons-my-notes/
 ├── chaton.extension.json
+├── package.json
 ├── index.html
 ├── style.css
 └── app.js
 ```
 
+---
+
+## Step-by-Step Build
+
 ### Step 1: Create the Directory
 
 ```bash
-mkdir -p ~/.chaton/extensions/my-notes-extension
-cd ~/.chaton/extensions/my-notes-extension
+mkdir -p ~/.chaton/extensions/@yourname/chatons-my-notes
+cd ~/.chaton/extensions/@yourname/chatons-my-notes
 ```
 
 ### Step 2: Create `chaton.extension.json`
@@ -83,9 +57,10 @@ cd ~/.chaton/extensions/my-notes-extension
   "version": "1.0.0",
   "description": "A simple note-taking extension for Chatons",
   "capabilities": [
+    "ui.menu",
     "ui.mainView",
     "storage.kv",
-    "events.subscribe"
+    "host.notifications"
   ],
   "ui": {
     "mainViews": [
@@ -98,33 +73,36 @@ cd ~/.chaton/extensions/my-notes-extension
     ],
     "menuItems": [
       {
+        "id": "notes.menu",
         "label": "Notes",
         "icon": "BookOpen",
         "order": 50,
         "openMainView": "notes.main"
-      }
-    ],
-    "quickActions": [
-      {
-        "id": "new-note",
-        "label": "New Note",
-        "icon": "Plus",
-        "action": "openMainView",
-        "target": "notes.main"
       }
     ]
   }
 }
 ```
 
-**What this does:**
-- `id`: Unique ID for your extension
-- `capabilities`: Declares what you want to access (storage, events)
-- `ui.mainViews`: Creates a main view (the "Notes" page)
-- `ui.menuItems`: Adds "Notes" to the sidebar
-- `ui.quickActions`: Adds quick action in empty thread
+**What each field does:**
 
-### Step 3: Create `index.html`
+- `id` -- Unique identifier. Used as the namespace for storage.
+- `capabilities` -- Permissions. `storage.kv` lets you save data, `host.notifications` lets you show notifications, `ui.menu` and `ui.mainView` let you add a sidebar item and page.
+- `ui.mainViews` -- Declares a full-page view. `webviewUrl` points to your HTML file.
+- `ui.menuItems` -- Adds a "Notes" entry to the sidebar. `openMainView` links it to the view above.
+
+### Step 3: Create `package.json`
+
+```json
+{
+  "name": "@yourname/chatons-my-notes",
+  "version": "1.0.0",
+  "description": "A note-taking extension for Chatons",
+  "license": "MIT"
+}
+```
+
+### Step 4: Create `index.html`
 
 ```html
 <!DOCTYPE html>
@@ -135,17 +113,35 @@ cd ~/.chaton/extensions/my-notes-extension
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <h1>My Notes</h1>
-    
-    <div class="note-input">
-      <textarea id="noteInput" placeholder="Write a note..."></textarea>
-      <button id="saveBtn">Save Note</button>
+  <div class="ce-page">
+    <div class="ce-page-header">
+      <div class="ce-page-title-group">
+        <h1 class="ce-page-title">My Notes</h1>
+        <p class="ce-page-description">Write and save notes. They persist across restarts.</p>
+      </div>
     </div>
 
-    <div class="notes-list">
-      <h2>Your Notes</h2>
-      <div id="notesList"></div>
+    <div class="ce-card">
+      <div class="ce-card__body">
+        <div class="ce-field">
+          <label class="ce-label" for="noteInput">New note</label>
+          <textarea id="noteInput" rows="4" placeholder="Write a note..."></textarea>
+        </div>
+        <div class="ce-toolbar">
+          <button id="saveBtn" class="chaton-ui-button chaton-ui-button--primary">
+            Save Note
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ce-card">
+      <div class="ce-card__body">
+        <h2 class="ce-section-title">Saved Notes</h2>
+        <div id="notesList" class="ce-list">
+          <div class="ce-empty">No notes yet. Write one above!</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -154,946 +150,521 @@ cd ~/.chaton/extensions/my-notes-extension
 </html>
 ```
 
-### Step 4: Create `style.css`
+**Why `.ce-page`, `.ce-card`, etc.?** Chatons injects a stylesheet with these class names into every extension webview. Using them makes your extension look native without writing custom CSS. See the [UI Library](/extensions/ui-library) for all available classes.
+
+### Step 5: Create `style.css`
 
 ```css
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  background-color: #f5f5f5;
-  color: #333;
-}
-
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-h1 {
-  margin-bottom: 20px;
-  color: #222;
-  font-size: 28px;
-}
-
-h2 {
-  font-size: 16px;
-  margin-top: 30px;
-  margin-bottom: 15px;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.note-input {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  margin-bottom: 30px;
-}
-
-textarea {
-  width: 100%;
-  height: 120px;
-  padding: 12px;
-  font-family: inherit;
-  font-size: 14px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  resize: vertical;
-  margin-bottom: 12px;
-}
-
-textarea:focus {
-  outline: none;
-  border-color: #007AFF;
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
-}
-
-button {
-  background-color: #007AFF;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: background-color 0.2s;
-}
-
-button:hover {
-  background-color: #0051D5;
-}
-
-button:active {
-  transform: scale(0.98);
-}
-
-.notes-list {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
+/* Chatons injects its own base styles into the webview.
+   Only add custom styles here. */
 
 .note-item {
-  padding: 15px;
-  margin-bottom: 12px;
-  background: #f9f9f9;
-  border-left: 3px solid #007AFF;
-  border-radius: 4px;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 15px;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ce-border, #eee);
 }
 
 .note-item:last-child {
-  margin-bottom: 0;
+  border-bottom: none;
 }
 
-.note-content {
+.note-text {
   flex: 1;
-}
-
-.note-content p {
   line-height: 1.5;
-  margin-bottom: 8px;
+  font-size: 14px;
 }
 
 .note-date {
   font-size: 12px;
-  color: #999;
-}
-
-.note-delete {
-  background-color: #FF3B30;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.note-delete:hover {
-  background-color: #CC0000;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 40px 20px;
-  color: #999;
-}
-
-.empty-state p {
-  margin: 10px 0;
+  color: var(--ce-muted, #999);
+  margin-top: 4px;
 }
 ```
 
-### Step 5: Create `app.js`
+### Step 6: Create `app.js`
+
+This is the heart of the extension. Pay close attention to how the API is called.
 
 ```javascript
-// Load SDK
-const sdk = window.chatonExtension;
-const { api } = sdk;
+(function () {
+  'use strict';
 
-// Initialize
-let notes = [];
+  // Your extension ID -- must match the "id" in chaton.extension.json
+  var EXTENSION_ID = '@yourname/chatons-my-notes';
 
-async function init() {
-  console.log('[Notes] Initializing...');
-  
-  // Load notes from storage
-  await loadNotes();
-  
-  // Set up event listeners
-  setupEventListeners();
-  
-  // Render notes
-  renderNotes();
-  
-  console.log('[Notes] Initialized with', notes.length, 'notes');
-}
+  // Enable the injected Chatons UI styles
+  if (window.chatonExtensionComponents) {
+    window.chatonExtensionComponents.ensureStyles();
+  }
 
-async function loadNotes() {
-  try {
-    const stored = await api.storage.kv.get('notes');
-    if (stored) {
-      notes = JSON.parse(stored);
+  // ---- State ----
+  var notes = [];
+
+  // ---- DOM refs ----
+  var noteInput = document.getElementById('noteInput');
+  var saveBtn = document.getElementById('saveBtn');
+  var notesList = document.getElementById('notesList');
+
+  // =========================================================================
+  // Storage API
+  //
+  // Extensions use window.chaton.extensionStorageKvGet/Set/Delete/List
+  // to persist data. The first argument is always your extension ID.
+  //
+  // KV storage is backed by SQLite. Values are stored as JSON -- you can
+  // pass objects directly without JSON.stringify().
+  //
+  // Returns: Promise<{ ok: true, data: ... }> or Promise<{ ok: false, ... }>
+  // =========================================================================
+
+  function loadNotes() {
+    return window.chaton.extensionStorageKvGet(EXTENSION_ID, 'notes')
+      .then(function (result) {
+        if (result && result.ok && result.data) {
+          // KV stores JSON objects directly -- no need to JSON.parse
+          notes = Array.isArray(result.data) ? result.data : [];
+        }
+      })
+      .catch(function (err) {
+        console.error('[Notes] Failed to load:', err);
+      });
+  }
+
+  function saveNotes() {
+    // Pass the array directly -- the host JSON-serializes it automatically
+    return window.chaton.extensionStorageKvSet(EXTENSION_ID, 'notes', notes)
+      .catch(function (err) {
+        console.error('[Notes] Failed to save:', err);
+      });
+  }
+
+  // =========================================================================
+  // Host calls
+  //
+  // window.chaton.extensionHostCall(extensionId, method, params)
+  // is used for notifications, conversation access, project access, etc.
+  // =========================================================================
+
+  function showNotification(title, body) {
+    return window.chaton.extensionHostCall(EXTENSION_ID, 'notifications.notify', {
+      title: title,
+      body: body,
+    });
+  }
+
+  // ---- Actions ----
+
+  function addNote() {
+    var text = noteInput.value.trim();
+    if (!text) {
+      showNotification('Notes', 'Please write a note first.');
+      return;
     }
-  } catch (err) {
-    console.error('[Notes] Failed to load notes:', err);
-  }
-}
 
-async function saveNotes() {
-  try {
-    await api.storage.kv.set('notes', JSON.stringify(notes));
-    console.log('[Notes] Saved', notes.length, 'notes');
-  } catch (err) {
-    console.error('[Notes] Failed to save notes:', err);
-  }
-}
+    var note = {
+      id: Date.now(),
+      text: text,
+      date: new Date().toISOString(),
+    };
 
-function setupEventListeners() {
-  document.getElementById('saveBtn').addEventListener('click', addNote);
-  document.getElementById('noteInput').addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.key === 'Enter' || e.metaKey && e.key === 'Enter') {
+    notes.unshift(note);
+    saveNotes();
+    noteInput.value = '';
+    renderNotes();
+    showNotification('Notes', 'Note saved.');
+  }
+
+  function deleteNote(id) {
+    notes = notes.filter(function (n) { return n.id !== id; });
+    saveNotes();
+    renderNotes();
+  }
+
+  // ---- Rendering ----
+
+  function renderNotes() {
+    if (notes.length === 0) {
+      notesList.innerHTML = '<div class="ce-empty">No notes yet. Write one above!</div>';
+      return;
+    }
+
+    notesList.innerHTML = notes.map(function (note) {
+      var dateStr = new Date(note.date).toLocaleString();
+      return (
+        '<div class="note-item">' +
+          '<div>' +
+            '<div class="note-text">' + escapeHtml(note.text) + '</div>' +
+            '<div class="note-date">' + dateStr + '</div>' +
+          '</div>' +
+          '<button class="chaton-ui-button" data-delete="' + note.id + '">Delete</button>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // ---- Event listeners ----
+
+  saveBtn.addEventListener('click', addNote);
+
+  noteInput.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       addNote();
     }
   });
-}
 
-async function addNote() {
-  const textarea = document.getElementById('noteInput');
-  const text = textarea.value.trim();
-  
-  if (!text) {
-    alert('Please write a note');
-    return;
-  }
-  
-  const note = {
-    id: Date.now(),
-    text: text,
-    date: new Date().toLocaleString(),
-    created: Date.now()
-  };
-  
-  notes.unshift(note); // Add to start
-  await saveNotes();
-  
-  textarea.value = '';
-  renderNotes();
-}
+  // Delegated click handler for delete buttons
+  notesList.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-delete]');
+    if (btn) {
+      deleteNote(Number(btn.getAttribute('data-delete')));
+    }
+  });
 
-async function deleteNote(id) {
-  notes = notes.filter(n => n.id !== id);
-  await saveNotes();
-  renderNotes();
-}
+  // ---- Initialize ----
 
-function renderNotes() {
-  const list = document.getElementById('notesList');
-  
-  if (notes.length === 0) {
-    list.innerHTML = '<div class="empty-state"><p>No notes yet</p><p>Write one above to get started!</p></div>';
-    return;
-  }
-  
-  list.innerHTML = notes.map(note => `
-    <div class="note-item">
-      <div class="note-content">
-        <p>${escapeHtml(note.text)}</p>
-        <span class="note-date">${note.date}</span>
-      </div>
-      <button class="note-delete" onclick="deleteNote(${note.id})">Delete</button>
-    </div>
-  `).join('');
-}
-
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-// Start when SDK is ready
-if (window.chatonExtension) {
-  init();
-} else {
-  window.addEventListener('chatonExtensionReady', init);
-}
+  loadNotes().then(function () {
+    renderNotes();
+    console.log('[Notes] Loaded', notes.length, 'notes');
+  });
+})();
 ```
 
-### Test It
+### Step 7: Test It
 
-1. Save all 4 files
+1. Save all 5 files
 2. Restart Chatons
-3. Go to **Extensions** panel
-4. You should see "My Notes" listed
-5. Click it to open the main view
-6. Write a note and click "Save Note"
-7. Notes persist even after restart!
+3. Click **Notes** in the sidebar
+4. Write a note and click **Save Note**
+5. Restart Chatons -- notes persist
 
 ---
 
-## Step-by-Step Walkthrough
+## How It Works
 
-### Understanding the Example
+### Startup sequence
 
-**What happens when you start Chatons:**
+1. Chatons reads `chaton.extension.json` from your extension folder
+2. It registers your menu item and main view
+3. When you click "Notes" in the sidebar, it loads your `index.html` in an iframe
+4. Chatons injects the UI bridge script, which sets up `window.chaton`, `window.chatonUi`, and `window.chatonExtensionComponents`
+5. Your `app.js` runs and calls `loadNotes()` via the KV storage API
 
-1. App loads your manifest from `chaton.extension.json`
-2. App injects `chatonExtension` SDK into your webview
-3. Your `app.js` runs and calls `init()`
-4. `init()` loads notes from storage using `api.storage.kv.get()`
-5. Notes are rendered from the stored data
+### What the bridge script injects
 
-**When you save a note:**
+The bridge script runs automatically before your code. It provides:
 
-1. User types text and clicks "Save Note"
-2. `addNote()` creates a note object with id, text, date
-3. Note is added to array
-4. `saveNotes()` stores array as JSON in `api.storage.kv`
-5. Chatons keeps this in local SQLite database
-6. UI is re-rendered
+| Global | Purpose |
+|--------|---------|
+| `window.chaton` | Host API: storage, events, queue, host calls, model listing |
+| `window.chatonUi` | UI helpers: `ensureStyles()`, `createButton()`, `createModelPicker()`, `createComponents()` |
+| `window.chatonExtensionComponents` | Pre-initialized component library (same as `window.chatonUi.createComponents()`) |
 
-**When you restart Chatons:**
+### Storage behavior
 
-1. Extension is discovered and loaded again
-2. `init()` runs again
-3. `loadNotes()` fetches from storage
-4. Previously saved notes appear automatically
-
-### Key Concepts Explained
-
-**1. Extension ID**
-- Must be unique
-- Format: `@username/chatons-extension-name`
-- Used to identify your extension to Chatons
-- Also used as namespace for storage
-
-**2. Manifest**
-- JSON file that tells Chatons what your extension does
-- Declares capabilities (what APIs you need)
-- Declares UI (menu items, main views, quick actions)
-- Must include `id`, `name`, `version`
-
-**3. Capabilities**
-- Act like permissions
-- You declare what you need: `storage.kv`, `events.subscribe`, etc.
-- If you use an API without declaring its capability, access is denied
-- Always declare what you use
-
-**4. SDK/API**
-- `window.chatonExtension` gives you access to Chatons APIs
-- Always check if it exists (use `window.addEventListener('chatonExtensionReady')`)
-- Async operations (use `await`)
-- Always wrap in try/catch
-
-**5. Storage**
-- `api.storage.kv` is key-value storage (like localStorage but persistent)
-- Limited to strings (stringify objects)
-- Namespaced by extension ID
-- Your notes in one extension don't conflict with another's
+- `extensionStorageKvGet()` returns `{ ok: true, data: <value> }` where `data` is the parsed JSON value (object, array, string, number, null)
+- `extensionStorageKvSet()` accepts any JSON-serializable value -- you do not need to `JSON.stringify()` it
+- `extensionStorageKvList()` returns `{ ok: true, data: [{ key, value, updatedAt }] }`
+- Storage is namespaced by extension ID -- your data cannot collide with another extension's
 
 ---
 
 ## Common Patterns
 
-### Pattern 1: Subscribe to Conversation Events
+### Pattern 1: Listen to Events
 
 ```javascript
-// Declare capability: "events.subscribe"
+// Capability required: "events.subscribe"
 
-async function subscribeToConversations() {
-  await api.events.subscribe('conversation.created', async (data) => {
-    console.log('New conversation:', data.conversation.id);
-    
-    // Do something with the conversation
-    await api.storage.kv.set(`last-conv`, data.conversation.id);
+window.chaton.extensionEventSubscribe(EXTENSION_ID, 'conversation.created')
+  .then(function () {
+    console.log('Subscribed to conversation.created');
+  });
+
+// Events arrive as IPC messages -- the subscription is registered
+// in the main process and forwarded to your extension's webview.
+```
+
+Available event topics:
+
+| Topic | Payload |
+|-------|---------|
+| `conversation.created` | `{ conversationId, projectId }` |
+| `conversation.updated` | `{ conversationId }` |
+| `conversation.message.received` | `{ conversationId, message }` |
+| `conversation.agent.started` | `{ conversationId }` |
+| `conversation.agent.ended` | `{ conversationId }` |
+| `conversation.turn.ended` | `{ conversationId }` |
+| `conversation.tool.executed` | `{ conversationId }` |
+| `project.created` | `{ project }` |
+| `project.deleted` | `{ project }` |
+| `extension.installed` | `{ extension }` |
+| `extension.enabled` | `{ extension }` |
+
+### Pattern 2: Read Conversations
+
+```javascript
+// Capability required: "host.conversations.read"
+
+// List all conversations
+var result = await window.chaton.extensionHostCall(EXTENSION_ID, 'conversations.list');
+if (result.ok) {
+  result.data.forEach(function (conv) {
+    console.log(conv.id, conv.title, conv.modelProvider + '/' + conv.modelId);
+  });
+}
+
+// Read messages from a specific conversation
+var msgResult = await window.chaton.extensionHostCall(
+  EXTENSION_ID,
+  'conversations.getMessages',
+  { conversationId: 'uuid-...' }
+);
+if (msgResult.ok) {
+  msgResult.data.forEach(function (msg) {
+    var payload = JSON.parse(msg.payloadJson);
+    console.log(msg.role, payload.content);
   });
 }
 ```
 
-### Pattern 2: Create Custom LLM Tools
-
-```json
-{
-  "capabilities": ["llm.tools"],
-  "llm": {
-    "tools": [
-      {
-        "name": "summarize_note",
-        "description": "Summarize a note in one sentence",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "note_id": {
-              "type": "string",
-              "description": "The ID of the note to summarize"
-            }
-          }
-        }
-      }
-    ]
-  }
-}
-```
+### Pattern 3: List Projects
 
 ```javascript
-// Handle tool calls
-api.llm.tools.onCall('summarize_note', async (params) => {
-  const note = await getNote(params.note_id);
-  // Call AI or return summary
-  return { summary: "..." };
-});
-```
+// Capability required: "host.projects.read"
 
-### Pattern 3: Show Notifications
-
-```javascript
-// Declare capability: "host.notifications"
-
-async function notifyUser() {
-  await api.host.notifications.show({
-    title: "Note Saved",
-    body: "Your note has been saved successfully",
-    type: "success" // or "error", "warning", "info"
+var result = await window.chaton.extensionHostCall(EXTENSION_ID, 'projects.list');
+if (result.ok) {
+  result.data.forEach(function (project) {
+    console.log(project.id, project.name, project.repoPath);
   });
 }
 ```
 
-### Pattern 4: Read Conversation Context
+### Pattern 4: File Storage
 
 ```javascript
-// Declare capability: "host.conversations.read"
+// Capability required: "storage.files"
+// Files are stored under ~/.chaton/extensions/data/<extensionId>/
 
-async function getCurrentConversation() {
-  const conv = await api.host.conversations.get();
-  console.log('Current conversation:', conv.id);
-  console.log('Messages:', conv.messages.length);
-  console.log('Model:', conv.model);
-  
-  return conv;
-}
+// Write a file
+await window.chaton.extensionStorageFilesWrite(EXTENSION_ID, 'exports/report.md', '# Report\n...');
+
+// Read a file
+var result = await window.chaton.extensionStorageFilesRead(EXTENSION_ID, 'exports/report.md');
+// result is { ok: true, data: '# Report\n...' }
+
+// Subdirectories are created automatically
+await window.chaton.extensionStorageFilesWrite(EXTENSION_ID, 'deep/nested/file.txt', 'content');
 ```
 
-### Pattern 5: Store Per-Conversation Data
+### Pattern 5: Queue Processing
 
 ```javascript
-// Store notes attached to specific conversations
-async function saveNoteForConversation(conversationId, note) {
-  const key = `notes:${conversationId}`;
-  const existing = await api.storage.kv.get(key) || '[]';
-  const notes = JSON.parse(existing);
-  notes.push(note);
-  await api.storage.kv.set(key, JSON.stringify(notes));
-}
+// Capabilities required: "queue.publish", "queue.consume"
 
-async function getNotesByConversation(conversationId) {
-  const key = `notes:${conversationId}`;
-  const stored = await api.storage.kv.get(key) || '[]';
-  return JSON.parse(stored);
-}
-```
+// Enqueue a job
+await window.chaton.extensionQueueEnqueue(
+  EXTENSION_ID,
+  'my-jobs',
+  { type: 'export', conversationId: 'uuid-...' },
+  { idempotencyKey: 'export-uuid' }
+);
 
-### Pattern 6: Queue Processing (Background Work)
+// Consume jobs (typically in a polling loop)
+var messages = await window.chaton.extensionQueueConsume(
+  EXTENSION_ID,
+  'my-jobs',
+  'worker-1',
+  { limit: 5 }
+);
 
-```javascript
-// Declare capabilities: ["queue.publish", "queue.consume"]
-
-// Publish a job
-async function publishJob(jobData) {
-  await api.queue.publish('myqueue', jobData);
-}
-
-// Consume jobs
-async function startWorker() {
-  while (true) {
-    const job = await api.queue.consume('myqueue', 5000);
-    if (!job) continue;
-    
-    try {
-      // Process job
-      await processJob(job.data);
-      await api.queue.ack(job.id);
-    } catch (err) {
-      await api.queue.nack(job.id);
-    }
+for (var i = 0; i < messages.length; i++) {
+  var msg = messages[i];
+  try {
+    await processJob(msg.payload);
+    await window.chaton.extensionQueueAck(EXTENSION_ID, msg.id);
+  } catch (err) {
+    // Retry later; errorMessage is stored for debugging
+    await window.chaton.extensionQueueNack(EXTENSION_ID, msg.id, null, err.message);
   }
 }
+
+// Check dead letters (repeatedly failed jobs)
+var dead = await window.chaton.extensionQueueDeadLetterList(EXTENSION_ID, 'my-jobs');
 ```
 
-### Pattern 7: File Storage
+### Pattern 6: Cross-Extension API Calls
 
 ```javascript
-// Declare capability: "storage.files"
+// In your manifest, expose an API:
+// "apis": { "exposes": [{ "name": "notes.search", "version": "1.0.0" }] }
 
-async function saveFile(path, content) {
-  await api.storage.files.write(path, content);
-}
+// Handle calls from other extensions via postMessage
+window.addEventListener('message', function (event) {
+  var data = event && event.data;
+  if (!data || data.type !== 'chaton.extension.apiCall') return;
+  if (data.apiName !== 'notes.search') return;
 
-async function readFile(path) {
-  return await api.storage.files.read(path);
-}
+  var query = data.payload && data.payload.query;
+  var results = notes.filter(function (n) {
+    return n.text.toLowerCase().includes((query || '').toLowerCase());
+  });
 
-// List files
-async function listFiles(dir) {
-  return await api.storage.files.list(dir);
-}
-```
-
----
-
-## Debugging Extensions
-
-### Enable DevTools
-
-Press **F12** in Chatons to open DevTools. Your extension's console.log() output appears here.
-
-### Common Issues
-
-**Issue 1: Extension doesn't appear in sidebar**
-
-**Checklist:**
-- [ ] Folder is in `~/.chaton/extensions/`
-- [ ] `chaton.extension.json` is valid JSON (use `jq` to check)
-- [ ] `id` is present and unique
-- [ ] `ui.menuItems` is declared correctly
-- [ ] Restart Chatons
-- [ ] Check console for errors (F12)
-
-**Issue 2: Main view doesn't load**
-
-**Checklist:**
-- [ ] `capabilities` includes `"ui.mainView"`
-- [ ] `webviewUrl` is correct format: `chaton-extension://@id/path.html`
-- [ ] HTML file exists at that path
-- [ ] No errors in console (F12)
-
-**Issue 3: Storage doesn't work**
-
-**Checklist:**
-- [ ] Capability `"storage.kv"` is declared
-- [ ] Using `await api.storage.kv.get/set()`
-- [ ] Wrapping in try/catch
-- [ ] Checking for null before parsing JSON
-
-**Issue 4: Manifest parsing error**
-
-**Command to validate:**
-```bash
-jq . ~/.chaton/extensions/YOUR_EXT/chaton.extension.json > /dev/null
-# If it succeeds, JSON is valid
-# If it fails, there's a syntax error
-```
-
-### Debug Checklist
-
-Add this to your extension:
-
-```javascript
-console.log('[MyExt] Extension loaded');
-console.log('[MyExt] SDK available:', !!window.chatonExtension);
-
-if (window.chatonExtension) {
-  const { api } = window.chatonExtension;
-  console.log('[MyExt] API available:', !!api);
-  console.log('[MyExt] Storage KV available:', !!api.storage.kv);
-  console.log('[MyExt] Events available:', !!api.events);
-}
-```
-
-Check DevTools console (F12) to see what's available.
-
----
-
-## Testing Your Extension
-
-### Manual Testing
-
-**Checklist:**
-- [ ] Create a note (data persists after restart)
-- [ ] Delete a note
-- [ ] Close and reopen the app
-- [ ] Notes still exist
-- [ ] No errors in console
-- [ ] UI is responsive
-
-### Automated Testing
-
-Create a `test.html` to run tests locally:
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Extension Tests</title>
-  <style>
-    body { font-family: monospace; padding: 20px; }
-    .pass { color: green; }
-    .fail { color: red; }
-  </style>
-</head>
-<body>
-  <h1>Extension Tests</h1>
-  <div id="results"></div>
-  <script>
-    const tests = [];
-    
-    function assert(condition, message) {
-      if (!condition) {
-        throw new Error(message);
-      }
-    }
-    
-    async function testStorageAPI() {
-      // Mock storage for testing
-      const storage = { data: {} };
-      
-      // Test set
-      storage.data['test'] = 'value';
-      assert(storage.data['test'] === 'value', 'Should store value');
-      
-      // Test get
-      const value = storage.data['test'];
-      assert(value === 'value', 'Should retrieve value');
-    }
-    
-    async function runTests() {
-      const results = [];
-      
-      const testFuncs = [testStorageAPI];
-      
-      for (const test of testFuncs) {
-        try {
-          await test();
-          results.push({ name: test.name, pass: true });
-        } catch (err) {
-          results.push({ name: test.name, pass: false, error: err.message });
-        }
-      }
-      
-      const div = document.getElementById('results');
-      div.innerHTML = results.map(r => `
-        <p class="${r.pass ? 'pass' : 'fail'}">
-          ${r.pass ? '✓' : '✗'} ${r.name}
-          ${r.error ? `: ${r.error}` : ''}
-        </p>
-      `).join('');
-    }
-    
-    runTests();
-  </script>
-</body>
-</html>
-```
-
----
-
-## Performance Best Practices
-
-### 1. Lazy-Load Data
-
-**Bad:**
-```javascript
-// Load all data at startup (slow)
-async function init() {
-  const allNotes = await api.storage.kv.get('all-notes');
-  console.log(allNotes); // Blocks startup
-}
-```
-
-**Good:**
-```javascript
-// Load only what you display
-async function init() {
-  // Load first 10 notes only
-  renderNotes(notes.slice(0, 10));
-}
-
-// Load more when user scrolls
-window.addEventListener('scroll', loadMore);
-```
-
-### 2. Debounce Frequent Updates
-
-**Bad:**
-```javascript
-// Save on every keystroke (lots of disk I/O)
-textarea.addEventListener('input', async () => {
-  await api.storage.kv.set('draft', textarea.value);
+  window.parent.postMessage({
+    type: 'chaton.extension.apiCallResponse',
+    callId: data.callId,
+    result: results,
+  }, '*');
 });
+
+// Other extensions call your API via:
+// window.chaton.extensionCall(
+//   theirExtId, '@yourname/chatons-my-notes',
+//   'notes.search', '^1.0.0', { query: 'hello' }
+// );
 ```
 
-**Good:**
+### Pattern 7: Model Picker
+
 ```javascript
-// Save after user stops typing
-let timeout;
-textarea.addEventListener('input', () => {
-  clearTimeout(timeout);
-  timeout = setTimeout(async () => {
-    await api.storage.kv.set('draft', textarea.value);
-  }, 1000); // Wait 1 sec after user stops
+// Use the built-in model picker widget
+var picker = window.chatonUi.createModelPicker({
+  host: document.getElementById('modelPickerContainer'),
+  onChange: function (modelKey) {
+    console.log('Selected model:', modelKey);
+    localStorage.setItem('myext:model', modelKey);
+  },
+  labels: {
+    filterPlaceholder: 'Filter models...',
+    more: 'more',
+    scopedOnly: 'scoped only',
+    noScoped: 'No scoped models',
+    noModels: 'No models',
+  },
 });
-```
 
-### 3. Cache Local Data
-
-**Bad:**
-```javascript
-// Fetch from storage repeatedly
-async function renderNotes() {
-  for (const id of noteIds) {
-    const note = await api.storage.kv.get(`note:${id}`);
-    console.log(note);
-  }
-}
-```
-
-**Good:**
-```javascript
-// Cache in memory
-let cachedNotes = {};
-
-async function loadNote(id) {
-  if (cachedNotes[id]) return cachedNotes[id];
-  const note = await api.storage.kv.get(`note:${id}`);
-  cachedNotes[id] = note;
-  return note;
-}
-```
-
-### 4. Limit Event Listeners
-
-**Bad:**
-```javascript
-// Creates thousands of listeners
-document.querySelectorAll('.note').forEach(note => {
-  note.addEventListener('click', handleClick);
-});
-```
-
-**Good:**
-```javascript
-// Single delegated listener
-document.addEventListener('click', (e) => {
-  if (e.target.closest('.note')) {
-    handleClick(e);
+// Load models from the host
+window.chaton.listPiModels().then(function (res) {
+  if (res.ok) {
+    picker.setModels(res.models);
+    picker.setSelected(localStorage.getItem('myext:model'));
   }
 });
 ```
 
-### 5. Monitor Bundle Size
-
-Keep your extension small:
-- Avoid large dependencies
-- Use native APIs when possible
-- Minify HTML/CSS/JS for production
-
 ---
 
-## Security Considerations
+## Debugging
 
-### 1. Never Store Secrets
+### Check the console
 
-**Bad:**
-```javascript
-// Never store API keys!
-await api.storage.kv.set('api_key', 'sk-secret-key');
-```
+Press **F12** in Chatons to open DevTools. Your extension's `console.log()` output appears here.
 
-**Good:**
-```javascript
-// User provides key when needed
-const key = prompt('Enter your API key:');
-// Use it once, don't store
-```
+### Verify the SDK is available
 
-### 2. Validate User Input
-
-**Bad:**
-```javascript
-// Dangerous: XSS vulnerability
-div.innerHTML = userText;
-```
-
-**Good:**
-```javascript
-// Safe: Escapes HTML
-div.textContent = userText;
-// Or use proper escaping
-div.innerHTML = escapeHtml(userText);
-```
-
-### 3. Sanitize Data from AI Models
-
-**Bad:**
-```javascript
-// AI model output could contain malicious code
-const response = await ai.generate(userPrompt);
-div.innerHTML = response; // Dangerous!
-```
-
-**Good:**
-```javascript
-// Treat AI output like user input
-const response = await ai.generate(userPrompt);
-div.textContent = response; // Safe
-```
-
-### 4. Limit Permissions
-
-Only declare capabilities you actually need:
-
-**Bad:**
-```json
-{
-  "capabilities": [
-    "ui.mainView",
-    "storage.kv",
-    "storage.files", // Don't need this
-    "host.conversations.read",
-    "host.conversations.write", // Don't need write
-    "host.projects.read",
-    "host.notifications",
-    "events.subscribe",
-    "events.publish",
-    "queue.publish",
-    "queue.consume"
-  ]
-}
-```
-
-**Good:**
-```json
-{
-  "capabilities": [
-    "ui.mainView",
-    "storage.kv",
-    "events.subscribe"
-  ]
-}
-```
-
-### 5. Clear User Data on Uninstall
+Add this to the top of your `app.js`:
 
 ```javascript
-// Clean up when extension is disabled
-async function onDisable() {
-  // Clear all stored data
-  const keys = ['notes', 'drafts', 'settings'];
-  for (const key of keys) {
-    await api.storage.kv.delete(key);
-  }
-}
+console.log('[MyExt] window.chaton available:', !!window.chaton);
+console.log('[MyExt] extensionStorageKvGet available:', typeof window.chaton.extensionStorageKvGet);
+console.log('[MyExt] extensionHostCall available:', typeof window.chaton.extensionHostCall);
+console.log('[MyExt] chatonUi available:', !!window.chatonUi);
+console.log('[MyExt] chatonExtensionComponents available:', !!window.chatonExtensionComponents);
 ```
 
----
-
-## Publishing Your Extension
-
-See [Extension Publishing](/extensions/publishing) for detailed publishing instructions.
-
-### Quick Summary
-
-1. **Prepare for Publication**
-   - Test thoroughly locally
-   - Add a README.md with usage instructions
-   - Add a LICENSE file (MIT recommended)
-   - Bump version in manifest
-
-2. **Create `package.json`**
-   ```json
-   {
-     "name": "@username/chatons-my-notes",
-     "version": "1.0.0",
-     "description": "A note-taking extension for Chatons",
-     "author": "Your Name",
-     "license": "MIT",
-     "repository": "https://github.com/username/chatons-my-notes"
-   }
-   ```
-
-3. **Publish to npm**
-   ```bash
-   npm login
-   npm publish
-   ```
-
-4. **Users Can Install It**
-   - From the **Extensions** panel in Chatons
-   - Search for your extension
-   - Click Install
-
-5. **Update It Later**
-   - Update version in manifest and package.json
-   - Commit changes
-   - Run `npm publish` again
-
----
-
-## Real-World Extension Ideas
-
-### 1. Code Snippet Manager
-- Store reusable code snippets
-- Search by language/tag
-- Insert into conversations
-
-### 2. Bookmark Manager
-- Save interesting links from conversations
-- Organize by topic
-- Quick access sidebar
-
-### 3. AI Cost Tracker
-- Track API usage per conversation
-- Show cost per conversation
-- Monthly summary
-
-### 4. Quick Research
-- Store research findings
-- Link to sources
-- Export formatted bibliography
-
-### 5. Habit Tracker
-- Log daily habits
-- Show statistics/charts
-- Integration with conversations
-
-### 6. Telegram/Slack Integration
-- Receive messages in Chatons
-- Reply from Chatons back to channel
-- Route to specific conversations
-
-### 7. Custom LLM Tools
-- Define domain-specific tools
-- Model calls your extension functions
-- Custom business logic
-
-### 8. Data Export
-- Export conversations to PDF/Markdown
-- Batch export multiple conversations
-- Custom formatting
-
----
-
-## Troubleshooting Common Extension Problems
+### Common issues
 
 | Problem | Solution |
 |---------|----------|
-| **Extension not listed** | Check folder in `~/.chaton/extensions/`, restart Chatons, check console for errors |
-| **Storage doesn't persist** | Declare `storage.kv` capability, use `await`, wrap in try/catch |
-| **Main view won't open** | Check `webviewUrl` format, confirm capability, restart app |
-| **Events not firing** | Declare `events.subscribe`, use correct event name, check DevTools |
-| **Performance issues** | Debounce updates, cache data, avoid large datasets, limit DOM nodes |
-| **Manifest error** | Run `jq . chaton.extension.json` to validate JSON |
-| **Users can't find extension** | Publish to npm, use correct package name format `@user/chatons-*` |
+| Extension not in sidebar | Check folder is in `~/.chaton/extensions/`, validate JSON with `jq . chaton.extension.json`, restart Chatons |
+| Main view is blank | Check `webviewUrl` format matches `chaton-extension://<id>/<path>`, check F12 console for errors |
+| Storage calls fail | Verify `"storage.kv"` is in capabilities, check the extensionId matches your manifest `id` |
+| Host call returns unauthorized | Add the required capability (e.g. `"host.notifications"`) to the manifest |
+| Notes disappear on restart | You might be calling `extensionStorageKvSet` with a stringified value that gets double-encoded. Pass objects directly. |
+
+### Validate manifest JSON
+
+```bash
+jq . ~/.chaton/extensions/@yourname/chatons-my-notes/chaton.extension.json > /dev/null
+```
+
+### Check extension logs
+
+```
+~/.chaton/extensions/logs/
+```
 
 ---
 
-## Getting Help
+## Performance Tips
 
-- **SDK Questions:** Check [Extensions API](/extensions/api)
-- **UI Questions:** Check [Extensions UI Library](/extensions/ui-library)
-- **Publishing:** Check [Extension Publishing](/extensions/publishing)
-- **Issues:** Open GitHub issue with error details and DevTools console output
+**1. Debounce frequent writes**
+
+```javascript
+var saveTimeout;
+function debouncedSave() {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(function () {
+    saveNotes();
+  }, 1000);
+}
+```
+
+**2. Cache data in memory**
+
+Load from KV once at startup, keep an in-memory copy, write back on changes. Don't re-read from KV on every render.
+
+**3. Use delegated event listeners**
+
+```javascript
+// One listener for all delete buttons
+notesList.addEventListener('click', function (e) {
+  var btn = e.target.closest('[data-delete]');
+  if (btn) deleteNote(Number(btn.getAttribute('data-delete')));
+});
+```
+
+**4. Keep extensions small**
+
+Avoid large dependencies. Use native browser APIs. The extension loads in an iframe -- heavy bundles slow down startup.
 
 ---
 
-## Related Pages
+## Security
 
-- [Extensions](/extensions)
-- [Extensions API](/extensions/api)
-- [Extension Publishing](/extensions/publishing)
-- [Automation Extension](/automation-extension)
+**1. Escape user input**
+
+```javascript
+// Safe
+div.textContent = userText;
+
+// Dangerous -- XSS risk
+div.innerHTML = userText; // Never do this with untrusted input
+```
+
+**2. Declare only needed capabilities**
+
+Don't request `host.conversations.write` if you only need to read.
+
+**3. Don't store secrets in KV**
+
+KV storage is not encrypted. For API keys, consider prompting the user each session or using the requirement sheet pattern (see [Requirement Sheets](/extensions/requirement-sheets)).
+
+---
+
+## Next Steps
+
+- **[Extensions API](/extensions/api)** -- Full method reference with parameters and return types
+- **[Extensions UI Library](/extensions/ui-library)** -- All CSS classes and UI helper functions
+- **[Extensions Channels](/extensions/channels)** -- Build a messaging bridge
+- **[Requirement Sheets](/extensions/requirement-sheets)** -- Prompt users for prerequisites
+- **[Extension Publishing](/extensions/publishing)** -- Share your extension via npm

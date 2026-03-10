@@ -1,296 +1,417 @@
 ---
 title: Extensions UI Library
-description: UI library reference for Chatons extensions.
+description: CSS classes, variables, and JavaScript helpers available in Chatons extension webviews.
 ---
 
-# Chatons Extension UI Library
+# Extensions UI Library
 
-Related pages:
+Chatons injects styles and JavaScript helpers into every extension webview. Use them to build UIs that look native without writing custom CSS.
 
-- [Extensions](/extensions) -- Overview and concepts
-- [Extensions API](/extensions/api) -- API reference
+**Related:**
 
----
-
-## 1. What gets injected
-
-For extension `mainView` pages, Chatons injects helpers under:
-
-- `window.chatonUi`
-
-Current helpers include:
-
-- `ensureStyles()`
-- `createModelPicker(options)`
-- `createButton(options)`
-- `createComponents()`
-
-Chatons also augments `window.chaton` with:
-
-- `registerExtensionServerFromUi(...)` -- register a local server at runtime
-- `requirementSheet.confirm()` -- confirm and close a requirement sheet
-- `requirementSheet.dismiss()` -- dismiss a requirement sheet
-- `requirementSheet.openSettings()` -- open Settings and close the sheet
-
-The `requirementSheet` methods are available inside requirement sheet iframes. See [Requirement Sheets](/extensions/requirement-sheets) for details.
+- [Extensions Tutorial](/extensions/tutorial) -- Build a working extension
+- [Extensions API](/extensions/api) -- Full API reference
+- [Requirement Sheets](/extensions/requirement-sheets) -- Inline prerequisite sheets
 
 ---
 
-## 2. Design intent
+## What Gets Injected
 
-The helper layer exists to solve a practical problem.
+The bridge script runs automatically before your code loads. It provides:
 
-Many extensions want to be self-contained HTML pages, but still feel visually at home inside Chatons.
-
-The injected UI layer helps with that by providing:
-
-- a shared visual baseline
-- a few reusable controls
-- a model picker that matches Chatons behavior
-- simple DOM helpers for non-React extensions
-
-It does **not** try to be:
-
-- a full component framework
-- a React replacement
-- a stable design-token API for every Chatons surface
+| Global | Purpose |
+|--------|---------|
+| `window.chatonUi` | UI helpers: `ensureStyles()`, `createButton()`, `createModelPicker()`, `createComponents()` |
+| `window.chatonExtensionComponents` | Pre-initialized component library (same as calling `createComponents()`) |
+| `window.chaton` | Host API (see [Extensions API](/extensions/api)) |
 
 ---
 
-## 3. Styling model
+## CSS Classes
 
-`ensureStyles()` injects a style block into the extension page if it is not already present.
+Call `window.chatonExtensionComponents.ensureStyles()` (or `window.chatonUi.ensureStyles()`) at the top of your script to inject the stylesheet. Then use these classes in your HTML.
 
-The current style layer defines variables such as:
+### Page Layout
 
-- background
-- foreground
-- card
-- primary
-- muted
-- accent
-- border
-- input
-- focus ring
+| Class | Description |
+|-------|-------------|
+| `.ce-page` | Page container. `max-width: 720px`, centered, `padding: 24px`. |
+| `.ce-page-header` | Flex header with title and actions. |
+| `.ce-page-title-group` | Wraps title and description. |
+| `.ce-page-title` | Main heading. `font-size: 20px`, `font-weight: 600`. |
+| `.ce-page-description` | Subtitle text. Muted color, `font-size: 13px`. |
 
-These values are chosen to align with Chatons' visual language, especially for simple extension pages.
+```html
+<div class="ce-page">
+  <div class="ce-page-header">
+    <div class="ce-page-title-group">
+      <h1 class="ce-page-title">My Extension</h1>
+      <p class="ce-page-description">A short description.</p>
+    </div>
+  </div>
+  <!-- content here -->
+</div>
+```
 
-The helper also defines the styling used by the injected model picker.
+### Cards
 
----
+| Class | Description |
+|-------|-------------|
+| `.ce-card` | Card container with border and rounded corners. |
+| `.ce-card__body` | Card body with padding. |
 
-## 4. `createButton(options)`
+```html
+<div class="ce-card">
+  <div class="ce-card__body">
+    <h2 class="ce-section-title">Settings</h2>
+    <!-- card content -->
+  </div>
+</div>
+```
 
-Creates a styled button element.
+### Section Headings
 
-Current options used by the helper:
+| Class | Description |
+|-------|-------------|
+| `.ce-section-title` | Section heading. `font-size: 15px`, `font-weight: 600`. |
+| `.ce-section-copy` | Uppercase meta text. `font-size: 12px`, muted, `letter-spacing: 0.04em`. |
 
-- `text`
-- `variant`
-- `type`
+### Grid
 
-Current button variants:
+| Class | Description |
+|-------|-------------|
+| `.ce-grid` | CSS grid container. `gap: 12px`. |
+| `.ce-grid--2` | 2-column grid. |
+| `.ce-grid--3` | 3-column grid. |
 
-- `default`
-- `outline`
-- `ghost`
+```html
+<div class="ce-grid ce-grid--2">
+  <div class="ce-field"><!-- left column --></div>
+  <div class="ce-field"><!-- right column --></div>
+</div>
+```
 
-Example:
+### Form Fields
 
-```js
-const button = window.chatonUi.createButton({
-  text: 'Run',
-  variant: 'default',
-  type: 'button'
-});
+| Class | Description |
+|-------|-------------|
+| `.ce-field` | Field wrapper. Flex column with `gap: 4px`. |
+| `.ce-label` | Label text. `font-size: 13px`, `font-weight: 500`. |
+| `.ce-help` | Help text. `font-size: 12px`, muted color. |
+
+Inputs, textareas, and selects inside `.ce-field` are automatically styled (full width, rounded borders, focus ring).
+
+```html
+<div class="ce-field">
+  <label class="ce-label" for="name">Name</label>
+  <input id="name" type="text" placeholder="Enter name">
+  <div class="ce-help">This is displayed in the sidebar.</div>
+</div>
+```
+
+### Toolbar
+
+| Class | Description |
+|-------|-------------|
+| `.ce-toolbar` | Flex row for buttons. `gap: 8px`, wraps. |
+
+```html
+<div class="ce-toolbar">
+  <button class="chaton-ui-button chaton-ui-button--primary">Save</button>
+  <button class="chaton-ui-button">Cancel</button>
+</div>
+```
+
+### List Rows
+
+| Class | Description |
+|-------|-------------|
+| `.ce-list` | List container. Flex column. |
+| `.ce-list-row` | Row item with bottom border. Flex, `padding: 10px 0`. |
+| `.ce-list-row__main` | Main content area (flex: 1). |
+| `.ce-list-row__content` | Inner content flex column. |
+| `.ce-list-row__title` | Row title. `font-weight: 500`, `font-size: 13px`, truncated. |
+| `.ce-list-row__meta` | Row metadata. `font-size: 12px`, muted. |
+
+```html
+<div class="ce-list">
+  <div class="ce-list-row">
+    <div class="ce-list-row__main">
+      <div class="ce-list-row__content">
+        <span class="ce-list-row__title">Item Name</span>
+        <span class="ce-list-row__meta">Last updated 2 hours ago</span>
+      </div>
+    </div>
+    <span class="chaton-ui-badge chaton-ui-badge--default">Active</span>
+  </div>
+</div>
+```
+
+### Empty State
+
+| Class | Description |
+|-------|-------------|
+| `.ce-empty` | Centered placeholder text. `padding: 24px`, muted color. |
+
+```html
+<div class="ce-empty">No items yet. Create one to get started.</div>
+```
+
+### Buttons
+
+| Class | Description |
+|-------|-------------|
+| `.chaton-ui-button` | Base button. Rounded, bordered. |
+| `.chaton-ui-button--primary` | Primary style. Filled background. |
+| `.chaton-ui-button--destructive` | Red destructive style. |
+
+```html
+<button class="chaton-ui-button">Default</button>
+<button class="chaton-ui-button chaton-ui-button--primary">Primary</button>
+<button class="chaton-ui-button chaton-ui-button--destructive">Delete</button>
+```
+
+### Badges
+
+| Class | Description |
+|-------|-------------|
+| `.chaton-ui-badge` | Base badge. Pill-shaped, `font-size: 12px`. |
+| `.chaton-ui-badge--default` | Primary color background. |
+| `.chaton-ui-badge--secondary` | Muted background. |
+| `.chaton-ui-badge--destructive` | Red background. |
+
+```html
+<span class="chaton-ui-badge chaton-ui-badge--default">Active</span>
+<span class="chaton-ui-badge chaton-ui-badge--secondary">Draft</span>
+<span class="chaton-ui-badge chaton-ui-badge--destructive">Error</span>
 ```
 
 ---
 
-## 5. `createModelPicker(options)`
+## CSS Variables
 
-This is the most useful helper for many extensions.
+The injected stylesheet defines these CSS custom properties on `:root`. They automatically adjust for dark mode via `@media (prefers-color-scheme: dark)`.
 
-It creates a model picker that mirrors Chatons' own conventions.
+### Chatons UI variables
 
-### Current behavior
+| Variable | Light Mode | Dark Mode | Purpose |
+|----------|-----------|-----------|---------|
+| `--chaton-ui-background` | `hsl(220 12% 96%)` | `hsl(222 14% 12%)` | Page background |
+| `--chaton-ui-foreground` | `hsl(222 12% 14%)` | `hsl(210 20% 90%)` | Primary text |
+| `--chaton-ui-card` | `hsl(0 0% 100%)` | `hsl(222 13% 17%)` | Card/input background |
+| `--chaton-ui-primary` | `hsl(220 7% 32%)` | `hsl(210 15% 60%)` | Primary action color |
+| `--chaton-ui-primary-foreground` | `hsl(0 0% 100%)` | `hsl(222 14% 10%)` | Text on primary |
+| `--chaton-ui-muted` | `hsl(220 10% 92%)` | `hsl(222 12% 22%)` | Muted background |
+| `--chaton-ui-muted-foreground` | `hsl(220 6% 44%)` | `hsl(215 10% 55%)` | Muted text |
+| `--chaton-ui-accent` | `hsl(220 10% 93%)` | `hsl(222 12% 22%)` | Accent background |
+| `--chaton-ui-accent-foreground` | `hsl(222 12% 16%)` | `hsl(210 20% 90%)` | Accent text |
+| `--chaton-ui-border` | `hsl(220 9% 85%)` | `hsl(222 10% 24%)` | Border color |
+| `--chaton-ui-input` | `hsl(220 9% 85%)` | `hsl(222 10% 24%)` | Input border |
+| `--chaton-ui-ring` | `hsl(220 9% 70%)` | `hsl(215 10% 40%)` | Focus ring |
 
-- shows scoped models by default
-- exposes a `more` toggle to reveal all models
-- supports text filtering when all-model mode is open
-- notifies the extension when selection changes
-- exposes helper methods for model list and current selection
+### Component shorthand variables
 
-### Required option
+| Variable | Purpose |
+|----------|---------|
+| `--ce-fg` | Foreground text color |
+| `--ce-muted` | Muted text color |
+| `--ce-border` | Border color |
+| `--ce-card-bg` | Card background |
+| `--ce-input-bg` | Input background |
 
-- `host`: an existing HTMLElement where the picker will mount
+Use these in your custom CSS:
 
-### Optional options
+```css
+.my-custom-element {
+  color: var(--ce-fg);
+  border: 1px solid var(--ce-border);
+  background: var(--ce-card-bg);
+}
 
-- `onChange(modelKey)`
-- `labels`
+.my-subtle-text {
+  color: var(--ce-muted);
+  font-size: 12px;
+}
+```
 
-Current label keys:
+---
 
-- `filterPlaceholder`
-- `more`
-- `scopedOnly`
-- `noScoped`
-- `noModels`
+## JavaScript Helpers
 
-### Example
+### `window.chatonExtensionComponents`
 
-```js
-const picker = window.chatonUi.createModelPicker({
-  host: document.getElementById('modelHost'),
-  onChange: (modelKey) => {
-    localStorage.setItem('my-extension:model', modelKey);
+Pre-initialized component library available immediately. No setup needed.
+
+#### `ensureStyles()`
+
+Inject the stylesheet if not already present.
+
+```javascript
+window.chatonExtensionComponents.ensureStyles();
+```
+
+Call this at the top of your `app.js`.
+
+#### `el(tag, className?, text?)`
+
+Create a DOM element.
+
+```javascript
+var ui = window.chatonExtensionComponents;
+var heading = ui.el('h2', 'ce-section-title', 'My Section');
+var container = ui.el('div', 'ce-card');
+```
+
+#### `cls(...classNames)`
+
+Join class names (filters out falsy values).
+
+```javascript
+var classes = ui.cls('ce-list-row', isActive && 'ce-list-row--active');
+// "ce-list-row ce-list-row--active" or "ce-list-row"
+```
+
+#### `createButton(options)`
+
+Create a styled button element.
+
+```javascript
+var btn = ui.createButton({ text: 'Save', variant: 'default' });
+// variant: 'default' | 'outline' | 'ghost'
+```
+
+#### `createBadge(options)`
+
+Create a styled badge element.
+
+```javascript
+var badge = ui.createBadge({ text: 'Active', variant: 'default' });
+// variant: 'default' | 'secondary' | 'outline'
+```
+
+#### `createCard()`
+
+Create a card container with body.
+
+```javascript
+var card = ui.createCard();
+// card.root -- the .ce-card element
+// card.body -- the .ce-card__body element
+card.body.appendChild(ui.el('p', '', 'Card content'));
+document.body.appendChild(card.root);
+```
+
+#### `createField(options)`
+
+Create a labelled form field.
+
+```javascript
+var input = ui.el('input', '');
+input.type = 'text';
+input.placeholder = 'Enter value';
+
+var field = ui.createField({
+  label: 'API Key',
+  input: input,
+  help: 'Get this from your provider settings.',
+});
+// Returns a .ce-field wrapper with label, input, and help text
+```
+
+### `window.chatonUi.createModelPicker(options)`
+
+Create a model picker dropdown that mirrors the Chatons model selection behavior.
+
+```javascript
+var picker = window.chatonUi.createModelPicker({
+  host: document.getElementById('modelPickerContainer'),  // Required: mount target
+  onChange: function (modelKey) {
+    console.log('Selected:', modelKey);  // e.g. "openai/gpt-4o"
   },
   labels: {
     filterPlaceholder: 'Filter models...',
     more: 'more',
     scopedOnly: 'scoped only',
     noScoped: 'No scoped models',
-    noModels: 'No models'
-  }
+    noModels: 'No models',
+  },
 });
 
-const res = await window.chaton.listPiModels();
-if (res.ok) {
-  picker.setModels(res.models);
-  picker.setSelected(localStorage.getItem('my-extension:model'));
+// Load models from the host
+window.chaton.listPiModels().then(function (res) {
+  if (res.ok) {
+    picker.setModels(res.models);  // [{ id, provider, key, scoped }]
+    picker.setSelected('openai/gpt-4o');
+  }
+});
+```
+
+**Returned API:**
+
+| Method | Description |
+|--------|-------------|
+| `setModels(models)` | Set the model list. Each model: `{ id, provider, key, scoped }` |
+| `setSelected(modelKey)` | Select a model by key (e.g. `"openai/gpt-4o"`) |
+| `getSelected()` | Get the currently selected model key |
+| `destroy()` | Remove the picker from the DOM |
+
+**Behavior:**
+
+- Shows scoped (starred) models by default
+- Click "more" to reveal all models with a text filter
+- Click "scoped only" to go back to starred models only
+
+---
+
+## Dark Mode
+
+The injected stylesheet handles dark mode automatically via `@media (prefers-color-scheme: dark)`. If you use the provided CSS variables and classes, dark mode works out of the box.
+
+If you need to sync with the parent app's `dark` class (useful for dynamic theme switching):
+
+```javascript
+function syncThemeClass() {
+  var isDark = false;
+  try {
+    isDark = window.parent.document.documentElement.classList.contains('dark');
+  } catch (e) {}
+  document.documentElement.classList.toggle('dark', isDark);
 }
+syncThemeClass();
 ```
 
-### Returned API
-
-- `setModels([{ id, provider, key, scoped }])`
-- `setSelected(modelKey | null)`
-- `getSelected()`
-- `destroy()`
-
-### Behavior details worth knowing
-
-- if scoped-only mode has no visible models, the picker shows the `noScoped` message
-- if all-model mode has no visible models, it shows the `noModels` message
-- switching between scoped-only and all-model mode re-renders the current options list
+This is the pattern used by the built-in automation and memory extensions.
 
 ---
 
-## 6. `createComponents()`
+## Full-Width Layout
 
-This helper returns a small DOM-oriented toolkit.
+Extension main views render in a full-width, full-height container. They are not constrained to the centered conversation column.
 
-It is useful when an extension wants to stay framework-free and still build a tidy UI quickly.
+This means your extension can build:
 
-Current helpers returned:
+- Admin dashboards
+- Full-screen configuration pages
+- Split-pane layouts (like the automation extension)
+- Data tables and catalog views
 
-- `cls(...classNames)`
-- `el(tag, className?, text?)`
-- `createButton(...)`
-- `createBadge(...)`
-- `ensureStyles()`
-
-### Badge variants
-
-Current badge variants:
-
-- `default`
-- `secondary`
-- `outline`
-
-### Example
-
-```js
-const ui = window.chatonUi.createComponents();
-ui.ensureStyles();
-
-const title = ui.el('h2', '', 'My Extension');
-const button = ui.createButton({ text: 'Execute', variant: 'default' });
-const badge = ui.createBadge({ text: 'Beta', variant: 'secondary' });
-```
+Use `.ce-page` (which sets `max-width: 720px`) for simple form-based views. Skip it for full-width layouts.
 
 ---
 
-## 7. Runtime server registration from the UI
+## Reference Implementation
 
-Chatons also injects:
-
-- `window.chaton.registerExtensionServerFromUi(...)`
-
-This function validates a payload and forwards it to the host bridge if available.
-
-Typical fields supported by the injected bridge include:
-
-- `extensionId`
-- `command`
-- `args`
-- `cwd`
-- `env`
-- `readyUrl`
-- `healthUrl`
-- `expectExit`
-- `startTimeoutMs`
-- `readyTimeoutMs`
-
-This is useful when the extension wants to decide server startup details dynamically instead of declaring everything statically in the manifest.
-
----
-
-## 8. Host layout behavior
-
-Extension `mainView` pages are mounted in a full-width, full-height main-panel container.
-
-That means:
-
-- no standard centered conversation-column constraint
-- no extra host padding intended to mimic the chat view
-- an extension page can behave more like a full app screen
-
-For extension authors, this makes it reasonable to build:
-
-- admin pages
-- dashboards
-- configuration screens
-- catalog-like interfaces
-
----
-
-## 9. Best practices
-
-If you want an extension to feel native without overengineering it, the best current approach is:
-
-- use `window.chatonUi.ensureStyles()` early
-- use the injected model picker instead of rebuilding model-scope behavior yourself
-- use the DOM helpers for simple buttons, badges, and structure
-- keep the extension self-contained rather than depending on the host renderer build pipeline
-
----
-
-## 10. Reference implementation
-
-The built-in automation extension is the main reference implementation for this helper layer.
-
-Useful files:
+The built-in automation extension is the primary reference for how to use these helpers in practice:
 
 - `electron/extensions/builtin/automation/index.html`
 - `electron/extensions/builtin/automation/index.js`
-- `electron/extensions/builtin/automation/components.js`
 
-It shows how to build a self-contained extension page that still looks integrated with Chatons.
+It demonstrates:
 
----
-
-## 11. Current limits
-
-The UI helper layer is intentionally small.
-
-Current limits include:
-
-- no imposed React framework
-- no full layout system
-- no large stable component catalog
-- no extension-specific theming API beyond the injected helper styles
-- a DOM-first API designed for plain HTML extension pages
-
-That is by design. The goal is to reduce friction, not to lock extension authors into a host UI framework.
+- `window.chatonExtensionComponents` for all DOM helpers
+- `window.chatonUi.createModelPicker()` for model selection
+- `window.chaton.extensionCall()` for cross-extension API calls
+- `window.chaton.extensionHostCall()` for notifications
+- Split-pane layout with list + detail pattern
+- Dark mode sync
+- Deeplink handling via `postMessage`

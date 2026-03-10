@@ -1,744 +1,455 @@
 ---
 title: Extensions API
-description: API reference for Chatons extensions.
+description: Complete API reference for Chatons extensions.
 ---
 
-# Chatons Extension API
+# Extensions API Reference
 
-**Quick Start:** If you're new to extensions, see the [Extensions overview](/extensions) for concepts and the tutorial for a complete working example.
+Every method available to Chatons extensions, with parameters and return types verified against the source code.
 
-**This document:** Reference for API methods and capabilities.
+**New to extensions?** Start with the [Extensions Tutorial](/extensions/tutorial).
 
-Related documents:
+**Related:**
 
-- [Extensions](/extensions) -- Extension overview and concepts
-- [Extensions Channels](/extensions/channels) -- Messaging platform integration
-- [Extensions UI Library](/extensions/ui-library) -- UI components and styling
-- [Requirement Sheets](/extensions/requirement-sheets) -- Inline sheets for tool prerequisites
+- [Extensions Overview](/extensions) -- Concepts and manifest reference
+- [Extensions Channels](/extensions/channels) -- Channel-specific host APIs
+- [Extensions UI Library](/extensions/ui-library) -- CSS classes and UI helpers
+- [Requirement Sheets](/extensions/requirement-sheets) -- Inline prerequisite sheets
 
 ---
 
-## 1. Quick API Reference (Copy-Paste Examples)
+## How Extensions Call Host APIs
 
-### Storage: Save and Load Data
+All extension APIs live on the `window.chaton` object. Every call requires your extension ID as the first argument.
 
 ```javascript
-// Declare capability: "storage.kv"
+var EXT_ID = '@yourname/chatons-my-ext';
 
-const { api } = window.chatonExtension;
-
-// Save a string
-await api.storage.kv.set('mykey', 'myvalue');
-
-// Load it back
-const value = await api.storage.kv.get('mykey');
-console.log(value); // 'myvalue'
-
-// Save an object (as JSON)
-const data = { name: 'John', age: 30 };
-await api.storage.kv.set('user', JSON.stringify(data));
-
-// Load and parse object
-const json = await api.storage.kv.get('user');
-const user = JSON.parse(json);
-
-// Delete a key
-await api.storage.kv.delete('mykey');
-
-// List all keys
-const keys = await api.storage.kv.list();
-console.log(keys); // ['mykey', 'user', ...]
+// All calls return Promises
+var result = await window.chaton.extensionStorageKvGet(EXT_ID, 'key');
 ```
 
-### Events: React to Chatons Events
+**There is no `window.chatonExtension.api.*` namespace.** The only API surface is `window.chaton.*`.
+
+---
+
+## Key-Value Storage
+
+Backed by SQLite (`extension_kv` table). Namespaced by extension ID.
+
+**Required capability:** `storage.kv`
+
+### `extensionStorageKvGet(extensionId, key)`
+
+Read a value by key.
 
 ```javascript
-// Declare capability: "events.subscribe"
-
-const { api } = window.chatonExtension;
-
-// Subscribe to conversation created
-await api.events.subscribe('conversation.created', (data) => {
-  console.log('New conversation:', data.conversation.id);
-});
-
-// Subscribe to message received
-await api.events.subscribe('conversation.message.received', (data) => {
-  console.log('Message:', data.message.content);
-  console.log('From:', data.message.role); // 'user' or 'assistant'
-});
-
-// Subscribe to agent finished
-await api.events.subscribe('conversation.agent.ended', (data) => {
-  console.log('Agent finished:', data.conversationId);
-});
-
-// Subscribe to project created
-await api.events.subscribe('project.created', (data) => {
-  console.log('New project:', data.project.name);
-});
-
-// Publish custom events (if "events.publish" capability)
-await api.events.publish('my_extension.custom_event', { data: 'value' });
+var result = await window.chaton.extensionStorageKvGet(EXT_ID, 'mykey');
+// result = { ok: true, data: <value> }
+// data is the parsed JSON value (object, array, string, number, null)
+// data is null if the key does not exist
 ```
 
-### Notifications: Show Messages to User
+### `extensionStorageKvSet(extensionId, key, value)`
+
+Write a value. Creates the key if it does not exist, overwrites if it does.
 
 ```javascript
-// Declare capability: "host.notifications"
-
-const { api } = window.chatonExtension;
-
-// Show success notification
-await api.host.notifications.show({
-  title: "Success",
-  body: "Your data was saved",
-  type: "success"
+// Pass objects directly -- no need to JSON.stringify
+await window.chaton.extensionStorageKvSet(EXT_ID, 'config', {
+  apiUrl: 'https://example.com',
+  enabled: true,
 });
 
-// Show error
-await api.host.notifications.show({
-  title: "Error",
-  body: "Failed to save",
-  type: "error"
-});
-
-// Show warning
-await api.host.notifications.show({
-  title: "Warning",
-  body: "This might take a while",
-  type: "warning"
-});
-
-// Show info
-await api.host.notifications.show({
-  title: "Info",
-  body: "New version available",
-  type: "info"
-});
+// Strings, numbers, arrays also work
+await window.chaton.extensionStorageKvSet(EXT_ID, 'counter', 42);
 ```
 
-### Read Conversations
+### `extensionStorageKvDelete(extensionId, key)`
+
+Delete a key.
 
 ```javascript
-// Declare capability: "host.conversations.read"
-
-const { api } = window.chatonExtension;
-
-// Get current conversation
-const conv = await api.host.conversations.get();
-console.log(conv.id);           // Conversation ID
-console.log(conv.messages);     // Array of messages
-console.log(conv.model);        // Selected model
-console.log(conv.project);      // Project if linked
-console.log(conv.accessMode);   // 'secure' or 'open'
-
-// Get specific conversation
-const conv2 = await api.host.conversations.get('conv-id-123');
-
-// Get all messages
-const messages = await api.host.conversations.getMessages('conv-id-123');
-messages.forEach(msg => {
-  console.log(msg.role, msg.content); // 'user' or 'assistant', message text
-});
+var result = await window.chaton.extensionStorageKvDelete(EXT_ID, 'mykey');
+// result = { ok: true, data: { removed: true } }
+// removed is false if the key did not exist
 ```
 
-### File Storage
+### `extensionStorageKvList(extensionId)`
+
+List all keys for this extension.
 
 ```javascript
-// Declare capability: "storage.files"
-
-const { api } = window.chatonExtension;
-
-// Write file (creates if not exists)
-await api.storage.files.write('notes.txt', 'My notes content');
-
-// Read file
-const content = await api.storage.files.read('notes.txt');
-console.log(content); // 'My notes content'
-
-// List files in directory
-const files = await api.storage.files.list('/');
-files.forEach(f => console.log(f.name, f.size));
-
-// Delete file
-await api.storage.files.delete('notes.txt');
-
-// Create subdirectories (path includes them)
-await api.storage.files.write('docs/readme.md', '# My Docs');
-
-// Read from subdirectory
-const readme = await api.storage.files.read('docs/readme.md');
+var result = await window.chaton.extensionStorageKvList(EXT_ID);
+// result = { ok: true, data: [
+//   { key: 'config', value: { apiUrl: '...' }, updatedAt: '2026-03-10T...' },
+//   { key: 'counter', value: 42, updatedAt: '2026-03-10T...' },
+// ] }
 ```
 
-### Queue: Background Jobs
+---
+
+## File Storage
+
+Sandboxed file-based storage under `~/.chaton/extensions/data/<extensionId>/`.
+
+**Required capability:** `storage.files`
+
+### `extensionStorageFilesRead(extensionId, relativePath)`
+
+Read a file's content as a UTF-8 string.
 
 ```javascript
-// Declare capabilities: "queue.publish", "queue.consume"
+var result = await window.chaton.extensionStorageFilesRead(EXT_ID, 'exports/report.md');
+// result = { ok: true, data: '# Report\n...' }
+// result = { ok: false, error: { code: 'not_found', message: 'file not found' } }
+```
 
-const { api } = window.chatonExtension;
+### `extensionStorageFilesWrite(extensionId, relativePath, content)`
 
-// Publish a job
-await api.queue.publish('myqueue', {
-  type: 'email',
-  to: 'user@example.com',
-  subject: 'Hello'
-});
+Write a file. Creates parent directories automatically.
 
-// Consume jobs (worker process)
-while (true) {
-  const job = await api.queue.consume('myqueue', 5000); // 5 sec timeout
-  if (!job) continue;
-  
-  try {
-    // Process the job
-    if (job.data.type === 'email') {
-      await sendEmail(job.data);
-    }
-    // Mark as processed
-    await api.queue.ack(job.id);
-  } catch (err) {
-    // Mark for retry
-    await api.queue.nack(job.id);
+```javascript
+await window.chaton.extensionStorageFilesWrite(
+  EXT_ID,
+  'exports/report.md',
+  '# My Report\n\nGenerated on ' + new Date().toISOString()
+);
+```
+
+**Path security:** Paths are normalized and sanitized. `..` traversal is rejected. Paths with null bytes are rejected.
+
+---
+
+## Events
+
+Subscribe to host events or publish custom events.
+
+### `extensionEventSubscribe(extensionId, topic, options?)`
+
+**Required capability:** `events.subscribe`
+
+```javascript
+await window.chaton.extensionEventSubscribe(
+  EXT_ID,
+  'conversation.created',
+  { projectId: 'optional-filter' }
+);
+```
+
+### `extensionEventPublish(extensionId, topic, payload, meta?)`
+
+**Required capability:** `events.publish`
+
+```javascript
+await window.chaton.extensionEventPublish(
+  EXT_ID,
+  'myext.note.created',
+  { noteId: 'abc123', title: 'My Note' },
+  { idempotencyKey: 'note-abc123' }
+);
+```
+
+### Available event topics
+
+| Topic | When Fired |
+|-------|------------|
+| `app.started` | App startup complete |
+| `conversation.created` | New conversation created |
+| `conversation.updated` | Conversation properties changed |
+| `conversation.message.received` | New message in a conversation |
+| `conversation.agent.started` | AI model started processing |
+| `conversation.agent.ended` | AI model finished processing |
+| `conversation.turn.ended` | Full turn (user + assistant) completed |
+| `conversation.tool.executed` | A tool call was executed |
+| `project.created` | New project imported |
+| `project.deleted` | Project removed |
+| `extension.installed` | An extension was installed |
+| `extension.enabled` | An extension was toggled on |
+
+---
+
+## Queue
+
+Persistent job queue backed by SQLite (`extension_queue` table). Supports at-least-once delivery, retry with backoff, and dead-letter handling.
+
+### `extensionQueueEnqueue(extensionId, topic, payload, opts?)`
+
+**Required capability:** `queue.publish`
+
+```javascript
+await window.chaton.extensionQueueEnqueue(
+  EXT_ID,
+  'export-jobs',
+  { conversationId: 'uuid-...', format: 'markdown' },
+  {
+    idempotencyKey: 'export-uuid',  // Prevents duplicate enqueue
+    availableAt: '2026-03-10T15:00:00Z',  // Delayed processing
   }
-}
+);
+```
 
-// Check dead letters (failed jobs)
-const deadLetters = await api.queue.deadLetter.list('myqueue');
-deadLetters.forEach(job => {
-  console.log('Failed job:', job.data, job.error);
+### `extensionQueueConsume(extensionId, topic, consumerId, opts?)`
+
+**Required capability:** `queue.consume`
+
+```javascript
+var messages = await window.chaton.extensionQueueConsume(
+  EXT_ID,
+  'export-jobs',
+  'worker-1',
+  { limit: 10 }
+);
+
+// messages is an array of { id, payload, ... }
+```
+
+### `extensionQueueAck(extensionId, messageId)`
+
+Mark a message as successfully processed.
+
+```javascript
+await window.chaton.extensionQueueAck(EXT_ID, message.id);
+```
+
+### `extensionQueueNack(extensionId, messageId, retryAt?, errorMessage?)`
+
+Mark a message as failed. It will be retried.
+
+```javascript
+await window.chaton.extensionQueueNack(
+  EXT_ID,
+  message.id,
+  null,  // retryAt: null means retry immediately
+  'Processing failed: timeout'
+);
+```
+
+### `extensionQueueDeadLetterList(extensionId, topic?)`
+
+List messages that have exceeded their retry limit.
+
+```javascript
+var dead = await window.chaton.extensionQueueDeadLetterList(EXT_ID, 'export-jobs');
+```
+
+### Queue item states
+
+| State | Meaning |
+|-------|---------|
+| `queued` | Waiting to be consumed |
+| `processing` | Currently being processed by a consumer |
+| `done` | Successfully acknowledged |
+| `dead` | Failed too many times, moved to dead-letter |
+
+---
+
+## Host Calls
+
+General-purpose host method invocation.
+
+### `extensionHostCall(extensionId, method, params?)`
+
+```javascript
+var result = await window.chaton.extensionHostCall(EXT_ID, method, params);
+// result = { ok: true, data: ... }
+// or
+// result = { ok: false, error: { code, message } }
+```
+
+### `notifications.notify`
+
+**Required capability:** `host.notifications`
+
+Show a notification in the Chatons UI.
+
+```javascript
+await window.chaton.extensionHostCall(EXT_ID, 'notifications.notify', {
+  title: 'My Extension',
+  body: 'Something happened!',
 });
 ```
 
-### LLM Tools: Let the Model Call Your Code
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `title` | string | No | Notification title. Defaults to `"Notification"`. |
+| `body` | string | No | Notification body text. |
+
+### `conversations.list`
+
+**Required capability:** `host.conversations.read`
+
+List all conversations.
 
 ```javascript
-// Declare capabilities: "llm.tools"
-
-// In your chaton.extension.json:
-// {
-//   "llm": {
-//     "tools": [{
-//       "name": "myext_get_weather",
-//       "description": "Get current weather",
-//       "parameters": {
-//         "type": "object",
-//         "properties": {
-//           "city": { "type": "string" }
-//         }
-//       }
-//     }]
+var result = await window.chaton.extensionHostCall(EXT_ID, 'conversations.list');
+// result.data = [
+//   {
+//     id: 'uuid',
+//     projectId: null,  // null for global conversations
+//     title: 'My Conversation',
+//     updatedAt: '2026-03-10T...',
+//     lastMessageAt: '2026-03-10T...',
+//     modelProvider: 'openai',
+//     modelId: 'gpt-4o',
+//     thinkingLevel: null,
 //   }
-// }
-
-// In your app.js:
-const { api } = window.chatonExtension;
-
-// Handle tool calls
-api.llm.tools.onCall('myext_get_weather', async (params) => {
-  const weather = await getWeather(params.city);
-  return {
-    temperature: weather.temp,
-    condition: weather.condition,
-    city: params.city
-  };
-});
-
-async function getWeather(city) {
-  const resp = await fetch(`https://api.weather.com/${city}`);
-  return resp.json();
-}
+// ]
 ```
 
----
+### `conversations.getMessages`
 
-## 2. Manifest Overview
+**Required capability:** `host.conversations.read`
 
-Extension manifests are stored in `chaton.extension.json`.
-
-The current implementation recognizes fields including:
-
-- `id` -- Extension ID (required, format: `@username/chatons-name`)
-- `name` -- Display name (required)
-- `version` -- Semantic version (required)
-- `capabilities` -- Array of permission capabilities (required)
-- `ui.menuItems[]` -- Sidebar items
-- `ui.mainViews[]` -- Full-page views
-- `ui.quickActions[]` -- Quick action buttons
-- `llm.tools[]` -- LLM-callable tools
-- `apis.exposes[]` -- APIs you expose
-- `apis.consumes[]` -- APIs you depend on
-- `server.start` -- Local server to start
-- `hooks` -- Lifecycle hooks
-
-Not every extension needs every section.
-
----
-
-## 3. Capability Model
-
-Capabilities act like permissions. Declare what you need:
-
-```json
-{
-  "capabilities": [
-    "ui.mainView",
-    "storage.kv",
-    "storage.files",
-    "events.subscribe",
-    "events.publish",
-    "queue.publish",
-    "queue.consume",
-    "llm.tools",
-    "host.notifications",
-    "host.conversations.read",
-    "host.conversations.write",
-    "host.projects.read"
-  ]
-}
-```
-
-**Important:**
-- Only declare capabilities you actually use
-- Runtime rejects operations without matching capability
-- Check capability before using APIs
-
----
-
-## 4. Manifest Field Reference
-
-### `id` (Required)
-
-```json
-{
-  "id": "@username/chatons-my-extension"
-}
-```
-
-Format: `@username/chatons-descriptive-name`
-
-Used as:
-- Unique identifier
-- Namespace for storage
-- Package name for npm publishing
-
-### `name` (Required)
-
-```json
-{
-  "name": "My Extension"
-}
-```
-
-Displayed in UI.
-
-### `version` (Required)
-
-```json
-{
-  "version": "1.0.0"
-}
-```
-
-Semantic versioning. Updated when you publish changes.
-
-### `ui.mainViews[]`
-
-```json
-{
-  "ui": {
-    "mainViews": [{
-      "viewId": "unique_id",
-      "title": "Display Title",
-      "webviewUrl": "chaton-extension://@username/chatons-name/index.html",
-      "initialRoute": "/",
-      "icon": "BookOpen"
-    }]
-  }
-}
-```
-
-Creates a full-page view in Chatons.
-
-### `ui.menuItems[]`
-
-```json
-{
-  "ui": {
-    "menuItems": [{
-      "label": "My Extension",
-      "icon": "BookOpen",
-      "order": 50,
-      "openMainView": "viewId"
-    }]
-  }
-}
-```
-
-Adds item to sidebar. `order` controls position (lower = higher in list).
-
-Icon names: Use Lucide React icon names (e.g., "BookOpen", "Settings", "Plus", etc.)
-
-### `ui.quickActions[]`
-
-```json
-{
-  "ui": {
-    "quickActions": [{
-      "id": "action-id",
-      "label": "Action Name",
-      "icon": "Plus",
-      "action": "openMainView",
-      "target": "viewId"
-    }]
-  }
-}
-```
-
-Shows in empty conversation state.
-
-### `llm.tools[]`
-
-```json
-{
-  "llm": {
-    "tools": [{
-      "name": "myext_tool_name",
-      "description": "What this tool does",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "param1": { "type": "string", "description": "..." },
-          "param2": { "type": "number" }
-        },
-        "required": ["param1"]
-      }
-    }]
-  }
-}
-```
-
-Tools must be referenced in `apis.exposes[]` too.
-
----
-
-## 5. Error Handling
-
-Always wrap API calls in try/catch:
+Read messages from a specific conversation.
 
 ```javascript
-try {
-  const value = await api.storage.kv.get('key');
-  // Use value
-} catch (err) {
-  console.error('Storage error:', err.message);
-  // Show user-friendly error
-  await api.host.notifications.show({
-    title: 'Error',
-    body: 'Failed to load data',
-    type: 'error'
-  });
-}
+var result = await window.chaton.extensionHostCall(
+  EXT_ID,
+  'conversations.getMessages',
+  { conversationId: 'uuid-...' }
+);
+// result.data = [
+//   {
+//     id: 'msg-id',
+//     role: 'user',       // or 'assistant'
+//     payloadJson: '{"role":"user","content":"Hello"}',
+//     createdAt: '2026-03-10T...',
+//     updatedAt: '2026-03-10T...',
+//   }
+// ]
 ```
 
-Common errors:
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `conversationId` | string | Yes | Conversation UUID |
 
-- **Capability not declared** -- "Missing capability: storage.kv"
-- **Storage limit exceeded** -- "Storage quota exceeded"
-- **File not found** -- "ENOENT: no such file or directory"
-- **Timeout** -- "Operation timed out"
+### `projects.list`
 
----
+**Required capability:** `host.projects.read`
 
-## 6. Async/Await Pattern
-
-All API operations are async. Always use await:
+List all imported projects.
 
 ```javascript
-// Wrong - won't work
-const value = api.storage.kv.get('key');
-console.log(value); // Promise, not the actual value!
-
-// Right
-const value = await api.storage.kv.get('key');
-console.log(value); // Actual value
+var result = await window.chaton.extensionHostCall(EXT_ID, 'projects.list');
+// result.data = [
+//   { id: 'uuid', name: 'my-project', repoPath: '/path/to/repo', updatedAt: '...' }
+// ]
 ```
 
-Or use `.then()`:
+### `open.mainView`
+
+Open an extension's main view programmatically.
 
 ```javascript
-api.storage.kv.get('key')
-  .then(value => console.log(value))
-  .catch(err => console.error(err));
-```
-
----
-
-## 7. Host Events
-
-Events you can subscribe to with `events.subscribe`:
-
-| Event | Data | Use Case |
-|-------|------|----------|
-| `app.started` | `{ timestamp }` | Extension initialization |
-| `conversation.created` | `{ conversation }` | New thread started |
-| `conversation.updated` | `{ conversation }` | Thread properties changed |
-| `conversation.message.received` | `{ conversation, message }` | New message |
-| `conversation.agent.started` | `{ conversation }` | Model started thinking |
-| `conversation.agent.ended` | `{ conversation }` | Model finished |
-| `project.created` | `{ project }` | New project imported |
-| `project.deleted` | `{ project }` | Project removed |
-| `extension.installed` | `{ extension }` | Extension installed |
-| `extension.enabled` | `{ extension }` | Extension toggled on |
-
-Example:
-
-```javascript
-// Listen for new messages
-await api.events.subscribe('conversation.message.received', (data) => {
-  const { message, conversation } = data;
-  console.log('New message:', message.content);
-  
-  // Store message for later
-  const key = `messages:${conversation.id}`;
-  const existing = await api.storage.kv.get(key) || '[]';
-  const messages = JSON.parse(existing);
-  messages.push(message);
-  await api.storage.kv.set(key, JSON.stringify(messages));
+await window.chaton.extensionHostCall(EXT_ID, 'open.mainView', {
+  viewId: 'myext.main',
 });
 ```
 
----
+### Channel-Specific Methods
 
-## 8. Host IPC Surface (Advanced)
-
-The renderer communicates with the extension host through IPC endpoints such as:
-
-- `extensions:getManifest`
-- `extensions:registerUi`
-- `extensions:events:subscribe`
-- `extensions:events:publish`
-- `extensions:queue:enqueue`
-- `extensions:queue:consume`
-- `extensions:queue:ack`
-- `extensions:queue:nack`
-- `extensions:queue:deadLetter:list`
-- `extensions:storage:kv:get`
-- `extensions:storage:kv:set`
-- `extensions:storage:kv:delete`
-- `extensions:storage:kv:list`
-- `extensions:storage:files:read`
-- `extensions:storage:files:write`
-- `extensions:hostCall`
-- `extensions:call`
-- `extensions:runtime:health`
-
-These IPC names are useful when tracing behavior across the renderer, Electron main process, and extension runtime.
+For `channels.upsertGlobalThread`, `channels.ingestMessage`, `channels.reportStatus`, and `channels.getStatus`, see the [Channels documentation](/extensions/channels).
 
 ---
 
-## 9. Capabilities Detail
+## Cross-Extension API Calls
 
-Capabilities gate access to host features. Declare what you need:
+### `extensionCall(callerExtensionId, targetExtensionId, apiName, versionRange, payload)`
 
-### UI Capabilities
-
-| Capability | What It Allows |
-|-----------|----------------|
-| `ui.mainView` | Create full-page views |
-| `ui.menu` | Add sidebar menu items |
-
-### Storage Capabilities
-
-| Capability | What It Allows |
-|-----------|----------------|
-| `storage.kv` | Key-value storage (JSON-backed) |
-| `storage.files` | File-based storage (sandboxed) |
-
-### Event Capabilities
-
-| Capability | What It Allows |
-|-----------|----------------|
-| `events.subscribe` | Listen to app events |
-| `events.publish` | Emit custom events |
-
-### Queue Capabilities
-
-| Capability | What It Allows |
-|-----------|----------------|
-| `queue.publish` | Create background jobs |
-| `queue.consume` | Process jobs |
-
-### LLM Capabilities
-
-| Capability | What It Allows |
-|-----------|----------------|
-| `llm.tools` | Expose tools to language model |
-
-### Host Capabilities
-
-| Capability | What It Allows |
-|-----------|----------------|
-| `host.notifications` | Show desktop notifications |
-| `host.conversations.read` | Read conversation data |
-| `host.conversations.write` | Modify conversations |
-| `host.projects.read` | Read project data |
-
----
-
-## 10. Extension Storage
-
-Namespaced key-value storage is backed by the SQLite table `extension_kv`.
-
-This is the right place for:
-
-- settings
-- bridge mappings
-- cursors
-- small extension state
-
-**Usage:**
+Call another extension's exposed API.
 
 ```javascript
-// Save
-await api.storage.kv.set('key', 'value');
-
-// Load
-const value = await api.storage.kv.get('key');
-
-// Delete
-await api.storage.kv.delete('key');
-
-// List all keys
-const keys = await api.storage.kv.list();
+var result = await window.chaton.extensionCall(
+  EXT_ID,                              // Your extension ID (the caller)
+  '@other/chatons-weather',            // Target extension ID
+  'get_weather',                       // API name (declared in target's apis.exposes)
+  '^1.0.0',                            // Semver version range
+  { city: 'Paris' }                    // Payload
+);
 ```
 
-**Limits:**
-- Keys are strings (max ~256 chars)
-- Values are strings (max ~1 MB)
-- Storage is per-extension (namespaced)
+### Exposing an API
 
-### File storage
-
-Extensions also get sandboxed file storage under:
-
-- `~/.chaton/extensions/data/<extensionId>/`
-
-Use that for:
-
-- larger state files
-- caches
-- imported assets
-- provider-specific local artifacts
-
-**Usage:**
-
-```javascript
-// Write file
-await api.storage.files.write('notes.txt', 'content');
-
-// Read file
-const content = await api.storage.files.read('notes.txt');
-
-// List files
-const files = await api.storage.files.list('/');
-
-// Delete file
-await api.storage.files.delete('notes.txt');
-
-// Subdirectories (created automatically)
-await api.storage.files.write('docs/readme.md', '# Docs');
-```
-
----
-
-## 11. Persistent Queue
-
-The extension queue is backed by the SQLite table `extension_queue`.
-
-Documented semantics today:
-
-- at-least-once delivery
-- retry with backoff
-- dead-letter handling
-
-Queue item states include:
-
-- `queued`
-- `processing`
-- `done`
-- `dead`
-
-This makes the queue suitable for extension jobs where occasional retry is acceptable and idempotency can be managed at the extension layer.
-
-**Usage:**
-
-```javascript
-// Publish job
-await api.queue.publish('myqueue', { type: 'task', data: 'value' });
-
-// Consume jobs
-const job = await api.queue.consume('myqueue', 5000);
-if (job) {
-  try {
-    // Process job
-    await doWork(job.data);
-    await api.queue.ack(job.id); // Mark done
-  } catch (err) {
-    await api.queue.nack(job.id); // Retry later
-  }
-}
-
-// Check failed jobs
-const dead = await api.queue.deadLetter.list('myqueue');
-```
-
----
-
-## 12. Cross-Extension APIs
-
-Extensions can expose APIs for other extensions to call.
-
-**In your manifest:**
+In your manifest:
 
 ```json
 {
   "apis": {
     "exposes": [
-      { "name": "my_feature.do_something", "version": "1.0.0" }
+      { "name": "notes.search", "version": "1.0.0" }
     ]
   }
 }
 ```
 
-**In your code:**
+Handle incoming API calls via `postMessage`:
 
 ```javascript
-// Handle calls from other extensions
-api.apis.onCall('my_feature.do_something', async (params) => {
-  return { result: 'success' };
+window.addEventListener('message', function (event) {
+  var data = event && event.data;
+  if (!data || data.type !== 'chaton.extension.apiCall') return;
+  if (data.apiName !== 'notes.search') return;
+
+  var results = doSearch(data.payload);
+
+  window.parent.postMessage({
+    type: 'chaton.extension.apiCallResponse',
+    callId: data.callId,
+    result: results,
+  }, '*');
 });
-```
-
-**Other extensions call your API:**
-
-```javascript
-const result = await api.apis.call(
-  '@yourname/chatons-my-ext',
-  'my_feature.do_something',
-  { param: 'value' }
-);
 ```
 
 ---
 
-## 13. LLM-Exposed Tools
+## Model Listing
 
-Extensions can expose tools that are injected into Pi thread sessions.
+### `listPiModels()`
 
-### Manifest contract
+List all available AI models.
 
-Example shape:
+```javascript
+var result = await window.chaton.listPiModels();
+// result = {
+//   ok: true,
+//   models: [
+//     { id: 'gpt-4o', provider: 'openai', key: 'openai/gpt-4o', scoped: true },
+//     { id: 'claude-3.5-sonnet', provider: 'anthropic', key: 'anthropic/claude-3.5-sonnet', scoped: false },
+//   ]
+// }
+```
+
+The `scoped` field indicates whether the user has starred this model. The model picker widget (see [UI Library](/extensions/ui-library)) uses this to show starred models first.
+
+---
+
+## Initial State
+
+### `getInitialState()`
+
+Get the app's current state (projects, conversations, etc.).
+
+```javascript
+var state = await window.chaton.getInitialState();
+// state.projects -- array of project objects
+// state.conversations -- array of conversation objects
+```
+
+This is called by built-in extensions (automation, memory) at startup to populate project pickers and conversation lists.
+
+---
+
+## LLM Tool Integration
+
+LLM tools are exposed through the manifest and handled via the cross-extension API system. The flow:
+
+1. Declare the tool in `llm.tools[]` and `apis.exposes[]` in your manifest
+2. The AI model decides to call your tool
+3. Chatons routes it as an `apiCall` message to your extension
+4. You process the call and respond via `postMessage`
+
+### Manifest
 
 ```json
 {
@@ -746,163 +457,154 @@ Example shape:
   "llm": {
     "tools": [
       {
-        "name": "my_extension.do_something",
-        "label": "Do something",
-        "description": "Description shown to the model.",
-        "promptSnippet": "Short one-line tool hint in the system prompt.",
+        "name": "myext_search_notes",
+        "description": "Search through the user's saved notes.",
+        "promptSnippet": "Use myext_search_notes to find user notes by keyword.",
         "promptGuidelines": [
-          "Optional extra guidance injected in the tool guidelines section."
+          "Always search before creating a duplicate note."
         ],
         "parameters": {
           "type": "object",
           "properties": {
-            "input": { "type": "string" }
+            "query": { "type": "string", "description": "Search keyword" }
           },
-          "required": ["input"]
+          "required": ["query"]
         }
       }
     ]
   },
   "apis": {
     "exposes": [
-      { "name": "my_extension.do_something", "version": "1.0.0" }
+      { "name": "myext_search_notes", "version": "1.0.0" }
     ]
   }
 }
 ```
 
-### Rules
-
-- each LLM tool entry must map to an exposed API with the same name
-- the extension must declare capability `llm.tools`
-- tool results are returned as JSON text output
-- execution is routed through the extension runtime bridge rather than by exposing arbitrary code directly to the model
-
-### Name restrictions
-
-Pi-facing tool names must match:
-
-- `^[a-zA-Z0-9_-]+$`
-
-If a manifest tool name contains characters such as `.`, `/`, or spaces, Chatons automatically normalizes the Pi-visible tool name and logs a normalization warning.
-
-The original extension API name still remains the internal dispatch target.
-
-### Requirement sheets
-
-An LLM tool can return a requirement sheet to prompt the user for missing prerequisites (API keys, auth, settings). The sheet appears as an inline iframe at the top of the conversation.
-
-To trigger a requirement sheet, return an error with a `requirementSheet` property:
+### Handler
 
 ```javascript
-return {
-  ok: false,
-  error: {
-    code: 'unauthorized',
-    message: 'API key not configured.',
-    requirementSheet: {
-      title: 'Configure API Key',
-      html: '<html>...</html>',
-    },
-  },
-};
+window.addEventListener('message', function (event) {
+  var data = event && event.data;
+  if (!data || data.type !== 'chaton.extension.apiCall') return;
+  if (data.apiName !== 'myext_search_notes') return;
+
+  var query = (data.payload && data.payload.query) || '';
+  var results = notes.filter(function (n) {
+    return n.text.toLowerCase().includes(query.toLowerCase());
+  });
+
+  window.parent.postMessage({
+    type: 'chaton.extension.apiCallResponse',
+    callId: data.callId,
+    result: { notes: results, count: results.length },
+  }, '*');
+});
 ```
 
-The sheet iframe has access to `window.chaton.requirementSheet` with `confirm()`, `dismiss()`, and `openSettings()` methods.
+### Returning a requirement sheet
 
-For the full requirement sheet API and examples, see [Requirement Sheets](/extensions/requirement-sheets).
+If your tool needs prerequisites (API key, auth), return an error with `requirementSheet`:
+
+```javascript
+window.parent.postMessage({
+  type: 'chaton.extension.apiCallResponse',
+  callId: data.callId,
+  result: {
+    ok: false,
+    error: {
+      code: 'unauthorized',
+      message: 'API key not configured.',
+      requirementSheet: {
+        title: 'Configure API Key',
+        html: '<html>...</html>',
+      },
+    },
+  },
+}, '*');
+```
+
+See [Requirement Sheets](/extensions/requirement-sheets) for the full API.
+
+### Tool name rules
+
+- Must match `^[a-zA-Z0-9_-]+$`
+- If your name contains `.` or `/`, Chatons auto-normalizes it and logs a warning
+- The exposed API name and the tool name must match
 
 ---
 
-## 14. Extension Servers
+## Error Handling
 
-An extension can declare a local server process to start automatically.
+All API calls return `{ ok: true, data: ... }` on success or `{ ok: false, error: { code, message } }` on failure.
 
-Manifest shape:
+### Error codes
 
-```json
-{
-  "server": {
-    "start": {
-      "command": "node",
-      "args": ["index.js"],
-      "cwd": ".",
-      "env": { "MY_VAR": "value" },
-      "readyUrl": "http://127.0.0.1:4317/health",
-      "readyTimeoutMs": 12000,
-      "expectExit": false
-    }
+| Code | Meaning |
+|------|---------|
+| `unauthorized` | Missing capability or permission denied |
+| `invalid_args` | Bad parameter (missing required field, wrong type) |
+| `not_found` | Resource does not exist (file, conversation, etc.) |
+| `rate_limited` | Too many requests |
+| `internal` | Server-side error |
+| `missing_api_key` | API key not configured |
+
+### Recommended pattern
+
+```javascript
+try {
+  var result = await window.chaton.extensionStorageKvGet(EXT_ID, 'key');
+  if (!result.ok) {
+    console.error('Storage error:', result.error.code, result.error.message);
+    return;
   }
+  // Use result.data
+} catch (err) {
+  console.error('Unexpected error:', err);
 }
 ```
 
-Current behavior:
+---
 
-- `command` is required
-- `args` are optional
-- `cwd` is resolved relative to the extension root and sandboxed to that directory
-- if `readyUrl` is set, Chatons polls it until HTTP 200 or timeout
-- `expectExit` can be used for one-shot scripts
-- the UI can also register a server dynamically through `window.chaton.registerExtensionServerFromUi(...)`
+## IPC Channel Names
 
-The host may temporarily report that a server is not ready while it is still starting.
+For developers tracing behavior across Electron's main and renderer processes, here are the IPC channel names used by the extension system:
+
+| IPC Channel | Maps To |
+|------------|---------|
+| `extensions:storage:kv:get` | `extensionStorageKvGet` |
+| `extensions:storage:kv:set` | `extensionStorageKvSet` |
+| `extensions:storage:kv:delete` | `extensionStorageKvDelete` |
+| `extensions:storage:kv:list` | `extensionStorageKvList` |
+| `extensions:storage:files:read` | `extensionStorageFilesRead` |
+| `extensions:storage:files:write` | `extensionStorageFilesWrite` |
+| `extensions:events:subscribe` | `extensionEventSubscribe` |
+| `extensions:events:publish` | `extensionEventPublish` |
+| `extensions:queue:enqueue` | `extensionQueueEnqueue` |
+| `extensions:queue:consume` | `extensionQueueConsume` |
+| `extensions:queue:ack` | `extensionQueueAck` |
+| `extensions:queue:nack` | `extensionQueueNack` |
+| `extensions:queue:deadLetter:list` | `extensionQueueDeadLetterList` |
+| `extensions:hostCall` | `extensionHostCall` |
+| `extensions:call` | `extensionCall` |
+| `extensions:runtime:health` | `extensionRuntimeHealth` |
 
 ---
 
-## 15. Channel Extension Profile
+## Capabilities Reference
 
-Chatons documents a specialized extension profile for external messaging bridges.
-
-Channel extensions are identified with `kind: "channel"`.
-
-Current rules around that profile:
-
-- inbound channel messages go to global threads only
-- channel extensions must not target project conversations
-- enabled channel extensions are shown through a dedicated `Channels` navigation entry instead of through separate sidebar items
-
-For the detailed profile, see [Extensions Channels](/extensions/channels).
-
----
-
-## 16. Logging
-
-Extension runtime logs are written under:
-
-- `~/.chaton/extensions/logs/`
-
-The filename is derived from the extension id using a filesystem-safe normalization step.
-
-This is the first place to inspect when:
-
-- a tool name was normalized
-- a server did not become ready
-- a runtime hook failed
-- an extension API call behaves differently than expected
-
----
-
-## 17. Stability and Compatibility
-
-### What to Treat as Stable Today
-
-These behaviors are clearly implemented and safe to rely on:
-
-- Capability-gated host access
-- Manifest-declared main views
-- Namespaced KV and file storage
-- Persistent queue with retry/dead-letter handling
-- Runtime server startup with readiness polling
-- LLM tool injection through manifest + API pairing
-- Event subscriptions and publications
-
-### What to Document Carefully
-
-These are real, but should be described precisely:
-
-- Channel extensions are a documented profile over the existing extension system
-- Extension runtime changes still often require restart for full reliability
-- LLM tool results are JSON-oriented and bridged, not arbitrary direct host execution
-- Host-managed translation of extension labels does not exist
-
-If platform behavior changes in those areas, update this file in the same change.
+| Capability | Required For |
+|-----------|-------------|
+| `ui.menu` | `ui.menuItems[]` in manifest |
+| `ui.mainView` | `ui.mainViews[]` in manifest |
+| `storage.kv` | `extensionStorageKvGet/Set/Delete/List` |
+| `storage.files` | `extensionStorageFilesRead/Write` |
+| `events.subscribe` | `extensionEventSubscribe` |
+| `events.publish` | `extensionEventPublish` |
+| `queue.publish` | `extensionQueueEnqueue` |
+| `queue.consume` | `extensionQueueConsume/Ack/Nack` |
+| `llm.tools` | LLM tool exposure |
+| `host.notifications` | `notifications.notify` host call |
+| `host.conversations.read` | `conversations.list`, `conversations.getMessages` |
+| `host.conversations.write` | `channels.*` methods, conversation creation |
+| `host.projects.read` | `projects.list` |

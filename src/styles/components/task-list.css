@@ -1,6 +1,8 @@
 @layer components {
   /* Task List Panel */
   .task-list-panel {
+    /* Bottom padding accounts for the composer/queue/diff overlay */
+    padding-bottom: var(--composer-overlay-height, 124px);
     @apply flex h-full w-full flex-col overflow-y-auto;
   }
 

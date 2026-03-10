@@ -5,108 +5,119 @@ description: Overview of the Chatons extension system.
 
 # Chatons Extensions
 
-**Start here:** If you're new to extensions, start with the Extensions Tutorial -- it has a complete working example.
+Extensions add features to Chatons: sidebar views, LLM tools, storage, event handling, background servers, and messaging bridges.
 
-**Reference:** For API details, see the [Extensions API](/extensions/api).
+**Start here:** The [Extensions Tutorial](/extensions/tutorial) walks you through building a complete extension from scratch.
 
-**Related documents:**
+**Reference:** The [Extensions API](/extensions/api) documents every available method and its parameters.
 
-- [Extensions API](/extensions/api) -- API reference and method signatures
-- [Extensions Channels](/extensions/channels) -- Building messaging platform integrations
+**Related:**
+
+- [Extensions Tutorial](/extensions/tutorial) -- Build your first extension
+- [Extensions API](/extensions/api) -- API reference with code examples
+- [Extensions Channels](/extensions/channels) -- Messaging platform bridges
 - [Extensions UI Library](/extensions/ui-library) -- UI components and styling
 - [Requirement Sheets](/extensions/requirement-sheets) -- Inline sheets for tool prerequisites
-- [Automation Extension](/automation-extension) -- Built-in automation extension details
+- [Extension Publishing](/extensions/publishing) -- Publish to npm
 
 ---
 
-## 1. What an extension is
+## 1. What an Extension Is
 
-A Chatons extension is a self-contained package that adds features to Chatons.
+A Chatons extension is a folder containing a manifest (`chaton.extension.json`), HTML, CSS, and JavaScript files. Extensions run inside isolated webview iframes with access to a set of host APIs.
 
-Your extension can contribute:
+An extension can contribute:
 
-- sidebar navigation
-- main views
-- quick actions
-- exposed APIs
-- LLM-callable tools
-- queue consumers and publishers
-- storage access
-- local background servers
-- host interactions such as notifications
+- **Sidebar menu items** and **main views** (full-page UIs)
+- **Quick actions** (buttons shown on the empty conversation screen)
+- **LLM tools** (functions the AI model can call)
+- **Event listeners** (react to conversations, messages, projects)
+- **Background servers** (local processes started automatically)
+- **Persistent storage** (key-value and file-based)
+- **Message queues** (reliable background job processing)
+- **Channel bridges** (external messaging platform integrations)
 
-Extensions are distinct from Pi skills.
-
-Use an extension when you need Chatons host integration, UI, or persistent extension-owned behavior.
+**Extensions vs Pi skills:** Extensions have access to the Chatons host (storage, events, UI). Pi skills are prompt-based instructions with no host integration. Use an extension when you need UI, storage, or event-driven behavior.
 
 ---
 
-## 2. Where extensions live
+## 2. Where Extensions Live
 
-### Canonical user extension directory
+### User extensions
 
-User-installed extensions live under:
+```
+~/.chaton/extensions/<extension-id>/
+```
 
-- `~/.chaton/extensions/<extension-id>`
-
-### Legacy fallback directory
-
-Chatons also still recognizes:
-
-- `~/.chaton/extensions/extensions/<extension-id>`
-
-### Registry file
-
-Installed extension state is tracked in:
-
-- `~/.chaton/extensions/registry.json`
+Example: `~/.chaton/extensions/@yourname/chatons-my-ext/`
 
 ### Built-in extensions
 
-Chatons always includes built-in extension entries for:
+Chatons ships two built-in extensions:
 
-- `@chaton/automation`
-- `@chaton/memory`
+- `@chaton/automation` -- Automation rules engine
+- `@chaton/memory` -- Persistent memory store
 
-These are shipped with the app and not stored in the user extension folder.
+These are bundled with the app and do not appear in the user extension folder.
+
+### Registry
+
+Installed extension state is tracked in:
+
+```
+~/.chaton/extensions/registry.json
+```
+
+### Extension data storage
+
+File-based storage for each extension lives under:
+
+```
+~/.chaton/extensions/data/<extensionId>/
+```
+
+### Extension logs
+
+Runtime logs are written to:
+
+```
+~/.chaton/extensions/logs/
+```
 
 ---
 
-## 3. Discovery and loading model
+## 3. Discovery and Loading
 
 At startup, Chatons loads extension manifests from:
 
-- built-in extensions
-- registered user extensions
-- valid on-disk extension folders discovered during registry scan
+1. Built-in extensions
+2. Registered user extensions
+3. Valid on-disk extension folders discovered during registry scan
 
-This means manual local development is possible: if you drop a valid extension folder into the expected directory, Chatons can discover it.
+**Local development:** Drop a valid extension folder into `~/.chaton/extensions/` and restart Chatons. The app will discover it automatically.
 
-Important current limitation:
-
-- the safest workflow after adding or changing extension files is still to restart Chatons
-- install or toggle operations do not guarantee a complete same-process runtime rebuild
+**Important limitation:** After adding or changing extension files, restart Chatons. Hot reload is not fully reliable.
 
 ---
 
-## 4. Minimal manifest
+## 4. Manifest
 
-Every extension is described by `chaton.extension.json`.
+Every extension needs a `chaton.extension.json` file. This is the manifest -- it tells Chatons what your extension does and what permissions it needs.
 
-Minimal example:
+### Minimal manifest
 
 ```json
 {
-  "id": "@user/chatons-your-extension",
-  "name": "Your Extension",
+  "id": "@yourname/chatons-my-ext",
+  "name": "My Extension",
   "version": "1.0.0",
   "capabilities": ["ui.mainView"],
   "ui": {
     "mainViews": [
       {
-        "viewId": "your.main",
-        "title": "Your View",
-        "webviewUrl": "chaton-extension://@user/chatons-your-extension/index.html",
+        "viewId": "myext.main",
+        "title": "My Extension",
+        "webviewUrl": "chaton-extension://@yourname/chatons-my-ext/index.html",
         "initialRoute": "/"
       }
     ]
@@ -114,123 +125,246 @@ Minimal example:
 }
 ```
 
-Fields that matter in practice:
+### Required fields
 
-- `id`
-- `name`
-- `version`
-- `capabilities`
-- `ui.mainViews` if the extension has a visible screen
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique extension ID. Format: `@username/chatons-name` |
+| `name` | string | Display name shown in the UI |
+| `version` | string | Semantic version (e.g. `"1.0.0"`) |
+| `capabilities` | string[] | Permissions your extension needs |
 
-If the extension exposes APIs or LLM tools, you also need the matching `apis` and `llm` sections.
+### All manifest fields
+
+```typescript
+{
+  id: string                    // Required. Unique extension ID.
+  name: string                  // Required. Display name.
+  version: string               // Required. Semantic version.
+  kind?: "channel"              // Set to "channel" for messaging bridges.
+  capabilities: Capability[]    // Required. Permission list.
+  ui?: {
+    menuItems?: [{
+      id: string                // Unique menu item ID
+      label: string             // Display text
+      icon?: string             // Lucide icon name (e.g. "BookOpen")
+      location?: "sidebar"      // Where to show the item
+      order?: number            // Sort order (lower = higher in list)
+      openMainView?: string     // viewId to open when clicked
+    }]
+    mainViews?: [{
+      viewId: string            // Unique view ID
+      title: string             // Display title
+      webviewUrl: string        // URL to load (chaton-extension://...)
+      initialRoute?: string     // Initial route path
+    }]
+    quickActions?: [{
+      id: string                // Unique action ID
+      title: string             // Button label
+      description?: string      // Optional helper text
+      scope?: "always" | "global-thread" | "project-thread" | "global-or-no-thread"
+      prompt?: string           // If set, creates a conversation with this prompt
+      extensionViewId?: string  // If set, opens this extension view
+      deeplink?: {
+        viewId: string          // Extension view to open
+        target: string          // Deeplink target identifier
+        params?: object         // Extra parameters
+        createConversation?: boolean  // Create a new conversation first
+        prefillPrompt?: string  // Pre-fill the composer with this text
+      }
+    }]
+  }
+  llm?: {
+    tools?: [{
+      name: string              // Tool name (alphanumeric, underscores, hyphens)
+      label?: string            // Display label
+      description: string       // Description shown to the model
+      promptSnippet?: string    // One-line hint in the system prompt
+      promptGuidelines?: string[] // Extra guidance lines
+      parameters?: object       // JSON Schema for tool parameters
+    }]
+  }
+  apis?: {
+    exposes?: [{
+      name: string              // API name (must match LLM tool name if paired)
+      version: string           // Semver version
+    }]
+    consumes?: [{
+      name: string              // API you depend on
+      version: string           // Semver range
+    }]
+  }
+  server?: {
+    start?: {
+      command: string           // Executable to run (e.g. "node")
+      args?: string[]           // Arguments (e.g. ["server.js"])
+      cwd?: string              // Working directory (relative to extension root)
+      env?: object              // Environment variables
+      readyUrl?: string         // URL to poll for readiness
+      healthUrl?: string        // Health check URL
+      expectExit?: boolean      // true for one-shot scripts
+      startTimeoutMs?: number   // Max startup time
+      readyTimeoutMs?: number   // Max readiness wait
+    }
+  }
+  hooks?: {
+    onInstall?: string
+    onEnable?: string
+    onDisable?: string
+    onUninstall?: string
+    onStart?: string
+    onStop?: string
+    onHealthCheck?: string
+  }
+  compat?: {
+    minHostVersion?: string
+    maxHostVersion?: string
+  }
+}
+```
 
 ---
 
-## 5. Common manifest sections
+## 5. Capabilities
 
-The current manifest format in the codebase includes support for areas such as:
+Capabilities are permissions. The runtime checks them before allowing access to host APIs.
 
-- top-level identity: `id`, `name`, `version`
-- `capabilities`
-- `hooks`
-- `ui.menuItems[]`
-- `ui.mainViews[]`
-- `ui.quickActions[]`
-- `apis.exposes[]`
-- `apis.consumes[]`
-- `server.start`
-- `llm.tools[]`
-- compatibility metadata
+| Capability | What It Allows |
+|-----------|----------------|
+| `ui.menu` | Add sidebar menu items |
+| `ui.mainView` | Create full-page views |
+| `storage.kv` | Key-value storage (SQLite-backed) |
+| `storage.files` | File-based storage (sandboxed directory) |
+| `events.subscribe` | Listen to host events |
+| `events.publish` | Emit custom events |
+| `queue.publish` | Enqueue background jobs |
+| `queue.consume` | Process queued jobs |
+| `llm.tools` | Expose tools to the AI model |
+| `host.notifications` | Show notifications in the UI |
+| `host.conversations.read` | Read conversation data and messages |
+| `host.conversations.write` | Create/modify conversations, channel operations |
+| `host.projects.read` | Read project data |
 
-Not every extension needs every section.
-
----
-
-## 6. Capabilities
-
-Capabilities are operational, not decorative.
-
-The runtime checks them before allowing access to different API families.
-
-Current capability names documented in the implementation include:
-
-- `ui.menu`
-- `ui.mainView`
-- `llm.tools`
-- `events.subscribe`
-- `events.publish`
-- `queue.publish`
-- `queue.consume`
-- `storage.kv`
-- `storage.files`
-- `host.notifications`
-- `host.conversations.read`
-- `host.projects.read`
-- `host.conversations.write`
-
-If a manifest is missing the relevant capability, host access is rejected.
+**Rule:** Only declare capabilities you actually use. If you call an API without declaring its capability, the call is rejected with an `unauthorized` error.
 
 ---
 
-## 7. Sidebar menu items and main views
+## 6. The Runtime API
 
-Extensions can contribute menu items and main views.
+Extensions access Chatons host functionality through the `window.chaton` object, which is available in all extension webviews.
+
+**This is the only API surface.** There is no `window.chatonExtension.api.*` namespace. All calls go through `window.chaton.*` with your extension ID as the first parameter.
+
+### Quick reference
+
+```javascript
+var EXT_ID = '@yourname/chatons-my-ext';
+
+// Key-value storage
+window.chaton.extensionStorageKvGet(EXT_ID, 'key')
+window.chaton.extensionStorageKvSet(EXT_ID, 'key', value)
+window.chaton.extensionStorageKvDelete(EXT_ID, 'key')
+window.chaton.extensionStorageKvList(EXT_ID)
+
+// File storage
+window.chaton.extensionStorageFilesRead(EXT_ID, 'path/to/file.txt')
+window.chaton.extensionStorageFilesWrite(EXT_ID, 'path/to/file.txt', 'content')
+
+// Events
+window.chaton.extensionEventSubscribe(EXT_ID, 'conversation.created', options)
+window.chaton.extensionEventPublish(EXT_ID, 'my.custom.event', payload)
+
+// Queue
+window.chaton.extensionQueueEnqueue(EXT_ID, 'topic', payload, opts)
+window.chaton.extensionQueueConsume(EXT_ID, 'topic', 'consumer-id', opts)
+window.chaton.extensionQueueAck(EXT_ID, messageId)
+window.chaton.extensionQueueNack(EXT_ID, messageId, retryAt, errorMessage)
+
+// Host calls (notifications, conversations, projects, channels)
+window.chaton.extensionHostCall(EXT_ID, 'notifications.notify', { title, body })
+window.chaton.extensionHostCall(EXT_ID, 'conversations.list')
+window.chaton.extensionHostCall(EXT_ID, 'conversations.getMessages', { conversationId })
+window.chaton.extensionHostCall(EXT_ID, 'projects.list')
+
+// Cross-extension API calls
+window.chaton.extensionCall(EXT_ID, targetExtId, apiName, versionRange, payload)
+
+// Model listing
+window.chaton.listPiModels()
+```
+
+All calls return Promises. See the [Extensions API](/extensions/api) for complete parameter details.
+
+---
+
+## 7. Sidebar Menu Items and Main Views
 
 ### Menu items
 
-Menu items are defined in `ui.menuItems[]`.
+Add a sidebar entry that opens your extension's view:
 
-A menu item can point to a `mainView` via `openMainView`.
+```json
+{
+  "ui": {
+    "menuItems": [
+      {
+        "id": "myext.menu",
+        "label": "My Extension",
+        "icon": "BookOpen",
+        "order": 50,
+        "openMainView": "myext.main"
+      }
+    ]
+  }
+}
+```
+
+`icon` values are [Lucide icon names](https://lucide.dev/icons) (e.g. `"BookOpen"`, `"Settings"`, `"Plus"`).
+
+`order` controls position in the sidebar. Lower values appear higher.
 
 ### Main views
 
-Main views are defined in `ui.mainViews[]`.
+Your view runs in a full-width, full-height iframe. It is not constrained to the centered conversation column -- your extension gets the full application content area.
 
-A main view usually includes:
+```json
+{
+  "ui": {
+    "mainViews": [
+      {
+        "viewId": "myext.main",
+        "title": "My Extension",
+        "webviewUrl": "chaton-extension://@yourname/chatons-my-ext/index.html",
+        "initialRoute": "/"
+      }
+    ]
+  }
+}
+```
 
-- `viewId`
-- `title`
-- `webviewUrl`
-- `initialRoute`
-
-### Host layout rule
-
-Extension main views are rendered in a full-width, full-height main-panel container.
-
-They are not constrained to the centered conversation column.
-
-This matters for extension authors because your webview can use the full application content area.
+The `webviewUrl` format is: `chaton-extension://<extension-id>/<path-to-html>`
 
 ---
 
-## 8. Quick actions
+## 8. Quick Actions
 
-Extensions can contribute quick actions through `ui.quickActions`.
-
-These are shown in the horizontal quick-action rail when the current UI context allows them.
-
-### Current limits
-
-- maximum of `2` quick actions per extension in the home quick-action rail
-- additional quick actions are ignored by the UI
-
-### Recommended quick action shape
+Quick actions appear as buttons on the empty conversation screen.
 
 ```json
 {
   "ui": {
     "quickActions": [
       {
-        "id": "your.create",
-        "title": "Create something",
-        "description": "Optional",
+        "id": "myext.create",
+        "title": "Create Something",
+        "description": "Optional description text",
         "scope": "global-thread",
         "deeplink": {
-          "viewId": "your.main",
+          "viewId": "myext.main",
           "target": "open-create",
           "params": { "preset": "default" },
           "createConversation": true,
-          "prefillPrompt": "Optional prompt injected into the composer"
+          "prefillPrompt": "Help me create something new"
         }
       }
     ]
@@ -238,238 +372,196 @@ These are shown in the horizontal quick-action rail when the current UI context 
 }
 ```
 
-### Supported fields
+**Limits:** Maximum 2 quick actions per extension.
 
-- `id`: stable identifier used for usage tracking
-- `title`: visible label
-- `description`: optional helper text
-- `scope`: visibility context
-- `deeplink`: instruction for opening an extension view and optionally preparing a thread
+### Scope values
 
-### Scope values currently used
+| Scope | When Shown |
+|-------|------------|
+| `"always"` | Always visible |
+| `"global-thread"` | Only when no project is selected |
+| `"project-thread"` | Only when a project is selected |
+| `"global-or-no-thread"` | When no project is selected, or no conversation is active |
 
-- `always`
-- `global-thread`
-- `project-thread`
-- `global-or-no-thread`
+### Deeplink behavior
 
-Default behavior is equivalent to `always`.
+- If `createConversation` is `true`, a new global conversation is created first
+- If `prefillPrompt` is set, the text is inserted into the composer
+- The `target` and `params` are sent to your extension as a deeplink message
 
-### Important product rule
+### Receiving deeplinks
 
-If `deeplink.createConversation = true`, the created thread is always a global thread.
+When Chatons opens your view through a deeplink, it sends a message event:
 
-It is not attached to the currently selected project.
-
-If `prefillPrompt` is provided, Chatons inserts it into the new composer and places the caret at the end.
-
----
-
-## 9. Deeplink contract
-
-When Chatons opens an extension main view through a deeplink, it sends a browser message event into the extension page.
-
-Current payload shape:
-
-```js
-window.postMessage({
-  type: 'chaton.extension.deeplink',
-  payload: {
-    viewId: 'your.main',
-    target: 'open-create',
-    params: {}
-  }
-}, '*')
-```
-
-Recommended extension-side listener:
-
-```js
-window.addEventListener('message', (event) => {
-  const data = event?.data;
+```javascript
+window.addEventListener('message', function (event) {
+  var data = event && event.data;
   if (!data || data.type !== 'chaton.extension.deeplink') return;
-  const payload = data.payload || {};
-  if (payload.viewId !== 'your.main') return;
-
+  var payload = data.payload || {};
+  if (payload.viewId !== 'myext.main') return;
   if (payload.target === 'open-create') {
-    // react here
+    // Handle the deeplink
   }
 });
 ```
 
----
+### Ranking
 
-## 10. LLM tools exposed by extensions
-
-Extensions can expose tools directly to the model inside Chatons threads.
-
-To do that, an extension needs:
-
-- capability `llm.tools`
-- `llm.tools[]` metadata in the manifest
-- a matching exposed API in `apis.exposes[]`
-
-### Execution flow
-
-1. the model decides to call the extension tool
-2. Chatons routes the request through the extension runtime bridge
-3. the matching extension API runs
-4. the result is serialized back to the model as tool output
-
-### Current constraints
-
-- one LLM tool maps to one exposed extension API with the same logical name
-- results are returned as JSON text payloads
-- tool names sent through Pi must match `^[a-zA-Z0-9_-]+$`
-- if a declared manifest tool name does not satisfy that rule, Chatons normalizes the Pi-exposed tool name automatically while still calling the original extension API name internally
+Quick actions are ranked by usage. Chatons tracks click counts with a decayed score (14-day half-life), so recently-used actions appear first.
 
 ---
 
-## 11. Injected UI helpers for extension pages
+## 9. LLM Tools
 
-For extension `mainView` pages, Chatons injects a lightweight helper layer under `window.chatonUi`.
+Extensions can expose tools that the AI model can call during conversations.
 
-Available helpers today:
+**Required:** capability `llm.tools`, tool definition in `llm.tools[]`, and a matching exposed API in `apis.exposes[]`.
 
-- `ensureStyles()`
-- `createModelPicker(options)`
-- `createButton(options)`
-- `createComponents()`
+### Manifest
 
-Extensions are still free to use their own UI stack. The helper exists to make visually aligned extension pages easier to build.
+```json
+{
+  "capabilities": ["llm.tools"],
+  "llm": {
+    "tools": [
+      {
+        "name": "myext_get_weather",
+        "description": "Get the current weather for a city.",
+        "promptSnippet": "Use myext_get_weather to check weather conditions.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": { "type": "string", "description": "City name" }
+          },
+          "required": ["city"]
+        }
+      }
+    ]
+  },
+  "apis": {
+    "exposes": [
+      { "name": "myext_get_weather", "version": "1.0.0" }
+    ]
+  }
+}
+```
 
-For the full UI helper reference, see the [Extensions UI Library](/extensions/ui-library).
+### Tool name rules
+
+Tool names sent to the AI model must match `^[a-zA-Z0-9_-]+$`. If your manifest tool name contains `.` or `/`, Chatons normalizes the name automatically and logs a warning.
+
+### Handling tool calls
+
+Tool calls are routed through the cross-extension API system. The model calls your tool, and Chatons dispatches it as an API call to your extension:
+
+```javascript
+window.addEventListener('message', function (event) {
+  var data = event && event.data;
+  if (!data || data.type !== 'chaton.extension.apiCall') return;
+  if (data.apiName !== 'myext_get_weather') return;
+
+  // Process the tool call
+  var result = { temperature: 22, condition: 'sunny', city: data.payload.city };
+
+  // Reply to the host
+  window.parent.postMessage({
+    type: 'chaton.extension.apiCallResponse',
+    callId: data.callId,
+    result: result,
+  }, '*');
+});
+```
+
+### Requirement sheets
+
+A tool can return a requirement sheet to prompt the user for missing prerequisites. See [Requirement Sheets](/extensions/requirement-sheets) for the full API.
 
 ---
 
-## 12. Runtime server processes
+## 10. Extension Servers
 
-An extension can declare a local server process in `server.start`.
-
-Example shape:
+An extension can run a local background process (e.g. a webhook receiver, an API server):
 
 ```json
 {
   "server": {
     "start": {
       "command": "node",
-      "args": ["index.js"],
-      "readyUrl": "http://127.0.0.1:4317/api/status",
+      "args": ["server.js"],
+      "cwd": ".",
+      "readyUrl": "http://127.0.0.1:4317/health",
       "readyTimeoutMs": 12000
     }
   }
 }
 ```
 
-Current behavior:
+If `readyUrl` is set, Chatons polls it until it returns HTTP 200 or the timeout expires.
 
-- the host can start the process automatically
-- if `readyUrl` is provided, Chatons polls it until it returns HTTP 200 or the timeout expires
-- a server can also be registered at runtime from the UI through `window.chaton.registerExtensionServerFromUi(...)`
+Environment variables available to the server process:
 
-Environment variables exposed to extension servers include:
+- `CHATON_EXTENSION_ID` -- Your extension's ID
+- `CHATON_EXTENSION_ROOT` -- Path to your extension folder
+- `CHATON_EXTENSION_DATA_DIR` -- Path to your data directory
 
-- `CHATON_EXTENSION_ID`
-- `CHATON_EXTENSION_ROOT`
-- `CHATON_EXTENSION_DATA_DIR`
+A server can also be registered dynamically from the UI:
 
----
-
-## 13. Quick-action ranking
-
-Quick actions are not displayed in fixed insertion order forever.
-
-Chatons keeps usage statistics and sorts them with a recency-weighted score.
-
-Stored concepts include:
-
-- raw use count
-- decayed score
-- last-used timestamp
-
-Current decay parameter:
-
-- half-life of `14 days`
-
-This means recent habits rise and stale habits gradually lose weight.
+```javascript
+window.chaton.registerExtensionServerFromUi({
+  extensionId: '@yourname/chatons-my-ext',
+  command: 'node',
+  args: ['server.js'],
+  readyUrl: 'http://127.0.0.1:4317/health',
+});
+```
 
 ---
 
-## 14. Persistence used by the extension platform
+## 11. Channel Extensions
 
-The extension runtime currently uses SQLite tables including:
+Channel extensions bridge external messaging platforms (Telegram, Slack, etc.) with Chatons.
 
-- `extension_kv`
-- `extension_queue`
-- `quick_actions_usage`
+They are identified by `kind: "channel"` in the manifest and have special behavior:
 
-What they are for:
+- Grouped under a dedicated **Channels** sidebar entry instead of separate sidebar items
+- Run automatically in hidden background iframes (polling stays alive)
+- Messages go to global threads only (not project conversations)
 
-- `extension_kv`: namespaced key-value persistence
-- `extension_queue`: persistent queue with retry/dead-letter handling
-- `quick_actions_usage`: usage-based sorting and statistics for quick actions
-
-For file storage, the extension platform also uses a sandboxed directory under:
-
-- `~/.chaton/extensions/data/<extensionId>/`
+For the complete guide, see [Extensions Channels](/extensions/channels).
 
 ---
 
-## 15. Channel extensions
+## 12. Translation
 
-Chatons supports a documented extension profile for messaging bridges.
+Chatons does not translate extension labels. Fields like `ui.menuItems[].label`, `ui.mainViews[].title`, and quick action titles are displayed as-is.
 
-Channel extensions are identified by:
-
-- `kind: "channel"`
-
-Current product behavior:
-
-- if at least one enabled channel extension is installed, Chatons shows a dedicated `Channels` sidebar entry
-- channel extensions are grouped inside that page instead of appearing as separate sidebar entries
-- inbound channel messages are intended for global threads only, not project conversations
-
-For the detailed contract, see [Extensions Channels](/extensions/channels).
+If your extension needs localization, implement it yourself in your JavaScript.
 
 ---
 
-## 16. Translation ownership
+## 13. Development Workflow
 
-The Chatons host does not auto-translate extension labels.
+1. Create a folder:
+   ```bash
+   mkdir -p ~/.chaton/extensions/@yourname/chatons-my-ext
+   ```
 
-That includes fields such as:
+2. Add `chaton.extension.json`, `index.html`, and any JS/CSS files
 
-- `ui.menuItems[].label`
-- `ui.mainViews[].title`
-- other manifest-provided labels
+3. Restart Chatons
 
-If an extension needs localization, the extension must own it.
+4. Open DevTools (F12) to check for errors
 
----
+5. After any file changes, restart Chatons
 
-## 17. Recommended workflow for local extension development
-
-The most reliable workflow today is:
-
-1. create a folder under `~/.chaton/extensions/<extension-id>`
-2. add a valid `chaton.extension.json`
-3. add the referenced HTML, JS, and assets
-4. restart Chatons
-5. inspect extension logs or run health checks from the Extensions screen
-
-This restart step matters because runtime hot reload is not the fully reliable path yet.
+See the [Extensions Tutorial](/extensions/tutorial) for a complete step-by-step example.
 
 ---
 
-## 18. What to document carefully
+## 14. Current Limitations
 
-When writing or updating extension docs, avoid overstating these areas.
-
-Current real limitations include:
-
-- restart is still the safe path after manifest or runtime file changes
-- channel classification is a documented contract layered on top of the extension platform, not a completely separate host subsystem
-- LLM tool exposure is capability-gated and JSON-oriented, not an arbitrary code bridge
-- extension-provided translation is extension-owned, not host-managed
-
-If you change any of those behaviors, update this file and the related extension docs in the same change.
+- **Restart required** after manifest or runtime file changes
+- **No host-managed translation** of extension labels
+- **LLM tool results are JSON-oriented** -- no arbitrary code bridge
+- **Maximum 2 quick actions** per extension
+- **Channel classification** is a profile on top of the extension system, not a separate subsystem

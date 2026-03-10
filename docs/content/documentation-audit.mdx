@@ -16,6 +16,36 @@ Related:
 
 ## March 10, 2026
 
+### Complete rewrite of all extension documentation
+
+All six extension documentation files were rewritten from scratch after a code-audit-driven review. Every API claim was verified against the source code (`electron/preload.ts`, `electron/extensions/runtime/ui-bridge.ts`, `electron/extensions/runtime/host.ts`, `electron/extensions/runtime/types.ts`, `electron/extensions/runtime/storage.ts`, `electron/extensions/runtime/capabilities.ts`, `electron/ipc/workspace-handlers.ts`, `electron/db/repos/extension-kv.ts`, `src/components/shell/QuickActionCards.tsx`, `src/features/workspace/types.ts`, `electron/extensions/builtin/automation/index.js`, `electron/extensions/builtin/memory/index.js`).
+
+**The single most critical finding:** The tutorial (tutorial.mdx) and API reference (api.mdx) documented an entirely fabricated SDK API surface (`window.chatonExtension.api.storage.kv.get()`, `api.events.subscribe()`, `api.host.notifications.show()`, `api.llm.tools.onCall()`, etc.) that does not exist anywhere in the codebase. The real API lives on `window.chaton.*` with explicit extension ID parameters (e.g. `window.chaton.extensionStorageKvGet(extensionId, key)`). This means no developer could have built a working extension by following the previous documentation.
+
+**Files rewritten:**
+
+1. **`index.mdx` (Extensions Overview)** -- Removed fabricated `window.chatonExtension.api.*` references, added the real `window.chaton.*` API surface with quick reference table, corrected all manifest field types against `ExtensionManifest` in `types.ts`, added complete quick action fields (verified against `ChatonsExtensionQuickAction` type), documented all 13 capabilities from the `Capability` type.
+
+2. **`tutorial.mdx` (Extensions Tutorial)** -- Completely rewrote the working example to use the real API (`window.chaton.extensionStorageKvGet/Set`, `window.chaton.extensionHostCall`), documented KV storage behavior (values are JSON objects, no need to stringify), added correct globals table (`window.chaton`, `window.chatonUi`, `window.chatonExtensionComponents`), rewrote all 7 common patterns with working code, fixed all debugging examples to check the real globals.
+
+3. **`api.mdx` (Extensions API Reference)** -- Replaced the entire fabricated API reference with the real methods from `electron/preload.ts`. Documented every parameter and return type for: `extensionStorageKvGet/Set/Delete/List`, `extensionStorageFilesRead/Write`, `extensionEventSubscribe/Publish`, `extensionQueueEnqueue/Consume/Ack/Nack/DeadLetterList`, `extensionHostCall` (all host methods), `extensionCall`, `listPiModels`, `getInitialState`. Added IPC channel names table for developers tracing Electron IPC. Verified return shapes against storage.ts and host.ts implementations.
+
+4. **`publishing.mdx` (Extension Publishing)** -- Verified the npm package name regex (`^@[^/]+\/chatons-[a-z0-9][a-z0-9-]*$`) from `manager.ts`. Documented the `localPath` install source requirement. Added in-app publishing flow. Removed excessive padding and redundant sections.
+
+5. **`requirement-sheets.mdx` (Requirement Sheets)** -- Verified the `requirementSheet` type from `ExtensionHostCallResult` in `types.ts`. Corrected the example to use the real postMessage-based tool call handling pattern instead of fabricated `api.llm.tools.onCall()`. Documented all three sheet communication methods (confirm, dismiss, openSettings) and their postMessage equivalents from `ui-bridge.ts`.
+
+6. **`ui-library.mdx` (UI Library)** -- Extracted every CSS class from the `EXTENSION_UI_BRIDGE_SCRIPT` in `ui-bridge.ts` and documented them with HTML examples. Documented all 17 CSS custom properties with their light and dark mode values. Documented all JavaScript helpers (`ensureStyles`, `el`, `cls`, `createButton`, `createBadge`, `createCard`, `createField`, `createModelPicker`) with their actual parameter shapes from the bridge source. Added `createCard()` and `createField()` which were present in the code but missing from the old docs.
+
+**Cross-cutting corrections applied to all files:**
+
+- Replaced all `window.chatonExtension.api.*` references with `window.chaton.*`
+- All storage examples pass objects directly (not stringified) per the KV implementation
+- All host call examples use `window.chaton.extensionHostCall(extensionId, method, params)`
+- All tool call handlers use the `postMessage` pattern (not fabricated `api.llm.tools.onCall`)
+- Removed references to `api.storage.kv.list()` returning a string array (it returns `[{ key, value, updatedAt }]`)
+- Removed references to `api.storage.files.delete()` and `api.storage.files.list()` (not implemented in storage.ts)
+- Corrected notification API from `api.host.notifications.show({ title, body, type })` to `extensionHostCall(id, 'notifications.notify', { title, body })`
+
 ### Complete rewrite of Channel Extensions documentation
 
 The channel extensions documentation (`docs/content/extensions/channels.mdx`) was rewritten from scratch after a code-audit-driven review.
