@@ -874,9 +874,7 @@ export function ChatonsExtensionsMainPanel() {
                       const serverStatus =
                         serverStatusById[extension.id] ?? null;
                       const iconValue = getExtensionIcon(
-                        typeof extension.config?.iconUrl === "string"
-                          ? extension.config.iconUrl
-                          : extension.config?.icon,
+                        extension.config?.iconUrl ?? extension.config?.icon,
                         extension.id,
                       );
                       const hasUpdate = updatesAvailable.some(

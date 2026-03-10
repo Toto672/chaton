@@ -510,6 +510,8 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
   // Store for active tool execution context (conversationId currently executing)
   const activeToolExecutionContext = new Map<string, string>(); // requestId -> conversationId
   const activeToolExecutionSignals = new Map<string, AbortSignal>(); // requestId -> AbortSignal
+  const activeToolCallIdByConversation = new Map<string, string>(); // conversationId -> requestId
+  const touchedPathsByToolCall = new Map<string, Set<string>>(); // requestId -> relative repo paths
 
   (globalThis as Record<string, unknown>).__chatonsToolExecutionContextStart = (
     requestId: string,
@@ -517,6 +519,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
     signal?: AbortSignal,
   ) => {
     activeToolExecutionContext.set(requestId, conversationId);
+    touchedPathsByToolCall.set(requestId, new Set());
     if (signal) {
       activeToolExecutionSignals.set(requestId, signal);
     }
@@ -528,6 +531,63 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
     activeToolExecutionContext.delete(requestId);
     activeToolExecutionSignals.delete(requestId);
   };
+
+  (globalThis as Record<string, unknown>).__chatonsActiveToolCallIdByConversationSet = (
+    conversationId: string,
+    requestId: string,
+  ) => {
+    activeToolCallIdByConversation.set(conversationId, requestId);
+  };
+
+  (globalThis as Record<string, unknown>).__chatonsActiveToolCallIdByConversationClear = (
+    conversationId: string,
+    requestId: string,
+  ) => {
+    if (activeToolCallIdByConversation.get(conversationId) === requestId) {
+      activeToolCallIdByConversation.delete(conversationId);
+    }
+  };
+
+  (globalThis as Record<string, unknown>).__chatonsActiveToolCallIdByConversationLookup = (
+    conversationId: string,
+  ): string | undefined => activeToolCallIdByConversation.get(conversationId);
+
+  (globalThis as Record<string, unknown>).__chatonsToolExecutionTrackPath = (
+    requestId: string,
+    absolutePath: string,
+  ) => {
+    const conversationId = activeToolExecutionContext.get(requestId);
+    if (!conversationId || typeof absolutePath !== "string" || !absolutePath.trim()) {
+      return;
+    }
+
+    const runtime = deps.piRuntimeManager.getRuntimeForConversation(conversationId) as {
+      workingDirectory?: string;
+    } | null;
+    const cwd = runtime?.workingDirectory;
+    if (!cwd) {
+      return;
+    }
+
+    const normalizedCwd = require("node:path").resolve(cwd);
+    const normalizedAbsolutePath = require("node:path").resolve(absolutePath);
+    const relativePath = require("node:path").relative(normalizedCwd, normalizedAbsolutePath);
+    if (
+      !relativePath ||
+      relativePath.startsWith("..") ||
+      require("node:path").isAbsolute(relativePath)
+    ) {
+      return;
+    }
+
+    const touched = touchedPathsByToolCall.get(requestId) ?? new Set<string>();
+    touched.add(relativePath.replace(/\\/g, "/"));
+    touchedPathsByToolCall.set(requestId, touched);
+  };
+
+  (globalThis as Record<string, unknown>).__chatonsToolExecutionTouchedPathsLookup = (
+    requestId: string,
+  ): string[] => Array.from(touchedPathsByToolCall.get(requestId) ?? []);
 
   (globalThis as Record<string, unknown>).__chatonsToolExecutionContextLookup = (
     requestId: string,
@@ -666,6 +726,10 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
     "workspace:getGitFileDiff",
     (_event, conversationId: string, filePath: string) =>
       deps.getGitFileDiffForConversation(conversationId, filePath),
+  );
+  ipcMain.handle(
+    "workspace:getTouchedFilesForToolCall",
+    (_event, toolCallId: string) => Array.from(touchedPathsByToolCall.get(toolCallId) ?? []),
   );
   ipcMain.handle(
     "workspace:getWorktreeGitInfo",

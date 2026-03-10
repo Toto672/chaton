@@ -67,6 +67,7 @@ declare global {
             message?: string;
           }
       >;
+      getTouchedFilesForToolCall: (toolCallId: string) => Promise<string[]>;
       getWorktreeGitInfo: (conversationId: string) => Promise<
         | {
             ok: true;

@@ -50,10 +50,12 @@ import { usePiRuntimeMeta, usePiMessages } from "@/features/workspace/store/pi-s
 import { perfMonitor } from "@/features/workspace/store/perf-monitor";
 import { workspaceIpc } from "@/services/ipc/workspace";
 import { useConversationSidePanel } from "@/hooks/use-conversation-side-panel";
+import { useNotifications } from "@/features/notifications/NotificationContext";
 
 export function Composer() {
   perfMonitor.recordComponentRender('Composer')
   const { t } = useTranslation();
+  const { addNotification } = useNotifications();
   const {
     state,
     createConversationGlobal,
@@ -652,7 +654,7 @@ export function Composer() {
           item.key === targetKey ? { ...item, scoped: model.scoped } : item,
         ),
       );
-      setNotice("Impossible de modifier le scope du modèle dans Pi.");
+      addNotification("Impossible de modifier le scope du modèle dans Pi.", 'error');
       return;
     }
 
@@ -681,7 +683,7 @@ export function Composer() {
 
     const parsedModel = parseModelKey(modelKey);
     if (!parsedModel) {
-      setNotice("Format de modèle invalide.");
+      addNotification("Format de modèle invalide.", 'error');
       return;
     }
     const response = await setPiModel(
@@ -690,7 +692,7 @@ export function Composer() {
       parsedModel.modelId,
     );
     if (!response.success) {
-      setNotice(response.error ?? "Impossible de changer de modèle.");
+      addNotification(response.error ?? "Impossible de changer de modèle.", 'error');
     }
   };
 
@@ -706,8 +708,9 @@ export function Composer() {
 
     const response = await setPiThinkingLevel(selectedConversation.id, level);
     if (!response.success) {
-      setNotice(
+      addNotification(
         response.error ?? "Impossible de changer le niveau de réflexion.",
+        'error',
       );
     }
   };
@@ -735,11 +738,10 @@ export function Composer() {
       mode,
     );
     if (!result.ok) {
-      setNotice("Impossible de changer le mode d’accès de l’agent.");
+      addNotification("Impossible de changer le mode d’accès de l’agent.", 'error');
       setSelectedAccessMode(selectedConversation.accessMode ?? "secure");
       return;
     }
-    setNotice(null);
   };
 
   const ajouterFichiers = async (files: FileList | File[]) => {
@@ -757,7 +759,7 @@ export function Composer() {
           error instanceof Error
             ? error.message
             : `Impossible de lire ${file.name}.`;
-        setNotice(messageErreur);
+        addNotification(messageErreur, 'error');
       }
     }
     if (nextAttachments.length > 0) {
@@ -826,15 +828,6 @@ export function Composer() {
       className={`composer-footer ${shouldShowComposer ? "composer-footer-visible" : ""}`}
     >
       <div className="content-wrap">
-        {state.notice ? (
-          <div
-            className="app-notice"
-            role="status"
-            onClick={() => setNotice(null)}
-          >
-            {state.notice}
-          </div>
-        ) : null}
 
         {showModificationsPanel ? (
           <ComposerModificationsPanel

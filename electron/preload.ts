@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld("chaton", {
     ipcRenderer.invoke("workspace:getGitDiffSummary", conversationId),
   getGitFileDiff: (conversationId: string, filePath: string) =>
     ipcRenderer.invoke("workspace:getGitFileDiff", conversationId, filePath),
+  getTouchedFilesForToolCall: (toolCallId: string) =>
+    ipcRenderer.invoke("workspace:getTouchedFilesForToolCall", toolCallId),
   getWorktreeGitInfo: (conversationId: string) =>
     ipcRenderer.invoke("workspace:getWorktreeGitInfo", conversationId),
   generateWorktreeCommitMessage: (conversationId: string) =>

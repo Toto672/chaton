@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ImageContent, FileContent } from "@/features/workspace/rpc";
 import { usePiStore } from "@/features/workspace/store/pi-store";
 import { workspaceIpc } from "@/services/ipc/workspace";
+import { useNotifications } from "@/features/notifications/NotificationContext";
 
 import { buildMessageWithAttachments } from "./attachments";
 import { parseModelKey, saveGlobalModel } from "./models";
@@ -83,6 +84,7 @@ export function useComposerMessaging({
   sendPiPrompt,
   collapseSidePanel,
 }: UseComposerMessagingArgs): UseComposerMessagingResult {
+  const { addNotification } = useNotifications();
   const [draftsByKey, setDraftsByKey] = useState<Record<string, string>>({});
 
   // Subscribe directly to the piStore for queue drain decisions.
@@ -238,7 +240,7 @@ export function useComposerMessaging({
 
         const setThinkingResponse = await setPiThinkingLevel(conversationId, selectedThinking);
         if (!setThinkingResponse.success) {
-          setNotice(setThinkingResponse.error ?? "Impossible de changer le niveau de réflexion.");
+          addNotification(setThinkingResponse.error ?? "Impossible de changer le niveau de réflexion.", 'error');
         }
       }
 

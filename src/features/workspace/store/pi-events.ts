@@ -327,31 +327,6 @@ export function applyPiEvent(
   const payload = event.event
 
   if (payload.type === 'system_prompt') {
-    // Log system prompt information for debugging
-    if (window.logger) {
-      const sections = Array.isArray(payload.sections) ? payload.sections : []
-      const model = payload.model as any
-      const accessMode = typeof payload.accessMode === 'string' ? payload.accessMode : 'secure'
-      const thinkingLevel = typeof payload.thinkingLevel === 'string' ? payload.thinkingLevel : 'medium'
-      
-      // Log a summary
-      window.logger.log('info', `System prompt initialized with ${sections.length} sections`, {
-        conversationId,
-        model: model ? `${model.provider}/${model.id}` : 'not set',
-        accessMode,
-        thinkingLevel,
-      })
-      
-      // Log each section
-      sections.forEach((section, index) => {
-        if (typeof section === 'string') {
-          window.logger.log('info', `System prompt section ${index + 1}/${sections.length}`, {
-            conversationId,
-            section,
-          })
-        }
-      })
-    }
     return { shouldAutoRetry: false }
   }
 

@@ -989,11 +989,19 @@ async function getWorktreeGitInfo(
   if (!conversation) {
     return { ok: false, reason: "conversation_not_found" };
   }
-  if (!conversation.worktree_path || !isGitRepo(conversation.worktree_path)) {
-    return { ok: false, reason: "worktree_not_found" };
+
+  const resolvedRepo = await resolveConversationRepoPath(conversationId);
+  if (!resolvedRepo.ok) {
+    return {
+      ok: false,
+      reason:
+        resolvedRepo.reason === "conversation_not_found"
+          ? "conversation_not_found"
+          : "worktree_not_found",
+    };
   }
 
-  const worktreePath = conversation.worktree_path;
+  const worktreePath = resolvedRepo.repoPath;
   const baseRepoPath = projectRepoPath ?? worktreePath;
   const baseBranch = "main";
 
@@ -1162,13 +1170,21 @@ async function generateWorktreeCommitMessage(
   if (!conversation) {
     return { ok: false, reason: "conversation_not_found" };
   }
-  if (!conversation.worktree_path || !isGitRepo(conversation.worktree_path)) {
-    return { ok: false, reason: "worktree_not_found" };
+
+  const resolvedRepo = await resolveConversationRepoPath(conversationId);
+  if (!resolvedRepo.ok) {
+    return {
+      ok: false,
+      reason:
+        resolvedRepo.reason === "conversation_not_found"
+          ? "conversation_not_found"
+          : "worktree_not_found",
+    };
   }
 
   try {
     const hasChanges = await gitService.hasUncommittedChanges(
-      conversation.worktree_path,
+      resolvedRepo.repoPath,
     );
     if (!hasChanges) {
       return { ok: false, reason: "no_changes" };
@@ -1178,7 +1194,7 @@ async function generateWorktreeCommitMessage(
     const piMessage = await generateCommitMessageWithPi(
       "",
       "",
-      conversation.worktree_path,
+      resolvedRepo.repoPath,
     );
 
     if (piMessage) {
@@ -1204,15 +1220,22 @@ async function stageWorktreeFile(
   if (!conversation) {
     return { ok: false, reason: 'conversation_not_found' };
   }
-  if (!conversation.worktree_path || !isGitRepo(conversation.worktree_path)) {
-    return { ok: false, reason: 'worktree_not_found' };
+  const resolvedRepo = await resolveConversationRepoPath(conversationId);
+  if (!resolvedRepo.ok) {
+    return {
+      ok: false,
+      reason:
+        resolvedRepo.reason === 'conversation_not_found'
+          ? 'conversation_not_found'
+          : 'worktree_not_found',
+    };
   }
   if (!filePath || !filePath.trim()) {
     return { ok: false, reason: 'file_not_found' };
   }
 
   try {
-    await gitService.stageFile(conversation.worktree_path, filePath);
+    await gitService.stageFile(resolvedRepo.repoPath, filePath);
     worktreeGitInfoCache.delete(conversationId);
     return { ok: true };
   } catch (error) {
@@ -1232,15 +1255,22 @@ async function unstageWorktreeFile(
   if (!conversation) {
     return { ok: false, reason: 'conversation_not_found' };
   }
-  if (!conversation.worktree_path || !isGitRepo(conversation.worktree_path)) {
-    return { ok: false, reason: 'worktree_not_found' };
+  const resolvedRepo = await resolveConversationRepoPath(conversationId);
+  if (!resolvedRepo.ok) {
+    return {
+      ok: false,
+      reason:
+        resolvedRepo.reason === 'conversation_not_found'
+          ? 'conversation_not_found'
+          : 'worktree_not_found',
+    };
   }
   if (!filePath || !filePath.trim()) {
     return { ok: false, reason: 'file_not_found' };
   }
 
   try {
-    await gitService.unstageFile(conversation.worktree_path, filePath);
+    await gitService.unstageFile(resolvedRepo.repoPath, filePath);
     worktreeGitInfoCache.delete(conversationId);
     return { ok: true };
   } catch (error) {
@@ -1259,14 +1289,21 @@ async function pullWorktreeBranch(
   if (!conversation) {
     return { ok: false, reason: 'conversation_not_found' };
   }
-  if (!conversation.worktree_path || !isGitRepo(conversation.worktree_path)) {
-    return { ok: false, reason: 'worktree_not_found' };
+  const resolvedRepo = await resolveConversationRepoPath(conversationId);
+  if (!resolvedRepo.ok) {
+    return {
+      ok: false,
+      reason:
+        resolvedRepo.reason === 'conversation_not_found'
+          ? 'conversation_not_found'
+          : 'worktree_not_found',
+    };
   }
 
   try {
-    const branch = await getCurrentBranch(conversation.worktree_path).catch(() => 'HEAD');
+    const branch = await getCurrentBranch(resolvedRepo.repoPath).catch(() => 'HEAD');
     const remote = 'origin';
-    await gitService.pull(conversation.worktree_path, remote, branch === 'HEAD' ? undefined : branch);
+    await gitService.pull(resolvedRepo.repoPath, remote, branch === 'HEAD' ? undefined : branch);
     worktreeGitInfoCache.delete(conversationId);
     return { ok: true, branch, remote };
   } catch (error) {
@@ -1290,10 +1327,17 @@ async function commitWorktree(
   if (!conversation) {
     return { ok: false, reason: "conversation_not_found" };
   }
-  if (!conversation.worktree_path || !isGitRepo(conversation.worktree_path)) {
-    return { ok: false, reason: "worktree_not_found" };
+  const resolvedRepo = await resolveConversationRepoPath(conversationId);
+  if (!resolvedRepo.ok) {
+    return {
+      ok: false,
+      reason:
+        resolvedRepo.reason === "conversation_not_found"
+          ? "conversation_not_found"
+          : "worktree_not_found",
+    };
   }
-  const worktreePath = conversation.worktree_path;
+  const worktreePath = resolvedRepo.repoPath;
   try {
     const hasWorkingChanges = await gitService.hasUncommittedChanges(worktreePath);
     const hasStaged = await gitService.hasStagedChanges(worktreePath);
@@ -1335,11 +1379,18 @@ async function mergeWorktreeIntoMain(
   if (!projectRepoPath || !isGitRepo(projectRepoPath)) {
     return { ok: false, reason: "project_not_found" };
   }
-  if (!conversation.worktree_path || !isGitRepo(conversation.worktree_path)) {
-    return { ok: false, reason: "worktree_not_found" };
+  const resolvedRepo = await resolveConversationRepoPath(conversationId);
+  if (!resolvedRepo.ok) {
+    return {
+      ok: false,
+      reason:
+        resolvedRepo.reason === "conversation_not_found"
+          ? "conversation_not_found"
+          : "worktree_not_found",
+    };
   }
   const baseBranch = "main";
-  const worktreePath = conversation.worktree_path;
+  const worktreePath = resolvedRepo.repoPath;
   const sourceBranch = await getCurrentBranch(worktreePath).catch(() => "HEAD");
   const alreadyMerged = await isMerged(
     projectRepoPath,
@@ -1503,16 +1554,23 @@ async function pushWorktreeBranch(
   if (!conversation) {
     return { ok: false, reason: "conversation_not_found" };
   }
-  if (!conversation.worktree_path || !isGitRepo(conversation.worktree_path)) {
-    return { ok: false, reason: "worktree_not_found" };
+  const resolvedRepo = await resolveConversationRepoPath(conversationId);
+  if (!resolvedRepo.ok) {
+    return {
+      ok: false,
+      reason:
+        resolvedRepo.reason === "conversation_not_found"
+          ? "conversation_not_found"
+          : "worktree_not_found",
+    };
   }
-  const branch = await getCurrentBranch(conversation.worktree_path).catch(
+  const branch = await getCurrentBranch(resolvedRepo.repoPath).catch(
     () => "HEAD",
   );
   const remote = "origin";
   try {
     await gitService.push(
-      conversation.worktree_path,
+      resolvedRepo.repoPath,
       remote,
       branch === "HEAD" ? undefined : branch,
     );
@@ -1956,39 +2014,67 @@ function syncProviderApiKeysBetweenModelsAndAuth(agentDir: string): void {
   if (!models.providers || typeof models.providers !== "object") return;
 
   let modelsChanged = false;
+  let authChanged = false;
   const nextProviders: Record<string, { apiKey?: unknown }> = {
     ...(models.providers as Record<string, { apiKey?: unknown }>),
   };
+  const nextAuth: Record<string, unknown> = { ...auth };
 
-  for (const [providerName, providerConfig] of Object.entries(nextProviders)) {
-    const authEntry = auth[providerName];
-    const authKey =
-      authEntry &&
-      typeof authEntry === "object" &&
-      !Array.isArray(authEntry) &&
-      authEntry.type === "api_key" &&
-      typeof authEntry.key === "string" &&
-      authEntry.key.trim().length > 0
-        ? authEntry.key.trim()
-        : null;
-    if (!authKey) {
-      continue;
+  // Track which providers are still in models.json
+  const currentProviderNames = new Set(Object.keys(models.providers));
+
+  // First, remove auth entries for providers that no longer exist in models.json
+  // This fixes the bug where re-adding a provider with a new API key would use the old key
+  for (const [providerName] of Object.entries(auth)) {
+    if (!currentProviderNames.has(providerName)) {
+      delete nextAuth[providerName];
+      authChanged = true;
+      console.log(`[pi] Removed auth entry for deleted provider: ${providerName}`);
     }
+  }
 
+  // Now sync API keys: models.json is the source of truth
+  for (const [providerName, providerConfig] of Object.entries(nextProviders)) {
     const modelKey =
       typeof providerConfig?.apiKey === "string"
         ? providerConfig.apiKey.trim()
         : "";
-    if (!modelKey || modelKey !== authKey) {
-      nextProviders[providerName] = {
-        ...(providerConfig ?? {}),
-        apiKey: authKey,
-      };
-      modelsChanged = true;
+    
+    if (!modelKey) {
+      // No API key in models.json for this provider, remove from auth
+      if (nextAuth[providerName]) {
+        delete nextAuth[providerName];
+        authChanged = true;
+        console.log(`[pi] Removed auth entry for provider without API key: ${providerName}`);
+      }
+      continue;
+    }
+
+    const authEntry = nextAuth[providerName];
+    const authKey =
+      authEntry &&
+      typeof authEntry === "object" &&
+      !Array.isArray(authEntry) &&
+      "type" in authEntry &&
+      authEntry.type === "api_key" &&
+      "key" in authEntry &&
+      typeof authEntry.key === "string"
+        ? (authEntry.key as string).trim()
+        : null;
+
+    // Always update auth.json with the key from models.json
+    // This ensures models.json is the source of truth
+    if (!authKey || authKey !== modelKey) {
+      nextAuth[providerName] = { type: "api_key", key: modelKey };
+      authChanged = true;
+      console.log(
+        `[pi] Updated auth.json for ${providerName}: ${authKey ? 'key changed' : 'entry added'}`,
+      );
     }
   }
 
-  if (modelsChanged) {
+  // Write files only if changes were made
+  if (modelsChanged || authChanged) {
     const nextModels = {
       ...models,
       providers: nextProviders,
@@ -1996,6 +2082,11 @@ function syncProviderApiKeysBetweenModelsAndAuth(agentDir: string): void {
     fs.writeFileSync(
       modelsPath,
       `${JSON.stringify(nextModels, null, 2)}\n`,
+      "utf8",
+    );
+    fs.writeFileSync(
+      authPath,
+      `${JSON.stringify(nextAuth, null, 2)}\n`,
       "utf8",
     );
   }

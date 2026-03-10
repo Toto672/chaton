@@ -118,6 +118,8 @@ export const workspaceIpc = {
     getApi().getGitDiffSummary(conversationId),
   getGitFileDiff: (conversationId: string, filePath: string) =>
     getApi().getGitFileDiff(conversationId, filePath),
+  getTouchedFilesForToolCall: (toolCallId: string) =>
+    getApi().getTouchedFilesForToolCall(toolCallId),
   getWorktreeGitInfo: (
     conversationId: string,
   ): Promise<WorktreeGitInfoResult> =>

@@ -79,7 +79,12 @@ export function ExtensionSidebarItems() {
                 src={iconValue.src}
                 alt=""
                 className="sidebar-nav-icon h-4 w-4 object-contain"
-                loading="lazy"
+                onError={(e) => {
+                  // Fallback to puzzle icon if image fails to load
+                  const target = e.currentTarget;
+                  target.onerror = null; // Prevent infinite loop
+                  target.src = ''; // Clear failed image
+                }}
               />
             ) : (
               <iconValue.Component className="sidebar-nav-icon h-4 w-4" />

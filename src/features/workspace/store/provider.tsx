@@ -39,16 +39,28 @@ import {
 } from './state'
 import { piStoreGetState, piStoreReplace, piStoreReplaceSync } from './pi-store'
 import { perfMonitor } from './perf-monitor'
+import { useNotifications } from '@/features/notifications/NotificationContext'
 
 export function WorkspaceProvider({ children }: PropsWithChildren) {
   const [state, rawDispatch] = useReducer(reducer, initialState)
   const [isLoading, setIsLoading] = useState(true)
+  const { addNotification } = useNotifications()
 
   // Combined dispatch: routes Pi actions to the external store,
   // non-Pi actions to the React reducer. Some actions (hydrate,
   // addConversation, removeConversation) go to both.
   const dispatch = useCallback((action: Action) => {
     perfMonitor.recordDispatch(action.type)
+    
+    // Handle notification actions
+    if (action.type === 'setNotice') {
+      const notice = action.payload.notice
+      if (notice) {
+        // Convert notice to notification
+        addNotification(notice, 'info')
+      }
+    }
+    
     // Always update piStore for actions it handles
     const piState = piStoreGetState()
     let nextPiState: typeof piState
@@ -93,7 +105,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
     // Always forward to React reducer (it returns state unchanged for Pi-only actions)
     rawDispatch(action)
-  }, [])
+  }, [addNotification])
 
   const hydratingRuntimeIdsRef = useRef(new Set<string>())
   const stateRef = useRef(state)
@@ -103,7 +115,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const retryAttemptsByPromptRef = useRef<Record<string, number>>({})
   const gitBaselineByConversationRef = useRef<Record<string, ModifiedFileStatByPath>>({})
   const lastFileChangeSignatureByConversationRef = useRef<Record<string, string>>({})
-  const lastEditToolCallAtByConversationRef = useRef<Record<string, number>>({})
   const lastCompletedNotificationAtByConversationRef = useRef<Record<string, number>>({})
 
   useEffect(() => {
@@ -154,14 +165,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         }) ?? { shouldAutoRetry: false }
 
       const payload = event.event as Record<string, JsonValue> | null
-      if (payload?.type === 'tool_execution_start') {
-        const conversationId = event.conversationId
-        const toolName = typeof payload.toolName === 'string' ? payload.toolName.trim() : ''
-        if (toolName === 'edit') {
-          lastEditToolCallAtByConversationRef.current[conversationId] = Date.now()
-        }
-      }
-
       if (payload?.type === 'tool_execution_end') {
         const conversationId = event.conversationId
         void (async () => {
@@ -176,16 +179,16 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             return
           }
 
-          const recentFiles = computeRecentChangedFiles(summary.files, baseline)
+          const payloadToolCallId = typeof payload.toolCallId === 'string' ? payload.toolCallId : null
+          const touchedPaths = payloadToolCallId
+            ? await workspaceIpc.getTouchedFilesForToolCall(payloadToolCallId)
+            : []
+          const touchedPathSet = new Set(touchedPaths)
+          const recentFiles = computeRecentChangedFiles(summary.files, baseline).filter((file) =>
+            touchedPathSet.size > 0 && touchedPathSet.has(file.path),
+          )
           gitBaselineByConversationRef.current[conversationId] = toStatByPath(summary.files)
           if (recentFiles.length === 0) {
-            return
-          }
-
-          const lastEditAt = lastEditToolCallAtByConversationRef.current[conversationId] ?? 0
-          const toolName = typeof payload.toolName === 'string' ? payload.toolName.trim() : ''
-          const wasTriggeredByRecentEdit = toolName === 'edit' || Date.now() - lastEditAt <= 3000
-          if (!wasTriggeredByRecentEdit) {
             return
           }
 
@@ -195,7 +198,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           }
           lastFileChangeSignatureByConversationRef.current[conversationId] = signature
 
-          const payloadToolCallId = typeof payload.toolCallId === 'string' ? payload.toolCallId : null
           const messageTimestamp = Date.now()
           const message = {
             id: payloadToolCallId
@@ -890,7 +892,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       if (activeConversationIds.has(conversationId)) continue
       delete gitBaselineByConversationRef.current[conversationId]
       delete lastFileChangeSignatureByConversationRef.current[conversationId]
-      delete lastEditToolCallAtByConversationRef.current[conversationId]
       delete lastCompletedNotificationAtByConversationRef.current[conversationId]
     }
   }, [state.conversations])

@@ -236,7 +236,7 @@ export function enrichExtensionsWithRuntimeFields(entries: ChatonsExtensionRegis
         ...(entry.config ?? {}),
         ...(manifest?.kind === 'channel' ? { kind: 'channel' } : {}),
         ...(icon ? { icon } : {}),
-        ...(icon ? { iconUrl: resolveIconDataUrl(entry.id, icon) ?? icon } : {}),
+        ...(icon && resolveIconDataUrl(entry.id, icon) ? { iconUrl: resolveIconDataUrl(entry.id, icon) } : {}),
       },
       capabilitiesDeclared: manifest?.capabilities ?? [],
       capabilitiesUsed: Array.from(runtimeState.capabilityUsage.get(entry.id) ?? new Set()),

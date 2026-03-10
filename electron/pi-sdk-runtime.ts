@@ -17,14 +17,19 @@ import {
   AuthStorage,
   type ApiKeyCredential,
   createAgentSession,
-  createCodingTools,
+  createBashTool,
+  createEditTool,
+  createReadTool,
+  createWriteTool,
   DefaultResourceLoader,
   ModelRegistry,
   SessionManager,
   SettingsManager,
   type AgentSession,
   type AgentSessionEvent,
+  type EditOperations,
   type ExtensionUIContext,
+  type WriteOperations,
 } from "@mariozechner/pi-coding-agent";
 import type { ExtensionWidgetOptions } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
@@ -318,6 +323,7 @@ export type PiRendererEvent = {
 
 type RuntimeState = {
   conversationId: string;
+  workingDirectory: string;
   session: AgentSession;
   settingsManager: SettingsManager;
   modelRegistry: ModelRegistry;
@@ -689,6 +695,12 @@ export class PiSdkRuntime {
         const controller = new AbortController();
         runtime.activeToolCalls.set(event.toolCallId, controller);
 
+        const setActiveHook = (globalThis as Record<string, unknown>)
+          .__chatonsActiveToolCallIdByConversationSet as
+          | ((conversationId: string, requestId: string) => void)
+          | undefined;
+        setActiveHook?.(this.conversationId, event.toolCallId);
+
         const startHook = (globalThis as Record<string, unknown>)
           .__chatonsToolExecutionContextStart as
           | ((requestId: string, conversationId: string, signal?: AbortSignal) => void)
@@ -699,6 +711,12 @@ export class PiSdkRuntime {
       if (event.type === "tool_execution_end" && event.toolCallId) {
         // Clean up the AbortController when tool execution ends
         runtime.activeToolCalls.delete(event.toolCallId);
+
+        const clearActiveHook = (globalThis as Record<string, unknown>)
+          .__chatonsActiveToolCallIdByConversationClear as
+          | ((conversationId: string, requestId: string) => void)
+          | undefined;
+        clearActiveHook?.(this.conversationId, event.toolCallId);
 
         const endHook = (globalThis as Record<string, unknown>)
           .__chatonsToolExecutionContextEnd as
@@ -1002,7 +1020,41 @@ export class PiSdkRuntime {
     });
     await resourceLoader.reload();
 
-    const builtinTools = createCodingTools(toolsCwd);
+    const trackedWriteOperations: WriteOperations = {
+      writeFile: async (absolutePath: string, content: string) => {
+        await fs.promises.writeFile(absolutePath, content, "utf8");
+        const trackTouchedPath = (globalThis as Record<string, unknown>)
+          .__chatonsToolExecutionTrackPath as
+          | ((requestId: string, absolutePath: string) => void)
+          | undefined;
+        const activeToolCallId = (globalThis as Record<string, unknown>)
+          .__chatonsActiveToolCallIdByConversationLookup as
+          | ((conversationId: string) => string | undefined)
+          | undefined;
+        const toolCallId = activeToolCallId?.(this.conversationId);
+        if (toolCallId) {
+          trackTouchedPath?.(toolCallId, absolutePath);
+        }
+      },
+      mkdir: async (dir: string) => {
+        await fs.promises.mkdir(dir, { recursive: true });
+      },
+    };
+
+    const trackedEditOperations: EditOperations = {
+      readFile: (absolutePath: string) => fs.promises.readFile(absolutePath),
+      writeFile: trackedWriteOperations.writeFile,
+      access: async (absolutePath: string) => {
+        await fs.promises.access(absolutePath, fs.constants.R_OK | fs.constants.W_OK);
+      },
+    };
+
+    const builtinTools = [
+      createReadTool(toolsCwd),
+      createBashTool(toolsCwd),
+      createEditTool(toolsCwd, { operations: trackedEditOperations }),
+      createWriteTool(toolsCwd, { operations: trackedWriteOperations }),
+    ];
     const builtinExtensionTools = getBuiltinExtensionTools();
 
     // Core conversation tools (task list, sub-agents, action suggestions, etc.)
@@ -1312,6 +1364,7 @@ export class PiSdkRuntime {
       status: "ready",
       snapshotState: null,
       snapshotMessages: [],
+      workingDirectory: runtimeCwd,
     };
 
     const extensionUiContext: ExtensionUIContext = {

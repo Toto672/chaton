@@ -17,10 +17,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ProjectTerminalDialog } from "@/components/shell/ProjectTerminalDialog";
+import { TopSheet } from "@/components/shell/TopSheet";
 import { useTranslation } from "react-i18next";
 import { useWorkspace } from "@/features/workspace/store";
 import { workspaceIpc } from "@/services/ipc/workspace";
 import { perfMonitor } from "@/features/workspace/store/perf-monitor";
+import { GlobalNotificationDisplay } from "@/features/notifications/GlobalNotificationDisplay";
+
+// Styles for project Git changes
 
 type WorktreeFileChange = {
   path: string;
@@ -31,6 +35,13 @@ type WorktreeFileChange = {
   untracked: boolean;
   deleted: boolean;
   renamed: boolean;
+};
+
+type ProjectFileChange = {
+  path: string;
+  added: number;
+  removed: number;
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'unmerged' | 'untracked' | 'ignored';
 };
 
 type WorktreeInfo = {
@@ -52,6 +63,13 @@ type TreeNode = {
   path: string;
   children: TreeNode[];
   file?: WorktreeFileChange;
+};
+
+type ProjectTreeNode = {
+  name: string;
+  path: string;
+  children: ProjectTreeNode[];
+  file?: ProjectFileChange;
 };
 
 function buildTree(files: WorktreeFileChange[]): TreeNode[] {
@@ -92,6 +110,44 @@ function buildTree(files: WorktreeFileChange[]): TreeNode[] {
   return roots;
 }
 
+function buildProjectTree(files: ProjectFileChange[]): ProjectTreeNode[] {
+  const roots: ProjectTreeNode[] = [];
+  const lookup = new Map<string, ProjectTreeNode>();
+
+  for (const file of files) {
+    const parts = file.path.split("/").filter(Boolean);
+    let currentPath = "";
+    let siblings = roots;
+
+    parts.forEach((part, index) => {
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      let node = lookup.get(currentPath);
+      if (!node) {
+        node = { name: part, path: currentPath, children: [] };
+        lookup.set(currentPath, node);
+        siblings.push(node);
+      }
+      if (index === parts.length - 1) {
+        node.file = file;
+      }
+      siblings = node.children;
+    });
+  }
+
+  const sortNodes = (nodes: ProjectTreeNode[]) => {
+    nodes.sort((a, b) => {
+      const aDir = !a.file;
+      const bDir = !b.file;
+      if (aDir !== bDir) return aDir ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    nodes.forEach((node) => sortNodes(node.children));
+  };
+  sortNodes(roots);
+
+  return roots;
+}
+
 function statusLabel(file: WorktreeFileChange, t: (value: string) => string) {
   if (file.untracked) return t("Nouveau");
   if (file.deleted) return t("Supprimé");
@@ -101,12 +157,123 @@ function statusLabel(file: WorktreeFileChange, t: (value: string) => string) {
   return t("Modifié");
 }
 
+function projectStatusLabel(file: ProjectFileChange, t: (value: string) => string) {
+  switch (file.status) {
+    case 'added':
+      return t("Ajouté");
+    case 'modified':
+      return t("Modifié");
+    case 'deleted':
+      return t("Supprimé");
+    case 'renamed':
+      return t("Renommé");
+    case 'untracked':
+      return t("Non suivi");
+    case 'copied':
+      return t("Copié");
+    case 'unmerged':
+      return t("Non fusionné");
+    default:
+      return t("Modifié");
+  }
+}
+
 function statusBadgeClass(file: WorktreeFileChange) {
   if (file.untracked) return "git-status-badge git-status-badge-added";
   if (file.deleted) return "git-status-badge git-status-badge-deleted";
   if (file.renamed) return "git-status-badge git-status-badge-renamed";
   if (file.staged) return "git-status-badge git-status-badge-staged";
   return "git-status-badge git-status-badge-modified";
+}
+
+function projectStatusBadgeClass(file: ProjectFileChange) {
+  switch (file.status) {
+    case 'added':
+      return "git-status-badge git-status-badge-added";
+    case 'modified':
+      return "git-status-badge git-status-badge-modified";
+    case 'deleted':
+      return "git-status-badge git-status-badge-deleted";
+    case 'renamed':
+      return "git-status-badge git-status-badge-renamed";
+    case 'untracked':
+      return "git-status-badge git-status-badge-untracked";
+    case 'copied':
+      return "git-status-badge git-status-badge-copied";
+    case 'unmerged':
+      return "git-status-badge git-status-badge-unmerged";
+    default:
+      return "git-status-badge git-status-badge-modified";
+  }
+  if (file.untracked) return "git-status-badge git-status-badge-added";
+  if (file.deleted) return "git-status-badge git-status-badge-deleted";
+  if (file.renamed) return "git-status-badge git-status-badge-renamed";
+  if (file.staged) return "git-status-badge git-status-badge-staged";
+  return "git-status-badge git-status-badge-modified";
+}
+
+function ProjectTreeRow({
+  node,
+  level,
+  expanded,
+  onToggle,
+  t,
+}: {
+  node: ProjectTreeNode;
+  level: number;
+  expanded: Record<string, boolean>;
+  onToggle: (path: string) => void;
+  t: (value: string) => string;
+}) {
+  const isFolder = !node.file;
+  const isOpen = expanded[node.path] ?? true;
+
+  return (
+    <>
+      <div className="git-tree-row" style={{ paddingLeft: `${level * 14 + 8}px` }}>
+        <div className="git-tree-main">
+          {isFolder ? (
+            <button
+              type="button"
+              className="git-tree-disclosure"
+              onClick={() => onToggle(node.path)}
+              aria-label={isOpen ? t("Réduire") : t("Déplier")}
+            >
+              {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </button>
+          ) : (
+            <span className="git-tree-disclosure git-tree-disclosure-spacer" />
+          )}
+          <span className={`git-tree-name ${isFolder ? "git-tree-folder" : "git-tree-file"}`}>
+            {node.name}
+          </span>
+        </div>
+        {node.file ? (
+          <div className="git-tree-actions">
+            <span className={projectStatusBadgeClass(node.file)}>
+              {projectStatusLabel(node.file, t)}
+            </span>
+            <span className="git-project-change-stats">
+              {node.file.added > 0 && <span className="git-change-added">+{node.file.added}</span>}
+              {node.file.removed > 0 && <span className="git-change-removed">-{node.file.removed}</span>}
+            </span>
+          </div>
+        ) : null}
+      </div>
+      {isFolder && isOpen
+        ? node.children.map((child) => (
+            <ProjectTreeRow
+              key={child.path}
+              node={child}
+              level={level + 1}
+              expanded={expanded}
+              onToggle={onToggle}
+              t={t}
+            />
+          ))
+        : null}
+    </>
+  );
 }
 
 function TreeRow({
@@ -195,7 +362,9 @@ export function Topbar() {
   const [isWorktreeDialogOpen, setIsWorktreeDialogOpen] = useState(false);
   const [isProjectTerminalOpen, setIsProjectTerminalOpen] = useState(false);
   const [worktreeInfo, setWorktreeInfo] = useState<WorktreeInfo | null>(null);
+  const [projectGitInfo, setProjectGitInfo] = useState<ProjectFileChange[] | null>(null);
   const [isLoadingWorktreeInfo, setIsLoadingWorktreeInfo] = useState(false);
+  const [isLoadingProjectGitInfo, setIsLoadingProjectGitInfo] = useState(false);
   const [isGeneratingCommitMessage, setIsGeneratingCommitMessage] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
@@ -231,20 +400,6 @@ export function Topbar() {
       setIsProjectTerminalOpen(false);
     }
   }, [selectedConversation?.id, selectedConversation?.projectId]);
-
-  useEffect(() => {
-    if (!isWorktreeDialogOpen) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsWorktreeDialogOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isWorktreeDialogOpen]);
 
   useEffect(() => {
     const checkVscode = async () => {
@@ -295,12 +450,62 @@ export function Topbar() {
     }
   };
 
+  const refreshProjectGitInfo = async () => {
+    if (!selectedConversation?.id) {
+      return;
+    }
+    setIsLoadingProjectGitInfo(true);
+    try {
+      const result = await workspaceIpc.getGitDiffSummary(selectedConversation.id);
+      if (!result.ok) {
+        setNotice(result.message ?? "Impossible de charger les infos Git du projet.");
+        setProjectGitInfo([]);
+        return;
+      }
+      // Convert the summary format to our ProjectFileChange format
+      const changes: ProjectFileChange[] = result.files.map(file => ({
+        path: file.path,
+        added: file.added,
+        removed: file.removed,
+        status: file.status as ProjectFileChange['status']
+      }));
+      setProjectGitInfo(changes);
+      
+      // Initialize expanded folders for the project tree
+      setExpandedFolders((current) => {
+        const next = { ...current };
+        for (const file of changes) {
+          const parts = file.path.split("/").filter(Boolean);
+          let currentPath = "";
+          parts.slice(0, -1).forEach((part: string) => {
+            currentPath = currentPath ? `${currentPath}/${part}` : part;
+            if (!(currentPath in next)) {
+              next[currentPath] = true;
+            }
+          });
+        }
+        return next;
+      });
+    } finally {
+      setIsLoadingProjectGitInfo(false);
+    }
+  };
+
+  const closeWorktreeDialog = () => {
+    setIsWorktreeDialogOpen(false);
+  };
+
   const openWorktreeDialog = async () => {
-    if (!selectedConversation?.id || !hasWorktree) {
+    if (!selectedConversation?.id) {
       return;
     }
     setIsWorktreeDialogOpen(true);
-    await refreshWorktreeInfo();
+    if (hasWorktree) {
+      await refreshWorktreeInfo();
+    } else {
+      // For project-level Git info when no worktree is active
+      await refreshProjectGitInfo();
+    }
   };
 
   const handleWorktreeToggleClick = async () => {
@@ -527,6 +732,10 @@ export function Topbar() {
     () => buildTree(worktreeInfo?.changes ?? []),
     [worktreeInfo?.changes],
   );
+  const projectTree = useMemo(
+    () => buildProjectTree(projectGitInfo ?? []),
+    [projectGitInfo],
+  );
   const stagedCount = worktreeInfo?.changes.filter((file) => file.staged).length ?? 0;
   const changedCount = worktreeInfo?.changes.length ?? 0;
 
@@ -535,9 +744,10 @@ export function Topbar() {
   }
 
   return (
-    <header className="topbar">
-      <div className="topbar-title">{selectedConversation?.title ?? t("Nouvelle conversation")}</div>
-      <div className="topbar-actions">
+    <>
+      <header className="topbar">
+        <div className="topbar-title">{selectedConversation?.title ?? t("Nouvelle conversation")}</div>
+        <div className="topbar-actions">
         {selectedConversation?.projectId ? (
           <>
             <div className="flex items-center gap-1">
@@ -620,12 +830,13 @@ export function Topbar() {
       ) : null}
 
       {isWorktreeDialogOpen ? (
-        <div className="extension-modal-backdrop" onClick={() => setIsWorktreeDialogOpen(false)}>
+        <div className={`git-sheet-backdrop ${isClosingWorktreeDialog ? "git-sheet-backdrop-closing" : ""}`} onClick={closeWorktreeDialog} style={{ zIndex: 1000 }}>
           <div
-            className="extension-modal git-panel-modal"
+            className={`git-sheet ${isClosingWorktreeDialog ? "git-sheet-closing" : ""}`}
             role="dialog"
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
+            style={{ zIndex: 1001 }}
           >
             <div className="extension-modal-title git-panel-header">
               <div>
@@ -634,20 +845,27 @@ export function Topbar() {
                   <span>{t("Source control")}</span>
                 </div>
                 <div className="git-panel-subtitle">
-                  {worktreeInfo ? `${worktreeInfo.branch} -> ${worktreeInfo.baseBranch}` : t("Chargement...")}
+                  {worktreeInfo ? `${worktreeInfo.branch} -> ${worktreeInfo.baseBranch}` : 
+                   projectGitInfo ? t("Statut Git du projet") : t("Chargement...")}
                 </div>
               </div>
               <div className="git-panel-header-badges">
-                <span className="git-summary-pill">{stagedCount} {t("staged")}</span>
-                <span className="git-summary-pill">{changedCount} {t("changements")}</span>
+                {worktreeInfo ? (
+                  <>
+                    <span className="git-summary-pill">{stagedCount} {t("staged")}</span>
+                    <span className="git-summary-pill">{changedCount} {t("changements")}</span>
+                  </>
+                ) : projectGitInfo ? (
+                  <span className="git-summary-pill">{projectGitInfo.length} {t("fichiers modifiés")}</span>
+                ) : null}
               </div>
             </div>
 
             <div className="git-panel-layout">
               <div className="git-panel-left">
-                <div className="git-section-card">
+                <div className="git-section-card git-section-card-scrollable">
                   <div className="git-section-title">{t("Modifications")}</div>
-                  {isLoadingWorktreeInfo ? (
+                  {isLoadingWorktreeInfo || isLoadingProjectGitInfo ? (
                     <div className="queue-panel-row">{t("Chargement...")}</div>
                   ) : worktreeInfo ? (
                     worktreeInfo.changes.length > 0 ? (
@@ -672,86 +890,142 @@ export function Topbar() {
                     ) : (
                       <div className="git-empty-state">{t("Aucune modification détectée.")}</div>
                     )
+                  ) : projectGitInfo ? (
+                    projectGitInfo.length > 0 ? (
+                      <div className="git-tree-list">
+                        {projectTree.map((node) => (
+                          <ProjectTreeRow
+                            key={node.path}
+                            node={node}
+                            level={0}
+                            expanded={expandedFolders}
+                            onToggle={(path) =>
+                              setExpandedFolders((current) => ({
+                                ...current,
+                                [path]: !(current[path] ?? true),
+                              }))
+                            }
+                            t={t}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="git-empty-state">{t("Aucune modification détectée.")}</div>
+                    )
                   ) : (
-                    <div className="queue-panel-error">{t("Impossible de lire le worktree")}</div>
+                    <div className="queue-panel-error">{t("Impossible de lire les informations Git")}</div>
                   )}
                 </div>
               </div>
 
-              <div className="git-panel-right">
-                <div className="git-section-card">
-                  <div className="git-section-title">{t("Commit")}</div>
-                  <div className="git-commit-meta">
-                    <span>{t("En avance")}: <strong>{worktreeInfo?.ahead ?? 0}</strong></span>
-                    <span>{t("En retard")}: <strong>{worktreeInfo?.behind ?? 0}</strong></span>
+              {worktreeInfo ? (
+                <div className="git-panel-right">
+                  <div className="git-section-card">
+                    <div className="git-section-title">{t("Commit")}</div>
+                    <div className="git-commit-meta">
+                      <span>{t("En avance")}: <strong>{worktreeInfo?.ahead ?? 0}</strong></span>
+                      <span>{t("En retard")}: <strong>{worktreeInfo?.behind ?? 0}</strong></span>
+                    </div>
+                    <Input
+                      value={commitMessage}
+                      onChange={(event) => setCommitMessage(event.target.value)}
+                      placeholder={t("Écrire un message de commit...")}
+                      className="git-commit-input"
+                    />
+                    <div className="git-commit-actions">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleGenerateCommitMessage}
+                        disabled={isGeneratingCommitMessage}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        {isGeneratingCommitMessage ? t("Génération...") : t("Générer")}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleCommit}
+                        disabled={isCommitting}
+                      >
+                        <GitCommitHorizontal className="h-4 w-4" />
+                        {isCommitting ? t("Commit...") : t("Commit")}
+                      </Button>
+                    </div>
                   </div>
-                  <Input
-                    value={commitMessage}
-                    onChange={(event) => setCommitMessage(event.target.value)}
-                    placeholder={t("Écrire un message de commit...")}
-                    className="git-commit-input"
-                  />
-                  <div className="git-commit-actions">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleGenerateCommitMessage}
-                      disabled={isGeneratingCommitMessage}
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      {isGeneratingCommitMessage ? t("Génération...") : t("Générer")}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={handleCommit}
-                      disabled={isCommitting}
-                    >
-                      <GitCommitHorizontal className="h-4 w-4" />
-                      {isCommitting ? t("Commit...") : t("Commit")}
-                    </Button>
-                  </div>
-                </div>
 
-                <div className="git-section-card">
-                  <div className="git-section-title">{t("Synchronisation")}</div>
-                  <div className="git-sync-actions">
-                    <Button type="button" variant="outline" size="sm" onClick={handlePull} disabled={isPulling}>
-                      <Download className="h-4 w-4" />
-                      {isPulling ? t("Pull...") : t("Pull")}
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={handlePush} disabled={isPushing}>
-                      <Upload className="h-4 w-4" />
-                      {isPushing ? t("Push...") : t("Push")}
+                  <div className="git-section-card">
+                    <div className="git-section-title">{t("Synchronisation")}</div>
+                    <div className="git-sync-actions">
+                      <Button type="button" variant="outline" size="sm" onClick={handlePull} disabled={isPulling}>
+                        <Download className="h-4 w-4" />
+                        {isPulling ? t("Pull...") : t("Pull")}
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={handlePush} disabled={isPushing}>
+                        <Upload className="h-4 w-4" />
+                        {isPushing ? t("Push...") : t("Push")}
+                      </Button>
+                    </div>
+                    <div className="git-sync-status">
+                      <span>{t("Mergé")}: <strong>{worktreeInfo?.isMergedIntoBase ? t("Oui") : t("Non")}</strong></span>
+                      <span>{t("Pushé")}: <strong>{worktreeInfo?.isPushedToUpstream ? t("Oui") : t("Non")}</strong></span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="git-merge-btn"
+                      onClick={handleMerge}
+                      disabled={isMerging}
+                    >
+                      {isMerging ? t("Merge...") : t("Merger vers main")}
                     </Button>
                   </div>
-                  <div className="git-sync-status">
-                    <span>{t("Mergé")}: <strong>{worktreeInfo?.isMergedIntoBase ? t("Oui") : t("Non")}</strong></span>
-                    <span>{t("Pushé")}: <strong>{worktreeInfo?.isPushedToUpstream ? t("Oui") : t("Non")}</strong></span>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="git-merge-btn"
-                    onClick={handleMerge}
-                    disabled={isMerging}
-                  >
-                    {isMerging ? t("Merge...") : t("Merger vers main")}
-                  </Button>
                 </div>
-              </div>
+              ) : projectGitInfo ? (
+                <div className="git-panel-right">
+                  <div className="git-section-card">
+                    <div className="git-section-title">{t("Actions Git")}</div>
+                    <div className="git-info-message" style={{ marginBottom: '16px' }}>
+                      {t("Ces modifications sont dans le dépôt principal du projet.")}
+                    </div>
+                    <div className="git-project-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleWorktreeToggleClick}
+                        disabled={isEnablingWorktree}
+                        style={{ width: '100%' }}
+                      >
+                        <ListTree className="h-4 w-4 mr-2" />
+                        {hasWorktree ? t("Désactiver worktree") : t("Activer worktree")}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={openProjectFolder}
+                        style={{ width: '100%' }}
+                      >
+                        <Folder className="h-4 w-4 mr-2" />
+                        {t("Ouvrir le dossier du projet")}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
-            <div className="extension-modal-actions worktree-actions">
-              <Button type="button" className="extension-modal-btn extension-modal-btn-primary" onClick={() => setIsWorktreeDialogOpen(false)}>
+            <div className="git-sheet-actions worktree-actions">
+              <Button type="button" className="extension-modal-btn extension-modal-btn-primary" onClick={closeWorktreeDialog}>
                 {t("Fermer")}
               </Button>
             </div>
           </div>
         </div>
       ) : null}
-    </header>
-  );
+  </header>
+  <GlobalNotificationDisplay />
+</>);
 }

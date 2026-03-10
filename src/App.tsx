@@ -17,6 +17,7 @@ import { WorkspaceProvider } from '@/features/workspace/store'
 import { useWorkspace } from '@/features/workspace/store'
 import { useLogConsole } from '@/hooks/use-log-console'
 import { ConversationSidePanelProvider } from '@/hooks/use-conversation-side-panel'
+import { NotificationProvider } from '@/features/notifications/NotificationContext'
 import heroCat from '@/assets/chaton-hero.webm'
 
 const SIDEBAR_MIN_WIDTH = 260
@@ -147,6 +148,10 @@ function AppShell() {
   }, [sidebarWidth])
 
   useEffect(() => {
+    document.documentElement.style.setProperty('--ui-sidebar-width', `${sidebarWidth}px`)
+  }, [sidebarWidth])
+
+  useEffect(() => {
     if (isLoading || isResizing || !hasHydratedSidebarWidthRef.current) {
       return
     }
@@ -264,19 +269,21 @@ export default function App() {
   }, [])
 
   return (
-    <WorkspaceProvider>
-      <PiSettingsProvider>
-        <ConversationSidePanelProvider>
-          <BackgroundChannelExtensions>
-            <AppShell />
-            <ChangelogManager ref={changelogManagerRef} />
-            <LogConsole 
-              isOpen={isLogConsoleOpen} 
-              onClose={() => setIsLogConsoleOpen(false)}
-            />
-          </BackgroundChannelExtensions>
-        </ConversationSidePanelProvider>
-      </PiSettingsProvider>
-    </WorkspaceProvider>
+    <NotificationProvider>
+      <WorkspaceProvider>
+        <PiSettingsProvider>
+          <ConversationSidePanelProvider>
+            <BackgroundChannelExtensions>
+              <AppShell />
+              <ChangelogManager ref={changelogManagerRef} />
+              <LogConsole 
+                isOpen={isLogConsoleOpen} 
+                onClose={() => setIsLogConsoleOpen(false)}
+              />
+            </BackgroundChannelExtensions>
+          </ConversationSidePanelProvider>
+        </PiSettingsProvider>
+      </WorkspaceProvider>
+    </NotificationProvider>
   )
 }
