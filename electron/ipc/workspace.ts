@@ -2033,24 +2033,38 @@ function syncProviderApiKeysBetweenModelsAndAuth(agentDir: string): void {
     }
   }
 
-  // Now sync API keys: models.json is the source of truth
+  // Now sync API keys: models.json is the source of truth for API-key providers only.
+  // OAuth providers (e.g. github-copilot) intentionally have no apiKey in models.json
+  // and must keep their auth.json entry.
   for (const [providerName, providerConfig] of Object.entries(nextProviders)) {
     const modelKey =
       typeof providerConfig?.apiKey === "string"
         ? providerConfig.apiKey.trim()
         : "";
-    
+
+    const authEntry = nextAuth[providerName];
+    const authType =
+      authEntry &&
+      typeof authEntry === "object" &&
+      !Array.isArray(authEntry) &&
+      "type" in authEntry &&
+      typeof authEntry.type === "string"
+        ? authEntry.type
+        : null;
+
     if (!modelKey) {
-      // No API key in models.json for this provider, remove from auth
-      if (nextAuth[providerName]) {
+      // Keep OAuth credentials. Only remove stale API-key entries for providers
+      // that no longer expose an apiKey in models.json.
+      if (authType === "api_key") {
         delete nextAuth[providerName];
         authChanged = true;
-        console.log(`[pi] Removed auth entry for provider without API key: ${providerName}`);
+        console.log(
+          `[pi] Removed stale API-key auth entry for provider without API key: ${providerName}`,
+        );
       }
       continue;
     }
 
-    const authEntry = nextAuth[providerName];
     const authKey =
       authEntry &&
       typeof authEntry === "object" &&
