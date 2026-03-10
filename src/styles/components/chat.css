@@ -558,6 +558,10 @@
     @apply px-4 pb-2 text-xs text-[#7b8190] flex-shrink-0;
   }
 
+  .project-terminal-start-error {
+    @apply mt-2 rounded-md border border-[#e9c1cc] bg-[#fff1f4] px-3 py-2 text-xs text-[#8f2f48];
+  }
+
   .project-terminal-custom-input {
     @apply h-9 rounded-md border border-[#d8d9dc] bg-white px-3 text-sm text-[#22242b] outline-none focus:border-[#b4b8c5] focus:ring-2 focus:ring-[#d9dce6];
   }

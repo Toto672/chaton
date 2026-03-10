@@ -57,6 +57,7 @@ export function ProjectTerminalDialog({
   const [runs, setRuns] = useState<TerminalRun[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const backdropRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -155,6 +156,7 @@ export function ProjectTerminalDialog({
   const startRun = async () => {
     if (!selectedCommandId || starting) return;
     if (selectedCommandId === "custom:new" && !customCommandText.trim()) return;
+    setStartError(null);
     setStarting(true);
     try {
       const result = await workspaceIpc.startProjectCommandTerminal(
@@ -162,9 +164,15 @@ export function ProjectTerminalDialog({
         selectedCommandId,
         selectedCommandId === "custom:new" ? customCommandText : undefined,
       );
-      if (!result.ok) return;
+      if (!result.ok) {
+        setStartError(result.message ?? `Unable to start command (${result.reason}).`);
+        return;
+      }
       const snapshot = await workspaceIpc.readProjectCommandTerminal(result.runId);
-      if (!snapshot.ok) return;
+      if (!snapshot.ok) {
+        setStartError("Command started, but terminal output could not be loaded.");
+        return;
+      }
       const nextRun: TerminalRun = {
         id: snapshot.run.id,
         title: snapshot.run.title,
@@ -299,6 +307,7 @@ export function ProjectTerminalDialog({
             : selectedCommandId.startsWith("custom:") || selectedCommandId === "custom:new"
               ? "Custom project command"
               : commands.find((item) => item.id === selectedCommandId)?.source ?? ""}
+          {startError ? <div className="project-terminal-start-error">{startError}</div> : null}
         </div>
 
         <div className="project-terminal-tabs" role="tablist" aria-label="Project terminal tabs">
