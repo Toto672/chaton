@@ -1,0 +1,73 @@
+{
+  "description": "Source of truth for Chatons extension registry. The cron sync job reads this file to know which npm packages to track. Builtin extensions are defined inline with their manifests.",
+  "builtin": [
+    {
+      "id": "@chaton/automation",
+      "name": "Automation",
+      "version": "1.2.0",
+      "description": "Schedule recurring or event-driven tasks directly from conversations. Build automated workflows that run on triggers like new messages or on a timer.",
+      "capabilities": [
+        "ui.menu",
+        "ui.mainView",
+        "llm.tools",
+        "events.subscribe",
+        "queue.publish",
+        "queue.consume",
+        "storage.kv",
+        "host.notifications",
+        "host.conversations.read",
+        "host.projects.read"
+      ],
+      "keywords": ["automation", "scheduling", "workflows", "triggers"],
+      "repositoryUrl": "https://github.com/thibautrey/chatons"
+    },
+    {
+      "id": "@chaton/memory",
+      "name": "Memory",
+      "version": "1.0.0",
+      "description": "Persistent memory store that lets the AI remember facts, preferences, and project context across conversations. Search by semantic similarity.",
+      "capabilities": [
+        "ui.menu",
+        "ui.mainView",
+        "llm.tools",
+        "host.projects.read",
+        "host.conversations.read"
+      ],
+      "keywords": ["memory", "context", "persistence", "embeddings"],
+      "repositoryUrl": "https://github.com/thibautrey/chatons"
+    },
+    {
+      "id": "@chaton/browser",
+      "name": "Browser",
+      "version": "1.0.0",
+      "description": "Headless browser automation built into your AI workspace. Navigate, click, type, take snapshots, and interact with web pages directly from conversations.",
+      "capabilities": ["llm.tools"],
+      "keywords": ["browser", "web", "automation", "scraping", "headless"],
+      "repositoryUrl": "https://github.com/thibautrey/chatons"
+    }
+  ],
+  "npm": [
+    "@thibautrey/chatons-channel-telegram",
+    "@thibautrey/chatons-channel-discord",
+    "@thibautrey/chatons-channel-slack",
+    "@thibautrey/chatons-channel-whatsapp",
+    "@thibautrey/chatons-channel-msteams",
+    "@thibautrey/chatons-channel-matrix",
+    "@thibautrey/chatons-channel-signal",
+    "@thibautrey/chatons-channel-imessage",
+    "@thibautrey/chatons-channel-line",
+    "@thibautrey/chatons-channel-mattermost",
+    "@thibautrey/chatons-channel-nextcloud-talk",
+    "@thibautrey/chatons-channel-feishu",
+    "@thibautrey/chatons-channel-zalo",
+    "@thibautrey/chatons-channel-tlon",
+    "@thibautrey/chatons-channel-twitch",
+    "@thibautrey/chatons-channel-irc",
+    "@thibautrey/chatons-channel-googlechat",
+    "@thibautrey/chatons-channel-nostr",
+    "@thibautrey/chatons-channel-synology-chat",
+    "@thibautrey/chatons-channel-bluebubbles",
+    "@thibautrey/chatons-extension-linear",
+    "@thibautrey/chatons-extension-usage-tracker"
+  ]
+}

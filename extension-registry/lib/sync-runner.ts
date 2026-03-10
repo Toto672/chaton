@@ -1,0 +1,34 @@
+/**
+ * Local sync runner: fetches extension data from npm and stores it
+ * on the local filesystem. Used for development and testing.
+ *
+ * Usage: npx tsx lib/sync-runner.ts
+ */
+
+import fs from "node:fs";
+import path from "node:path";
+import { syncExtensions } from "./sync.js";
+import { saveCatalogLocal, saveIconLocal } from "./storage-local.js";
+import type { RegistrySource } from "./types.js";
+
+const registryPath = path.join(process.cwd(), "data", "registry.json");
+const registry: RegistrySource = JSON.parse(
+  fs.readFileSync(registryPath, "utf-8")
+);
+
+async function main() {
+  const catalog = await syncExtensions({
+    registry,
+    saveIcon: saveIconLocal,
+  });
+
+  await saveCatalogLocal(catalog);
+
+  console.log("\nLocal sync complete. Data written to .data/");
+  console.log("Run 'npm run dev' to start the API server.");
+}
+
+main().catch((err) => {
+  console.error("Sync failed:", err);
+  process.exit(1);
+});

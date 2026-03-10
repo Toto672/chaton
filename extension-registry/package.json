@@ -1,0 +1,21 @@
+{
+  "name": "chatons-extension-registry",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Centralized extension registry for Chatons -- syncs from npm and serves a public API",
+  "scripts": {
+    "dev": "npx tsx lib/dev-server.ts",
+    "build": "echo 'No build step needed -- serverless functions are built by Vercel'",
+    "sync": "npx tsx lib/sync-runner.ts"
+  },
+  "dependencies": {
+    "@vercel/blob": "^0.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "~5.9.3",
+    "vercel": "^50.29.0"
+  }
+}
