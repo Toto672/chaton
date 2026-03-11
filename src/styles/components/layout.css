@@ -102,6 +102,10 @@
     @apply bg-[#ffe9e3] text-[#b9412d];
   }
 
+  .project-delete-confirm-text {
+    @apply ml-1 whitespace-nowrap text-xs font-medium;
+  }
+
   .sidebar-thread-list {
     @apply space-y-1 pl-2;
   }
@@ -184,12 +188,77 @@
     @apply opacity-100;
   }
 
+  .thread-delete-confirm-text {
+    @apply ml-1 whitespace-nowrap text-xs font-medium;
+  }
+
   .empty-thread-state {
     @apply px-2.5 py-2 text-xs text-[#8d8e95];
   }
 
   .sidebar-show-more {
     @apply mx-auto mt-2 flex w-fit items-center justify-center rounded-full border border-[#d8dce6] bg-gradient-to-b from-[#ffffff] to-[#f3f5fa] px-3 py-1 text-xs font-medium text-[#4a5060] shadow-sm transition-all duration-150 hover:border-[#c9cfdb] hover:from-[#ffffff] hover:to-[#eceff6] hover:text-[#343a49] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+  }
+
+  /* ── Project Folder (iOS-style grouped row) ── */
+
+  .project-folder-container {
+    -webkit-app-region: no-drag;
+    @apply relative rounded-lg;
+  }
+
+  .project-folder-row {
+    -webkit-app-region: no-drag;
+    @apply flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[#5a5b63] transition-colors hover:bg-[#e8e8ea] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+  }
+
+  .project-folder-icons {
+    @apply flex items-center gap-0.5;
+  }
+
+  .project-folder-icon-slot {
+    @apply flex h-6 w-6 items-center justify-center rounded-md bg-[#e0e1e4] text-[#6e6f78];
+  }
+
+  .project-folder-extra-count {
+    @apply ml-0.5 flex h-6 min-w-[24px] items-center justify-center rounded-md bg-[#d8d9dd] px-1 text-[10px] font-semibold text-[#6e6f78];
+  }
+
+  .project-folder-label {
+    font-size: var(--ui-font-body);
+    @apply min-w-0 flex-1 truncate text-[#6e6f78];
+  }
+
+  .project-folder-popover {
+    @apply absolute left-1 right-1 z-30 mt-1 rounded-xl border border-[#d8dce4] bg-white shadow-lg;
+    max-height: 320px;
+    overflow: hidden;
+  }
+
+  .project-folder-popover-header {
+    @apply flex items-center justify-between border-b border-[#e8e9ec] px-3 py-2;
+  }
+
+  .project-folder-popover-title {
+    @apply text-xs font-semibold uppercase tracking-[0.06em] text-[#8d8e95];
+  }
+
+  .project-folder-popover-close {
+    @apply inline-flex h-6 w-6 items-center justify-center rounded-md text-[#8d8e95] transition-colors hover:bg-[#eeeeef] hover:text-[#4f5060];
+  }
+
+  .project-folder-popover-list {
+    @apply overflow-y-auto p-1;
+    max-height: 280px;
+  }
+
+  .project-folder-popover-item {
+    @apply flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[#303139] transition-colors hover:bg-[#f0f0f2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+  }
+
+  .project-folder-popover-name {
+    font-size: var(--ui-font-body);
+    @apply min-w-0 flex-1;
   }
 
   .sidebar-resize-handle {

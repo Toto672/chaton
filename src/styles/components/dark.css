@@ -119,6 +119,44 @@
     @apply border-[#2b3447] bg-gradient-to-b from-[#111827] to-[#0d1422] text-[#b9c6de] hover:border-[#394760] hover:from-[#152033] hover:to-[#101b2d] hover:text-[#e8efff] focus-visible:ring-[#2a3448];
   }
 
+  /* ── Project Folder dark mode ── */
+
+  .dark .project-folder-row {
+    @apply text-[#8e9cb7] hover:bg-[#121722];
+  }
+
+  .dark .project-folder-icon-slot {
+    @apply bg-[#1a2232] text-[#8e9cb7];
+  }
+
+  .dark .project-folder-extra-count {
+    @apply bg-[#1e2a3d] text-[#8e9cb7];
+  }
+
+  .dark .project-folder-label {
+    @apply text-[#8e9cb7];
+  }
+
+  .dark .project-folder-popover {
+    @apply border-[#273244] bg-[#0d131d] shadow-[0_12px_30px_rgba(0,0,0,0.45)];
+  }
+
+  .dark .project-folder-popover-header {
+    @apply border-[#1e2634];
+  }
+
+  .dark .project-folder-popover-title {
+    @apply text-[#7f8da8];
+  }
+
+  .dark .project-folder-popover-close {
+    @apply text-[#7f8da8] hover:bg-[#162132] hover:text-[#ecf2ff];
+  }
+
+  .dark .project-folder-popover-item {
+    @apply text-[#d6deef] hover:bg-[#162132];
+  }
+
   .dark .hero-title {
     @apply text-[#edf1fa];
   }

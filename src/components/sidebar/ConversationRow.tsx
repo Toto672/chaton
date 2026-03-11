@@ -1,6 +1,7 @@
 import { Loader2, Trash2 } from 'lucide-react'
 import { memo, type CSSProperties, type MouseEvent, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { AnimatePresence, motion } from 'framer-motion'
 
 import type { Conversation } from '@/features/workspace/types'
 import { ExtensionIcon } from '@/components/extensions/extension-icons'
@@ -87,10 +88,24 @@ export const ConversationRow = memo(function ConversationRow({ conversation, isA
       style={progressStyle}
       role="button"
       tabIndex={0}
-      onClick={() => onSelect(conversation.id)}
+      onClick={() => {
+        // Dispatch event to notify MainView to scroll to bottom
+        window.dispatchEvent(
+          new CustomEvent('chaton:conversation-selected', {
+            detail: { conversationId: conversation.id },
+          }),
+        )
+        onSelect(conversation.id)
+      }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
+          // Dispatch event to notify MainView to scroll to bottom
+          window.dispatchEvent(
+            new CustomEvent('chaton:conversation-selected', {
+              detail: { conversationId: conversation.id },
+            }),
+          )
           onSelect(conversation.id)
         }
       }}
@@ -137,6 +152,19 @@ export const ConversationRow = memo(function ConversationRow({ conversation, isA
           title={confirmDelete ? t('Cliquer à nouveau pour supprimer') : t('Supprimer la conversation')}
         >
           <Trash2 className="h-3.5 w-3.5" />
+          <AnimatePresence initial={false} mode="wait">
+            {confirmDelete && (
+              <motion.span
+                className="thread-delete-confirm-text"
+                initial={{ opacity: 0, scale: 0.8, x: -4 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.8, x: 4 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+              >
+                {t('Confirmer')}
+              </motion.span>
+            )}
+          </AnimatePresence>
         </button>
       </span>
     </div>

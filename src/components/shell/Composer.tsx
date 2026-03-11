@@ -1064,23 +1064,28 @@ export function Composer() {
               aria-label="Suggested thread actions"
             >
               {threadActionSuggestions.slice(0, 4).map((action) => (
-                <button
-                  key={action.id}
-                  type="button"
-                  className="composer-thread-action-badge"
-                  onClick={() => {
-                    if (!selectedConversation) {
-                      return;
-                    }
-                    clearThreadActionSuggestions(selectedConversation.id);
-                    setMessage(action.message);
-                    requestAnimationFrame(() => {
-                      textareaRef.current?.focus();
-                    });
-                  }}
-                >
-                  {action.label}
-                </button>
+                <div key={action.id} className="composer-thread-action-wrapper">
+                  <button
+                    type="button"
+                    className="composer-thread-action-badge"
+                    onClick={() => {
+                      if (!selectedConversation) {
+                        return;
+                      }
+                      clearThreadActionSuggestions(selectedConversation.id);
+                      setMessage(action.message);
+                      requestAnimationFrame(() => {
+                        void handleSendMessage();
+                      });
+                    }}
+                    title={action.message}
+                  >
+                    {action.label}
+                  </button>
+                  <div className="composer-thread-action-tooltip">
+                    {action.message}
+                  </div>
+                </div>
               ))}
             </div>
           ) : null}

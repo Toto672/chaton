@@ -5,6 +5,7 @@ import { SettingsSidebar } from '@/components/sidebar/settings/SettingsSidebar'
 import { SidebarHeaderActions } from '@/components/sidebar/SidebarHeaderActions'
 import { SidebarModeSwitcher } from '@/components/sidebar/SidebarModeSwitcher'
 import { ProjectGroup } from '@/components/sidebar/ProjectGroup'
+import { ProjectFolder } from '@/components/sidebar/ProjectFolder'
 import { ChannelsNavItem } from '@/components/sidebar/ChannelsNavItem'
 import { UpdateButton } from '@/components/sidebar/UpdateButton'
 import { ChangelogCard } from '@/components/sidebar/ChangelogCard'
@@ -12,6 +13,7 @@ import { ExtensionSidebarItems } from '@/components/sidebar/ExtensionSidebarItem
 import { useChangelogManager } from '@/components/ChangelogManager'
 import { useWorkspace } from '@/features/workspace/store'
 import { selectGlobalConversations, selectVisibleConversations } from '@/features/workspace/selectors'
+import { useProjectFolder } from '@/components/sidebar/useProjectFolder'
 import { useTranslation } from 'react-i18next'
 import { useMemo, useEffect, useState } from 'react'
 import { workspaceIpc } from '@/services/ipc/workspace'
@@ -48,6 +50,13 @@ export function Sidebar({ width }: { width: number }) {
   const extensionsData = useMemo(() => 
     extensions.map(ext => ({ id: ext.id, icon: ext.config?.icon, iconUrl: ext.config?.iconUrl })),
     [extensions]
+  )
+
+  // Split projects into visible and folded groups
+  const { visible: visibleProjects, folded: foldedProjects } = useProjectFolder(
+    state.projects,
+    state.conversations,
+    state.selectedProjectId,
   )
 
   if (state.sidebarMode === 'settings') {
@@ -152,7 +161,10 @@ export function Sidebar({ width }: { width: number }) {
                     />
                   ))}
                 </section>
-                {state.projects.map((project) => <ProjectGroup key={project.id} project={project} extensions={extensionsData} />)}
+                {visibleProjects.map((project) => <ProjectGroup key={project.id} project={project} extensions={extensionsData} />)}
+                {foldedProjects.length > 0 && (
+                  <ProjectFolder projects={foldedProjects} extensions={extensionsData} />
+                )}
               </>
             )}
           </div>

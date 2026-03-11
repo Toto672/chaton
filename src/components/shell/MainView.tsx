@@ -451,6 +451,28 @@ export function MainView() {
     }
   }, [isAtBottom, selectedConversation?.id, visibleMessages])
 
+  // Listen for conversation selection events to scroll to bottom even if conversation ID didn't change
+  useEffect(() => {
+    if (!selectedConversation) return
+    const container = scrollRef.current
+    if (!container) return
+
+    const handleConversationSelected = (event: Event) => {
+      const customEvent = event as CustomEvent<{ conversationId: string }>
+      if (customEvent.detail?.conversationId === selectedConversation.id) {
+        // Scroll to bottom when conversation is selected (even if already selected)
+        const frameId = window.requestAnimationFrame(() => {
+          container.scrollTo({ top: container.scrollHeight, behavior: 'auto' })
+          setIsAtBottom(true)
+        })
+        return () => window.cancelAnimationFrame(frameId)
+      }
+    }
+
+    window.addEventListener('chaton:conversation-selected', handleConversationSelected)
+    return () => window.removeEventListener('chaton:conversation-selected', handleConversationSelected)
+  }, [selectedConversation?.id])
+
   const shellPanel = (() => {
     if (state.sidebarMode === 'settings') {
       return <PiSettingsMainPanel />

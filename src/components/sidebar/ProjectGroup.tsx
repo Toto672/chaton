@@ -140,6 +140,19 @@ export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [
           }}
         >
           <Trash2 className="h-4 w-4" />
+          <AnimatePresence initial={false} mode="wait">
+            {confirmDelete && (
+              <motion.span
+                className="project-delete-confirm-text"
+                initial={{ opacity: 0, scale: 0.8, x: -4 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.8, x: 4 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+              >
+                {t('Confirmer')}
+              </motion.span>
+            )}
+          </AnimatePresence>
         </button>
       </div>
 
