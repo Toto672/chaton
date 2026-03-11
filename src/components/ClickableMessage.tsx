@@ -9,14 +9,6 @@ interface ClickableMessageProps {
 const ClickableMessage: React.FC<ClickableMessageProps> = ({ text, onLinkClick }) => {
   const processedText = replaceLinksWithAnchors(text);
 
-  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
-    const url = e.currentTarget.getAttribute('data-url');
-    if (url) {
-      onLinkClick(url);
-    }
-  };
-
   return (
     <div
       className="clickable-message"

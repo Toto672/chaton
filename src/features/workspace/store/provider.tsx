@@ -1004,7 +1004,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       openExtensions: () => dispatch({ type: 'setSidebarMode', payload: { mode: 'extensions' } }),
       openChannels: () => dispatch({ type: 'setSidebarMode', payload: { mode: 'channels' } }),
       closeSettings: () => dispatch({ type: 'setSidebarMode', payload: { mode: 'default' } }),
-      selectProject: (projectId: string) => dispatch({ type: 'selectProject', payload: { projectId } }),
+      selectProject: async (projectId: string) => {
+        dispatch({ type: 'selectProject', payload: { projectId } })
+      },
       selectConversation: async (conversationId: string) => {
         dispatch({ type: 'setSidebarMode', payload: { mode: 'default' } })
         // Pre-load message cache before switching conversation to avoid flashing empty state
