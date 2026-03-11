@@ -461,15 +461,72 @@ export function ChatonsExtensionsMainPanel() {
   };
 
   const installedIds = new Set(extensions.map((extension) => extension.id));
-  const installedItems = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return extensions.filter((item) => {
-      if (!normalized) return true;
-      const haystack =
-        `${item.name} ${item.id} ${item.description}`.toLowerCase();
-      return haystack.includes(normalized);
-    });
-  }, [extensions, query]);
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const matchesExtensionQuery = useCallback(
+    (item: {
+      id: string;
+      name: string;
+      description?: string;
+      author?: string;
+      category?: string;
+      tags?: string[];
+    }) => {
+      if (!normalizedQuery) return true;
+      const haystack = [
+        item.name,
+        item.id,
+        item.description,
+        item.author,
+        item.category,
+        ...(item.tags ?? []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(normalizedQuery);
+    },
+    [normalizedQuery],
+  );
+
+  const installedItems = useMemo(
+    () => extensions.filter((item) => matchesExtensionQuery(item)),
+    [extensions, matchesExtensionQuery],
+  );
+  const filteredMarketplace = useMemo(() => {
+    if (!marketplace) return null;
+
+    const filterItems = (items?: ChatonsExtensionCatalogItem[]) =>
+      (items ?? []).filter((item) => matchesExtensionQuery(item));
+
+    const featured = filterItems(marketplace.featured).filter(
+      (item) => item.source !== "builtin",
+    );
+    const recent = filterItems(marketplace.new);
+    const trending = filterItems(marketplace.trending);
+    const byCategory = (marketplace.byCategory ?? [])
+      .map((category) => ({
+        ...category,
+        items: filterItems(category.items),
+      }))
+      .filter((category) => category.items.length > 0)
+      .map((category) => ({
+        ...category,
+        count: category.items.length,
+      }));
+
+    return {
+      featured,
+      new: recent,
+      trending,
+      byCategory,
+    };
+  }, [marketplace, matchesExtensionQuery]);
+  const hasMarketplaceResults =
+    (filteredMarketplace?.featured?.length ?? 0) > 0 ||
+    (filteredMarketplace?.new?.length ?? 0) > 0 ||
+    (filteredMarketplace?.trending?.length ?? 0) > 0 ||
+    (filteredMarketplace?.byCategory?.length ?? 0) > 0;
   const activeLogsExtension = useMemo(
     () => extensions.find((extension) => extension.id === activeLogsExtensionId) ?? null,
     [activeLogsExtensionId, extensions],
@@ -585,7 +642,7 @@ export function ChatonsExtensionsMainPanel() {
               ) : (
                 <>
                   {/* Featured Section */}
-                  {marketplace?.featured && marketplace.featured.filter((item) => item.source !== "builtin").length > 0 && (
+                  {filteredMarketplace?.featured && filteredMarketplace.featured.length > 0 && (
                     <section className="ep-section">
                       <div className="ep-marketplace-section-header">
                         <div>
@@ -598,7 +655,7 @@ export function ChatonsExtensionsMainPanel() {
                         </div>
                       </div>
                       <div className="ep-marketplace-featured-grid">
-                        {marketplace.featured.filter((item) => item.source !== "builtin").map((item) => (
+                        {filteredMarketplace.featured.map((item) => (
                           <MarketplaceExtensionCard
                             key={item.id}
                             item={item}
@@ -614,7 +671,7 @@ export function ChatonsExtensionsMainPanel() {
                   )}
 
                   {/* New Section */}
-                  {marketplace?.new && marketplace.new.length > 0 && (
+                  {filteredMarketplace?.new && filteredMarketplace.new.length > 0 && (
                     <section className="ep-section">
                       <div className="ep-marketplace-section-header">
                         <div>
@@ -627,7 +684,7 @@ export function ChatonsExtensionsMainPanel() {
                         </div>
                       </div>
                       <div className="ep-marketplace-grid">
-                        {marketplace.new.map((item) => (
+                        {filteredMarketplace.new.map((item) => (
                           <MarketplaceExtensionCard
                             key={item.id}
                             item={item}
@@ -642,7 +699,7 @@ export function ChatonsExtensionsMainPanel() {
                   )}
 
                   {/* Trending Section */}
-                  {marketplace?.trending && marketplace.trending.length > 0 && (
+                  {filteredMarketplace?.trending && filteredMarketplace.trending.length > 0 && (
                     <section className="ep-section">
                       <div className="ep-marketplace-section-header">
                         <div>
@@ -655,7 +712,7 @@ export function ChatonsExtensionsMainPanel() {
                         </div>
                       </div>
                       <div className="ep-marketplace-grid">
-                        {marketplace.trending.map((item) => (
+                        {filteredMarketplace.trending.map((item) => (
                           <MarketplaceExtensionCard
                             key={item.id}
                             item={item}
@@ -670,10 +727,10 @@ export function ChatonsExtensionsMainPanel() {
                   )}
 
                   {/* Categories */}
-                  {marketplace?.byCategory &&
-                    marketplace.byCategory.length > 0 && (
+                  {filteredMarketplace?.byCategory &&
+                    filteredMarketplace.byCategory.length > 0 && (
                       <>
-                        {marketplace.byCategory.map((category) => (
+                        {filteredMarketplace.byCategory.map((category) => (
                           <section key={category.name} className="ep-section">
                             <div className="ep-marketplace-section-header">
                               <div>
@@ -704,6 +761,11 @@ export function ChatonsExtensionsMainPanel() {
                         ))}
                       </>
                     )}
+                  {!hasMarketplaceResults && normalizedQuery && (
+                    <div className="ep-empty">
+                      {t("Aucune extension ne correspond à votre recherche.")}
+                    </div>
+                  )}
                 </>
               )}
             </>

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Analytics } from '@vercel/analytics/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowRight,
@@ -413,7 +412,6 @@ export function LandingPage() {
           </div>
         </section>
       </main>
-      <Analytics />
     </div>
   )
 }

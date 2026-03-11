@@ -254,71 +254,38 @@
     modalBg.setAttribute("aria-modal", "true");
     modalBg.setAttribute("aria-labelledby", "modalTitle");
 
-    var modal = ui.el("div", "ce-modal");
+    var modal = ui.el("div", "ce-modal ce-modal--compact");
     var modalHeader = ui.el("div", "ce-modal__header");
     var modalTitle = ui.el("h3", "ce-modal__title", "Creer une automatisation");
     modalTitle.id = "modalTitle";
     modalHeader.appendChild(modalTitle);
-    modalHeader.appendChild(
-      ui.el(
-        "p",
-        "ce-modal__description",
-        "Decrivez le besoin, laissez l'assistant pre-remplir les champs, puis ajustez les reglages avant validation.",
-      ),
-    );
+    modal.appendChild(modalHeader);
 
-    var assist = ui.el("section", "ce-callout ce-stack");
-    assist.appendChild(ui.el("p", "ce-callout__title", "Assistant de pre-remplissage"));
-    assist.appendChild(
-      ui.el(
-        "p",
-        "ce-callout__description",
-        "Le formulaire propose un declencheur, une action et un cooldown initial.",
-      ),
-    );
-
-    var instructionInput = ui.el("textarea", "ce-textarea");
-    instructionInput.id = "instruction";
-    instructionInput.placeholder =
-      "Ex: Chaque lundi verifier les conversations Pixatwin et me notifier";
-    assist.appendChild(
-      ui.createField({ label: "Instructions", input: instructionInput }),
-    );
-    var assistActions = ui.el("div", "ce-toolbar");
-    var fillBtn = ui.createButton({
-      text: "Pre-remplir via IA",
-      variant: "outline",
-    });
-    fillBtn.id = "fillBtn";
-    assistActions.appendChild(fillBtn);
-    assist.appendChild(assistActions);
-
-    var grid = ui.el("div", "ce-grid ce-grid--2");
+    // Primary fields: name + instruction
+    var primaryFields = ui.el("div", "ce-modal__primary");
 
     var nameInput = ui.el("input", "ce-input");
     nameInput.id = "name";
-    nameInput.placeholder = "Verifier les alertes";
-    grid.appendChild(ui.createField({ label: "Nom", input: nameInput }));
+    nameInput.placeholder = "Ex: Verifier les alertes";
+    primaryFields.appendChild(ui.createField({ label: "Nom", input: nameInput }));
 
-    var projectSelect = ui.el("select", "ce-select");
-    projectSelect.id = "project";
-    grid.appendChild(
-      ui.createField({
-        label: "Projet",
-        input: projectSelect,
-        help: "Optionnel. Laissez vide pour une automatisation globale.",
-      }),
+    var instructionInput = ui.el("textarea", "ce-textarea ce-textarea--short");
+    instructionInput.id = "instruction";
+    instructionInput.placeholder =
+      "Ex: Chaque lundi verifier les conversations et me notifier un resume";
+    primaryFields.appendChild(
+      ui.createField({ label: "Instruction", input: instructionInput }),
     );
 
-    var modelPickerHost = ui.el("div", "ce-model-picker");
-    modelPickerHost.id = "modelPickerHost";
-    grid.appendChild(
-      ui.createField({
-        label: "Modele",
-        input: modelPickerHost,
-        help: "Utilise le picker de modeles coherent avec Chatons.",
-      }),
-    );
+    // Hidden request field keeps compatibility -- synced from instruction
+    var requestInput = ui.el("textarea", "ce-textarea");
+    requestInput.id = "request";
+    requestInput.style.display = "none";
+
+    modal.appendChild(primaryFields);
+
+    // Inline row: trigger + action
+    var inlineRow = ui.el("div", "ce-modal__inline-row");
 
     var triggerSelect = ui.el("select", "ce-select");
     triggerSelect.id = "trigger";
@@ -332,7 +299,7 @@
       option.value = entry[0];
       triggerSelect.appendChild(option);
     });
-    grid.appendChild(ui.createField({ label: "Declencheur", input: triggerSelect }));
+    inlineRow.appendChild(ui.createField({ label: "Declencheur", input: triggerSelect }));
 
     var actionTypeSelect = ui.el("select", "ce-select");
     actionTypeSelect.id = "actionType";
@@ -346,44 +313,82 @@
       option.value = entry[0];
       actionTypeSelect.appendChild(option);
     });
-    grid.appendChild(ui.createField({ label: "Action", input: actionTypeSelect }));
+    inlineRow.appendChild(ui.createField({ label: "Action", input: actionTypeSelect }));
 
-    var cooldownInput = ui.el("input", "ce-input");
-    cooldownInput.id = "cooldown";
-    cooldownInput.type = "number";
-    cooldownInput.min = "0";
-    cooldownInput.value = "0";
-    grid.appendChild(
-      ui.createField({
-        label: "Cooldown",
-        input: cooldownInput,
-        help: "Temps minimum entre deux executions. Saisissez une valeur en millisecondes.",
-      }),
+    modal.appendChild(inlineRow);
+
+    // Collapsible advanced section
+    var advancedToggle = ui.el("button", "ce-modal__advanced-toggle");
+    advancedToggle.type = "button";
+    var advancedChevron = ui.el("span", "ce-modal__advanced-chevron", "\u25B8");
+    advancedToggle.appendChild(advancedChevron);
+    advancedToggle.appendChild(document.createTextNode(" Options avancees"));
+    modal.appendChild(advancedToggle);
+
+    var advancedPanel = ui.el("div", "ce-modal__advanced-panel");
+    advancedPanel.style.display = "none";
+
+    var advancedGrid = ui.el("div", "ce-modal__inline-row");
+
+    var cooldownSelect = ui.el("select", "ce-select");
+    cooldownSelect.id = "cooldown";
+    [
+      ["0", "Aucun"],
+      ["60000", "1 minute"],
+      ["300000", "5 minutes"],
+      ["900000", "15 minutes"],
+      ["3600000", "1 heure"],
+      ["86400000", "1 jour"],
+    ].forEach(function (entry) {
+      var option = ui.el("option", "", entry[1]);
+      option.value = entry[0];
+      cooldownSelect.appendChild(option);
+    });
+    advancedGrid.appendChild(
+      ui.createField({ label: "Cooldown", input: cooldownSelect }),
     );
 
-    var requestInput = ui.el("textarea", "ce-textarea");
-    requestInput.id = "request";
-    requestInput.placeholder = "Decrivez precisement l'action a executer";
-    var requestField = ui.createField({
-      label: "Requete",
-      input: requestInput,
-      help: "Instruction envoyee a l'IA pour 'Executer et notifier'.",
+    var projectSelect = ui.el("select", "ce-select");
+    projectSelect.id = "project";
+    advancedGrid.appendChild(
+      ui.createField({ label: "Projet", input: projectSelect }),
+    );
+
+    advancedPanel.appendChild(advancedGrid);
+
+    var modelPickerHost = ui.el("div", "ce-model-picker");
+    modelPickerHost.id = "modelPickerHost";
+    advancedPanel.appendChild(
+      ui.createField({ label: "Modele", input: modelPickerHost }),
+    );
+
+    modal.appendChild(advancedPanel);
+
+    advancedToggle.addEventListener("click", function () {
+      var open = advancedPanel.style.display !== "none";
+      advancedPanel.style.display = open ? "none" : "grid";
+      advancedChevron.textContent = open ? "\u25B8" : "\u25BE";
     });
 
-    var footerActions = ui.el("div", "ce-toolbar");
+    // AI pre-fill button sits inline with footer
+    var fillBtn = ui.createButton({
+      text: "Pre-remplir via IA",
+      variant: "outline",
+    });
+    fillBtn.id = "fillBtn";
+
+    var footerActions = ui.el("div", "ce-modal__footer");
+    footerActions.appendChild(fillBtn);
+    var footerRight = ui.el("div", "ce-modal__footer-right");
     var cancelBtn = ui.createButton({ text: "Annuler", variant: "ghost" });
     cancelBtn.id = "cancelBtn";
     var saveBtn = ui.createButton({ text: "Creer", variant: "default" });
     saveBtn.id = "saveBtn";
-    footerActions.appendChild(cancelBtn);
-    footerActions.appendChild(saveBtn);
+    footerRight.appendChild(cancelBtn);
+    footerRight.appendChild(saveBtn);
+    footerActions.appendChild(footerRight);
 
-    modal.appendChild(modalHeader);
-    modal.appendChild(assist);
-    modal.appendChild(ui.el("div", "ce-stack"));
-    modal.appendChild(grid);
-    modal.appendChild(ui.el("hr", "ce-divider"));
-    modal.appendChild(requestField);
+    modal.appendChild(requestInput);
     modal.appendChild(footerActions);
     modalBg.appendChild(modal);
 
@@ -884,6 +889,11 @@
       var saved = localStorage.getItem(MODEL_KEY);
       state.modelPicker.setSelected(saved || null);
     }
+    // Collapse advanced panel on reset
+    var panel = document.querySelector(".ce-modal__advanced-panel");
+    var chevron = document.querySelector(".ce-modal__advanced-chevron");
+    if (panel) panel.style.display = "none";
+    if (chevron) chevron.textContent = "\u25B8";
   }
 
   function populateForm(rule) {
@@ -893,7 +903,13 @@
     refs.saveBtn.textContent = "Enregistrer";
     refs.nameInput.value = rule.name || "";
     refs.triggerSelect.value = rule.trigger || "conversation.created";
-    refs.cooldownInput.value = String(rule.cooldown || 0);
+
+    // Map cooldown value to nearest select option
+    var cd = Number(rule.cooldown) || 0;
+    var opts = [0, 60000, 300000, 900000, 3600000, 86400000];
+    var best = "0";
+    opts.forEach(function (v) { if (v <= cd) best = String(v); });
+    refs.cooldownInput.value = best;
 
     var action = getPrimaryAction(rule) || {};
     refs.actionTypeSelect.value = action.type || "notify";
@@ -902,6 +918,15 @@
     refs.projectSelect.value = String(action.projectId || "");
     if (state.modelPicker) {
       state.modelPicker.setSelected(action.model || localStorage.getItem(MODEL_KEY) || null);
+    }
+
+    // Open advanced panel if any advanced field is set
+    var hasAdvanced = cd > 0 || action.projectId || action.model;
+    var panel = document.querySelector(".ce-modal__advanced-panel");
+    var chevron = document.querySelector(".ce-modal__advanced-chevron");
+    if (hasAdvanced && panel) {
+      panel.style.display = "grid";
+      if (chevron) chevron.textContent = "\u25BE";
     }
   }
 
@@ -994,11 +1019,13 @@
     refs.nameInput.value = plan.name;
     refs.triggerSelect.value = plan.trigger;
     refs.actionTypeSelect.value = plan.action;
-    refs.cooldownInput.value = String(plan.cooldown);
+    // Map cooldown to nearest select value
+    var cd = plan.cooldown;
+    var opts = [0, 60000, 300000, 900000, 3600000, 86400000];
+    var best = "0";
+    opts.forEach(function (v) { if (v <= cd) best = String(v); });
+    refs.cooldownInput.value = best;
     if (plan.projectId) refs.projectSelect.value = plan.projectId;
-    if (!refs.requestInput.value.trim()) {
-      refs.requestInput.value = refs.instructionInput.value.trim();
-    }
     notify("Pre-remplissage IA applique.");
   });
 
@@ -1012,20 +1039,20 @@
 
     var trigger = refs.triggerSelect.value;
     var actionType = refs.actionTypeSelect.value;
+    var instruction = refs.instructionInput.value.trim();
     var action;
 
     if (actionType === "notify") {
       action = {
         type: "notify",
         title: "Automation: " + name,
-        body: refs.requestInput.value.trim() || "Trigger " + trigger,
+        body: instruction || "Trigger " + trigger,
       };
     } else if (actionType === "executeAndNotify") {
       action = {
         type: "executeAndNotify",
         title: "Automation: " + name,
-        instruction:
-          refs.requestInput.value.trim() || refs.instructionInput.value.trim(),
+        instruction: instruction,
       };
     } else if (actionType === "enqueueEvent") {
       action = { type: "enqueueEvent", topic: "automation." + trigger };

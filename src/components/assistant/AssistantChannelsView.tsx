@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { workspaceIpc } from '@/services/ipc/workspace'
 import { useWorkspace } from '@/features/workspace/store'
-import type { ChatonsExtension } from '@/features/workspace/types'
+import type { AppMode, ChatonsExtension } from '@/features/workspace/types'
 import { getExtensionIcon } from '@/components/extensions/extension-icons'
 
 type ExtensionUiEntry = {
@@ -35,7 +35,7 @@ function isChannelExtension(ext: ChatonsExtension): boolean {
 
 export function AssistantChannelsView() {
   const { t } = useTranslation()
-  const { setAssistantView, openExtensionMainView, openExtensions } = useWorkspace()
+  const { state, setAssistantView, openExtensionMainView, openExtensions } = useWorkspace()
   const [extensions, setExtensions] = useState<ChatonsExtension[]>([])
   const [entries, setEntries] = useState<ExtensionUiEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -84,17 +84,26 @@ export function AssistantChannelsView() {
           <div className="ad-card-empty">
             <MessageSquareShare className="h-8 w-8 text-[#b0b5c0] dark:text-[#5a6580]" />
             <p>{t('assistant.channels.empty')}</p>
-            <button type="button" className="ad-card-action" onClick={openExtensions}>
+            <button
+              type="button"
+              className="ad-card-action"
+              onClick={() => {
+                openExtensions()
+                setAssistantView('home')
+              }}
+            >
               <Plus className="h-3.5 w-3.5" />
               {t('assistant.channels.install')}
             </button>
           </div>
         ) : (
           <AssistantChannelsList
+            appMode={state.appMode}
             channelExtensions={channelExtensions}
             entryMap={entryMap}
             openExtensionMainView={openExtensionMainView}
             openExtensions={openExtensions}
+            setAssistantView={setAssistantView}
             t={t}
           />
         )}
@@ -104,16 +113,20 @@ export function AssistantChannelsView() {
 }
 
 function AssistantChannelsList({
+  appMode,
   channelExtensions,
   entryMap,
   openExtensionMainView,
   openExtensions,
+  setAssistantView,
   t,
 }: {
+  appMode: AppMode
   channelExtensions: ChatonsExtension[]
   entryMap: Map<string, ExtensionUiEntry>
   openExtensionMainView: (viewId: string) => void
   openExtensions: () => void
+  setAssistantView: (view: 'home' | 'conversations' | 'memory' | 'automations' | 'channels') => void
   t: (key: string) => string
 }) {
   const [statuses, setStatuses] = useState<Record<string, boolean>>({})
@@ -182,7 +195,16 @@ function AssistantChannelsList({
           </div>
         )
       })}
-      <button type="button" className="ad-card-action mt-3" onClick={openExtensions}>
+      <button
+        type="button"
+        className="ad-card-action mt-3"
+        onClick={() => {
+          openExtensions()
+          if (appMode === 'assistant') {
+            setAssistantView('home')
+          }
+        }}
+      >
         <Plus className="h-3.5 w-3.5" />
         {t('assistant.channels.addMore')}
       </button>

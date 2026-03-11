@@ -67,7 +67,13 @@ Si le probleme persiste, veuillez verifier les logs de l'application.`
           } catch (fetchError) {
             console.error(`Error fetching changelog for version ${normalizedVersion}:`, fetchError)
             const errorMessage = fetchError instanceof Error ? fetchError.message : 'Erreur inconnue'
-            const errorChangelog = `Erreur de chargement des notes de version
+            const isRateLimit = errorMessage.includes('rate limit')
+            const errorChangelog = isRateLimit
+              ? `Les notes de version pour v${normalizedVersion} ne peuvent pas etre chargees car la limite de requetes GitHub a ete atteinte.
+
+Veuillez reessayer dans quelques minutes, ou visitez directement :
+https://github.com/thibautrey/chaton/releases/tag/v${normalizedVersion}`
+              : `Erreur de chargement des notes de version
 
 Une erreur s'est produite lors de la récupération des notes de version pour v${normalizedVersion}.
 

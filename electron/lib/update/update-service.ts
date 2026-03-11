@@ -35,6 +35,7 @@ export class UpdateService {
   private static lastUpdateCheckAt: number | null = null
   private static cachedUpdateCheck: GitHubRelease | null = null
   private static updateCheckInFlight: Promise<GitHubRelease | null> | null = null
+  private static changelogsPrefetched = false
 
   static async checkForUpdates(): Promise<GitHubRelease | null> {
     // Return cached result only if cache is valid AND had a successful result
@@ -127,6 +128,10 @@ export class UpdateService {
             } else {
               reject(new Error(`Redirect without location header`))
             }
+          } else if (res.statusCode === 403 || res.statusCode === 429) {
+            const remaining = res.headers['x-ratelimit-remaining']
+            console.warn(`GitHub API rate limited (${res.statusCode}), remaining: ${remaining}`)
+            reject(new Error('GitHub API rate limit exceeded. Please try again later.'))
           } else {
             reject(new Error(`GitHub API returned status ${res.statusCode}`))
           }
@@ -221,6 +226,13 @@ export class UpdateService {
 
           if (res.statusCode === 404) {
             resolve(null)
+            return
+          }
+
+          if (res.statusCode === 403 || res.statusCode === 429) {
+            const remaining = res.headers['x-ratelimit-remaining']
+            console.warn(`GitHub API rate limited (${res.statusCode}), remaining: ${remaining}`)
+            reject(new Error('GitHub API rate limit exceeded. Please try again later.'))
             return
           }
 
@@ -756,8 +768,11 @@ sudo rpm -i "${filePath}"
       }
 
       // Try to find a changelog file for this version
+      // Files are stored with v prefix (e.g. changelog-v0.133.0.json)
+      // but version may arrive without it, so match both formats
       const files = readdirSync(changelogDir)
-      const versionPattern = new RegExp(`changelog-${version.replace(/\./g, '\\.')}`)
+      const escapedVersion = version.replace(/^v/i, '').replace(/\./g, '\\.')
+      const versionPattern = new RegExp(`changelog-v?${escapedVersion}`)
 
       const changelogFile = files.find(file => versionPattern.test(file))
 
@@ -780,8 +795,8 @@ sudo rpm -i "${filePath}"
 
   static async prefetchAndStoreChangelogs(): Promise<void> {
     try {
-      if (this.lastUpdateCheckAt) {
-        console.log('Skipping changelog prefetch: update check already performed this session')
+      if (this.changelogsPrefetched) {
+        console.log('Skipping changelog prefetch: already prefetched this session')
         return
       }
 
@@ -821,6 +836,7 @@ sudo rpm -i "${filePath}"
       }
       
       console.log('Changelog prefetch completed')
+      this.changelogsPrefetched = true
     } catch (error) {
       console.error('Error prefetching changelogs:', error)
     }
