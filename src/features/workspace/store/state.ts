@@ -36,6 +36,8 @@ export type Action =
   | { type: 'setAppMode'; payload: { mode: AppMode } }
   | { type: 'setAssistantView'; payload: { view: AssistantView } }
   | { type: 'setAssistantExtensionView'; payload: { viewId: string | null } }
+  | { type: 'openExtensionConfigSheet'; payload: { viewId: string; title: string } }
+  | { type: 'closeExtensionConfigSheet' }
   | { type: 'setPiRuntime'; payload: { conversationId: string; runtime: Partial<PiConversationRuntime> } }
   | { type: 'setThreadActionSuggestions'; payload: { conversationId: string; actions: ThreadActionSuggestion[] } }
   | { type: 'clearThreadActionSuggestions'; payload: { conversationId: string } }
@@ -125,6 +127,7 @@ export const initialState: WorkspaceState = {
   appMode: 'workspace',
   assistantView: 'home',
   assistantExtensionViewId: null,
+  extensionConfigSheet: null,
   settings: defaultSettings,
   notice: null,
   extensionUpdatesCount: 0,
@@ -230,6 +233,20 @@ function isPlainRecord(value: JsonValue | undefined): value is Record<string, Js
 
 function isEmptyRecord(value: JsonValue | undefined): boolean {
   return isPlainRecord(value) && Object.keys(value).length === 0
+}
+
+// Extract all toolCallIds from a message's content array
+function getToolCallIdsFromMessage(message: JsonValue): string[] {
+  if (!isPlainRecord(message)) return []
+  const content = Array.isArray(message.content) ? message.content : []
+  const ids: string[] = []
+  for (const part of content) {
+    if (!isPlainRecord(part)) continue
+    if (part.type === 'toolCall' && typeof part.id === 'string' && part.id.length > 0) {
+      ids.push(part.id)
+    }
+  }
+  return ids
 }
 
 function mergeToolCallArgs(existing: JsonValue, incoming: JsonValue): JsonValue {
@@ -359,6 +376,21 @@ export function reducer(state: WorkspaceState, action: Action): WorkspaceState {
       return {
         ...state,
         assistantExtensionViewId: action.payload.viewId,
+      }
+    }
+    case 'openExtensionConfigSheet': {
+      return {
+        ...state,
+        extensionConfigSheet: {
+          viewId: action.payload.viewId,
+          title: action.payload.title,
+        },
+      }
+    }
+    case 'closeExtensionConfigSheet': {
+      return {
+        ...state,
+        extensionConfigSheet: null,
       }
     }
     case 'toggleProjectCollapsed': {
@@ -666,23 +698,44 @@ export function piReducer(piState: PiStoreState, action: Action): PiStoreState {
               updated[index] = mergeToolCallArgs(existing, incoming)
               return updated
             })()
+      // Evict tool-exec placeholder messages whose tool calls are now covered by the incoming message.
+      // This handles the race where tool_execution_start fires before message_update arrives.
+      const afterToolExecEviction = (() => {
+        if (!incomingId || incomingId.startsWith('tool-exec:')) return nextMessages
+        const incomingToolCallIds = getToolCallIdsFromMessage(incoming)
+        if (incomingToolCallIds.length === 0) return nextMessages
+        const evictIds = new Set<string>()
+        for (const msg of nextMessages) {
+          const msgId = getPiMessageId(msg)
+          if (!msgId || !msgId.startsWith('tool-exec:')) continue
+          const msgToolCallIds = getToolCallIdsFromMessage(msg)
+          if (msgToolCallIds.some((id) => incomingToolCallIds.includes(id))) {
+            evictIds.add(msgId)
+          }
+        }
+        if (evictIds.size === 0) return nextMessages
+        return nextMessages.filter((msg) => {
+          const msgId = getPiMessageId(msg)
+          return !msgId || !evictIds.has(msgId)
+        })
+      })()
       const reconciledMessages =
         incomingId !== null && incomingRole === 'user'
           ? (() => {
               const incomingText = extractPiMessageText(incoming).trim()
-              if (!incomingText) return nextMessages
-              const optimisticIndex = nextMessages.findIndex((message) => {
+              if (!incomingText) return afterToolExecEviction
+              const optimisticIndex = afterToolExecEviction.findIndex((message) => {
                 const id = getPiMessageId(message)
                 if (!id || !id.startsWith('optimistic-user:')) return false
                 if (getPiMessageRole(message) !== 'user') return false
                 return extractPiMessageText(message).trim() === incomingText
               })
-              if (optimisticIndex === -1) return nextMessages
-              const updated = [...nextMessages]
+              if (optimisticIndex === -1) return afterToolExecEviction
+              const updated = [...afterToolExecEviction]
               updated[optimisticIndex] = incoming
               return updated
             })()
-          : nextMessages
+          : afterToolExecEviction
       return {
         ...piState,
         piByConversation: {

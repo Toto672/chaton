@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { workspaceIpc } from '@/services/ipc/workspace'
 import { useWorkspace } from '@/features/workspace/store'
 import type { ChatonsExtension } from '@/features/workspace/types'
-import { getExtensionIcon } from '@/components/extensions/extension-icons'
+import { ExtensionIcon } from '@/components/extensions/extension-icons'
 
 type ExtensionUiEntry = {
   extensionId: string
@@ -37,7 +37,7 @@ export type ChannelInfo = {
   name: string
   isConnected: boolean
   configViewId: string | null
-  iconValue: ReturnType<typeof getExtensionIcon>
+  iconName: string | undefined
 }
 
 function isChannelExtension(ext: ChatonsExtension): boolean {
@@ -74,8 +74,7 @@ export function useChannelExtensions() {
         const infos: ChannelInfo[] = await Promise.all(
           extensions.map(async (ext) => {
             const entry = entryMap.get(ext.id)
-            const iconRaw = typeof entry?.iconUrl === 'string' ? entry.iconUrl : entry?.icon
-            const iconValue = getExtensionIcon(iconRaw, ext.id)
+            const iconName = typeof entry?.iconUrl === 'string' ? entry.iconUrl : entry?.icon
             const mainView = entry?.mainViews?.[0]
 
         // Query channel status reported by the extension itself
@@ -87,7 +86,7 @@ export function useChannelExtensions() {
           name: ext.name,
           isConnected,
           configViewId: mainView?.viewId ?? null,
-          iconValue,
+          iconName,
         }
           }),
         )
@@ -155,11 +154,11 @@ export function ChannelsStatus({
             {channels.map((channel) => (
               <div key={channel.id} className="ad-channel-row">
                 <div className="ad-channel-icon">
-                  {channel.iconValue.kind === 'image' ? (
-                    <img src={channel.iconValue.src} alt="" className="h-4 w-4 object-contain" loading="lazy" />
-                  ) : (
-                    <channel.iconValue.Component className="h-4 w-4" />
-                  )}
+                  <ExtensionIcon
+                    iconName={channel.iconName}
+                    extensionId={channel.id}
+                    className="h-4 w-4 object-contain"
+                  />
                 </div>
                 <span className="ad-channel-name">{channel.name}</span>
                 <span className={`ad-status-dot ${channel.isConnected ? 'ad-status-dot-online' : 'ad-status-dot-offline'}`} />

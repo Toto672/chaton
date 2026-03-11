@@ -14,6 +14,34 @@ Related:
 
 ---
 
+## March 11, 2026 (Session 3)
+
+### Enhanced manifest file detection for extensions
+
+**Change:** Modified `electron/extensions/runtime/manifest.ts` to support both `manifest.json` and `chaton.extension.json` manifest filenames.
+
+**Why:** Third-party extensions published to npm were using `manifest.json` as the standard filename (aligning with common extension naming conventions), while Chatons was only looking for `chaton.extension.json`. This caused npm-published extensions with `manifest.json` to fail to load with "Package not found in node_modules" errors, even though the package was installed correctly.
+
+**Solution:**
+
+- Updated `readManifestFromExtensionDir()` in `manifest.ts` to iterate through a priority list of manifest filenames: `['manifest.json', 'chaton.extension.json']`
+- `manifest.json` is preferred (tried first); `chaton.extension.json` is the legacy fallback
+- Both formats are fully supported and validated
+- Existing builtin and user extensions using `chaton.extension.json` continue to work without changes
+
+**Files modified:**
+
+- `electron/extensions/runtime/manifest.ts` -- Added manifest filename iteration logic
+- `docs/content/extensions/index.mdx` -- Updated documentation to mention both filename formats
+
+**Build verification:** Compilation successful, no TypeScript errors.
+
+**Compatibility:** Fully backward compatible. All existing extensions continue to work.
+
+**Recommendation for extension developers:** Use `manifest.json` when publishing new extensions to npm for better alignment with standard extension conventions.
+
+---
+
 ## March 10, 2026 (Session 2)
 
 ### Gap analysis and documentation of 14 previously undocumented features

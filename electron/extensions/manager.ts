@@ -599,6 +599,18 @@ function getNpmCatalogCachedOrFresh() {
   }
 }
 
+/**
+ * Look up the marketplace CDN iconUrl for an installed extension.
+ * Uses the cached npm catalog to avoid network requests on every call.
+ */
+export function lookupMarketplaceIconUrl(extensionId: string): string | null {
+  const cache = readNpmCache()
+  if (!cache) return null
+  const entry = cache.entries.find((e) => e.id === extensionId)
+  if (!entry) return null
+  return typeof entry.iconUrl === 'string' && entry.iconUrl ? entry.iconUrl : null
+}
+
 async function getNpmCatalogCachedOrFreshAsync() {
   const cache = readNpmCache()
   if (cache && isNpmCatalogCacheFresh(cache)) {
@@ -644,19 +656,23 @@ function normalizeInstalledExtensionEntryFromDisk(extensionId: string, rootDir: 
   const manifest = readJsonFile(manifestPath)
   if (!manifest) return null
 
+  const packageJson = readJsonFile(path.join(rootDir, 'package.json'))
+  const manifestVersion = typeof manifest.version === 'string' ? manifest.version.trim() : ''
+  const packageVersion = typeof packageJson?.version === 'string' ? packageJson.version.trim() : ''
+
   const id = typeof manifest.id === 'string' ? manifest.id.trim() : ''
   const name = typeof manifest.name === 'string' ? manifest.name.trim() : ''
-  const version = typeof manifest.version === 'string' ? manifest.version.trim() : '0.0.0'
+  const version = packageVersion || manifestVersion || '0.0.0'
   const description = typeof manifest.description === 'string' ? manifest.description : ''
   const manifestKind = typeof manifest.kind === 'string' ? manifest.kind.trim() : null
   const manifestIcon = typeof manifest.icon === 'string' ? manifest.icon.trim() : null
   if (!id || id !== extensionId || !name || !version) return null
 
-  const packageJson = readJsonFile(path.join(rootDir, 'package.json'))
   const chatons = packageJson?.chatons && typeof packageJson.chatons === 'object' ? packageJson.chatons as Record<string, unknown> : null
   const requiresRestart = extractRequiresRestart(packageJson)
 
-  // Extract the npm package name if available
+  // Prefer package.json for installed npm version because npm install/update mutates it,
+  // while chaton.extension.json can lag behind until the package author republishes.
   const npmPackageName = typeof packageJson?.name === 'string' ? packageJson.name.trim() : null
 
   return {
@@ -815,12 +831,20 @@ function startNpmExtensionInstall(id: string) {
   const pkgMeta: Record<string, unknown> = { name: id }
 
   const extensionDir = path.join(EXTENSIONS_DIR, id)
+  const installRootDir = path.join(EXTENSIONS_DIR, '.npm-install', extensionLogFileSafeId(id))
   fs.mkdirSync(extensionDir, { recursive: true })
+  fs.mkdirSync(installRootDir, { recursive: true })
+  // Create a minimal package.json so npm treats this as a project root
+  // and does not walk up the filesystem to find a parent package.json
+  const installPkgJsonPath = path.join(installRootDir, 'package.json')
+  if (!fs.existsSync(installPkgJsonPath)) {
+    fs.writeFileSync(installPkgJsonPath, JSON.stringify({ name: 'chaton-ext-install-tmp', private: true }), 'utf8')
+  }
   const logPath = path.join(LOGS_DIR, `${extensionLogFileSafeId(id)}.install.log`)
   fs.writeFileSync(logPath, '', 'utf8')
 
   const child = spawn('npm', ['install', id, '--no-save'], {
-    cwd: extensionDir,
+    cwd: installRootDir,
     env: process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -863,6 +887,59 @@ function startNpmExtensionInstall(id: string) {
       return
     }
     if (code === 0) {
+      try {
+        // Try multiple possible locations for scoped packages
+        const possiblePaths = [
+          path.join(installRootDir, 'node_modules', ...id.split('/')),
+          path.join(installRootDir, 'node_modules', id), // fallback for non-scoped or unscoped variation
+        ]
+
+        let installedPackageRoot: string | null = null
+        for (const candidate of possiblePaths) {
+          if (fs.existsSync(candidate)) {
+            installedPackageRoot = candidate
+            break
+          }
+        }
+
+        if (!installedPackageRoot) {
+          // Provide detailed error message with debugging info
+          const nodeModulesPath = path.join(installRootDir, 'node_modules')
+          let debugInfo = `Package not found in: ${possiblePaths.join(' or ')}`
+          if (fs.existsSync(nodeModulesPath)) {
+            try {
+              const entries = fs.readdirSync(nodeModulesPath)
+              debugInfo += `\n\nContents of node_modules: ${entries.slice(0, 20).join(', ')}${entries.length > 20 ? ` ... (${entries.length} total)` : ''}`
+            } catch {
+              // ignore if we can't read directory
+            }
+          } else {
+            debugInfo += '\n\nWarning: node_modules directory does not exist'
+          }
+          throw new Error(`Package installe introuvable dans node_modules.\n\n${debugInfo}`)
+        }
+
+        if (fs.existsSync(extensionDir)) {
+          fs.rmSync(extensionDir, { recursive: true, force: true })
+        }
+        fs.mkdirSync(path.dirname(extensionDir), { recursive: true })
+        fs.cpSync(installedPackageRoot, extensionDir, { recursive: true })
+      } catch (error) {
+        setInstallState(id, {
+          status: 'error',
+          finishedAt: new Date().toISOString(),
+          message: error instanceof Error ? error.message : String(error),
+          pid: undefined,
+        })
+        return
+      } finally {
+        try {
+          fs.rmSync(installRootDir, { recursive: true, force: true })
+        } catch {
+          // ignore cleanup failures for temp npm install roots
+        }
+      }
+
       const extension = upsertInstalledExtensionFromPackage(id, pkgMeta)
       setInstallState(id, {
         status: 'done',
@@ -909,6 +986,11 @@ function startNpmExtensionInstall(id: string) {
       message: baseMessage + errorDetails,
       pid: undefined,
     })
+    try {
+      fs.rmSync(installRootDir, { recursive: true, force: true })
+    } catch {
+      // ignore cleanup failures for temp npm install roots
+    }
   })
 
   return { ok: true as const, started: true, state: installStates.get(id), extension: null }
@@ -1054,9 +1136,13 @@ export function removeChatonsExtension(id: string) {
   }
 
   const extensionDir = path.join(EXTENSIONS_DIR, id)
+  const legacyInstallRoot = path.join(extensionDir, 'node_modules', ...id.split('/'))
   try {
     if (fs.existsSync(extensionDir)) {
       fs.rmSync(extensionDir, { recursive: true, force: true })
+    }
+    if (fs.existsSync(legacyInstallRoot)) {
+      fs.rmSync(legacyInstallRoot, { recursive: true, force: true })
     }
   } catch (error) {
     return { ok: false as const, message: error instanceof Error ? error.message : String(error) }

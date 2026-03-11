@@ -9,6 +9,7 @@ import { AssistantMainView } from '@/components/assistant/AssistantMainView'
 import { Composer } from '@/components/shell/Composer'
 import { MainView } from '@/components/shell/MainView'
 import { Topbar } from '@/components/shell/Topbar'
+import { ExtensionConfigSheet } from '@/components/shell/ExtensionConfigSheet'
 import { ChangelogManager, setChangelogManagerRef } from '@/components/ChangelogManager'
 import type { ChangelogManagerHandle } from '@/components/ChangelogManager'
 import { LogConsole } from '@/components/LogConsole'
@@ -274,6 +275,7 @@ function AppShell() {
         </main>
       </div>
       <TelemetryConsentCard />
+      <ExtensionConfigSheet />
     </div>
   )
 }

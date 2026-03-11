@@ -555,9 +555,24 @@ export function applyPiEvent(
     const runtime = piStoreGetState().piByConversation?.[conversationId]
     const existingMessages = runtime?.messages ?? []
 
-    const alreadyExists = toolCallId
+    let alreadyExists = toolCallId
       ? existingMessages.some((msg) => doesMessageContainToolCall(msg, toolCallId))
       : doesMessageContainToolCall(existingMessages[existingMessages.length - 1] ?? null, null)
+
+    // Also check pending (batched) message_updates not yet flushed.
+    // message_update is batched via requestAnimationFrame while tool_execution_start
+    // dispatches synchronously, so the tool call may already be queued but not visible in the store yet.
+    if (!alreadyExists) {
+      const pendingMessages = pendingMessageUpdatesByConversation.get(conversationId)
+      if (pendingMessages) {
+        for (const pendingMsg of pendingMessages.values()) {
+          if (doesMessageContainToolCall(pendingMsg, toolCallId)) {
+            alreadyExists = true
+            break
+          }
+        }
+      }
+    }
 
     if (alreadyExists) {
       // Tool call already exists in a message (from message_update), skip duplicate

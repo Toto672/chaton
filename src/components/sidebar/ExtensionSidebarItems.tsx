@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useWorkspace } from '@/features/workspace/store'
 import { workspaceIpc } from '@/services/ipc/workspace'
-import { getExtensionIcon } from '@/components/extensions/extension-icons'
+import { ExtensionIcon } from '@/components/extensions/extension-icons'
 
 type ExtensionUiEntry = {
   extensionId: string
@@ -57,7 +57,6 @@ export function ExtensionSidebarItems() {
   return (
     <>
       {sidebarItems.map(({ extensionId, item }) => {
-        const iconValue = getExtensionIcon(item.icon, extensionId)
         const isActive =
           state.sidebarMode === 'extension-main-view' &&
           state.activeExtensionViewId === item.openMainView
@@ -74,21 +73,11 @@ export function ExtensionSidebarItems() {
             }}
             disabled={!item.openMainView}
           >
-            {iconValue.kind === 'image' ? (
-              <img
-                src={iconValue.src}
-                alt=""
-                className="sidebar-nav-icon h-4 w-4 object-contain"
-                onError={(e) => {
-                  // Fallback to puzzle icon if image fails to load
-                  const target = e.currentTarget;
-                  target.onerror = null; // Prevent infinite loop
-                  target.src = ''; // Clear failed image
-                }}
-              />
-            ) : (
-              <iconValue.Component className="sidebar-nav-icon h-4 w-4" />
-            )}
+            <ExtensionIcon
+              iconName={item.icon}
+              extensionId={extensionId}
+              className="sidebar-nav-icon h-4 w-4 object-contain"
+            />
             {item.label}
           </button>
         )

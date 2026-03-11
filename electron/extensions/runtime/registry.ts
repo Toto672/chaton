@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import { listChatonsExtensions, type ChatonsExtensionRegistryEntry } from '../manager.js'
 import { AUTOMATION_MANIFEST, AUTOMATION_TRIGGER_TOPICS, BUILTIN_AUTOMATION_DIR, BUILTIN_AUTOMATION_ID, BUILTIN_BROWSER_DIR, BUILTIN_BROWSER_ID, BUILTIN_MEMORY_DIR, BUILTIN_MEMORY_ID } from './constants.js'
 import { ensureDirs } from './logging.js'
-import { normalizeManifest, readManifestFromExtensionDir, resolveIconDataUrl } from './manifest.js'
+import { normalizeManifest, readManifestFromExtensionDir, resolveIconWithMarketplaceFallback } from './manifest.js'
 import { runtimeState } from './state.js'
 import type { ExtensionManifest } from './types.js'
 
@@ -202,7 +202,7 @@ export function listRegisteredExtensionUi() {
       extensionId: manifest.id,
       kind: manifest.kind ?? null,
       icon,
-      iconUrl: icon ? resolveIconDataUrl(manifest.id, icon) ?? icon : undefined,
+      iconUrl: icon ? resolveIconWithMarketplaceFallback(manifest.id, icon) ?? icon : undefined,
       sidebarMenuItems,
       mainViews: (manifest.ui?.mainViews ?? []).map((mainView) => ({
         ...mainView,
@@ -238,7 +238,7 @@ export function enrichExtensionsWithRuntimeFields(entries: ChatonsExtensionRegis
         ...(entry.config ?? {}),
         ...(manifest?.kind === 'channel' ? { kind: 'channel' } : {}),
         ...(icon ? { icon } : {}),
-        ...(icon && resolveIconDataUrl(entry.id, icon) ? { iconUrl: resolveIconDataUrl(entry.id, icon) } : {}),
+        ...(icon ? (() => { const url = resolveIconWithMarketplaceFallback(entry.id, icon); return url ? { iconUrl: url } : {}; })() : {}),
       },
       capabilitiesDeclared: manifest?.capabilities ?? [],
       capabilitiesUsed: Array.from(runtimeState.capabilityUsage.get(entry.id) ?? new Set()),

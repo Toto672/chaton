@@ -477,7 +477,10 @@ function messageHasInlineToolResult(message: JsonValue): boolean {
 
 export function dedupeToolCallMessages(messages: JsonValue[]): JsonValue[] {
   const deduped: JsonValue[] = []
+  // Maps tool-call key -> index in `deduped` array
   const seenByKey = new Map<string, number>()
+  // Track which indices in `deduped` are tool-only messages so they can be evicted
+  const toolOnlyIndices = new Set<number>()
 
   for (const message of messages) {
     const blocks = dedupeToolCalls(getToolBlocks(message))
@@ -490,6 +493,17 @@ export function dedupeToolCallMessages(messages: JsonValue[]): JsonValue[] {
     if (!isToolOnly) {
       // Not a tool-only message (e.g. has text + tool calls, or is a plain text message).
       // Always keep it, but register its tool call keys so later tool-only duplicates are dropped.
+      // Also evict any earlier tool-only messages whose tool calls are now covered by this richer message.
+      for (const call of toolCalls) {
+        const signatureKey = getToolCallSignature(call)
+        const idKey = call.toolCallId ? `id:${call.toolCallId}` : null
+        const existingIndex = (idKey ? seenByKey.get(idKey) : undefined) ?? seenByKey.get(signatureKey)
+        if (existingIndex !== undefined && toolOnlyIndices.has(existingIndex)) {
+          // Mark the earlier tool-only message for removal (nullify it)
+          deduped[existingIndex] = null as unknown as JsonValue
+          toolOnlyIndices.delete(existingIndex)
+        }
+      }
       const newIndex = deduped.length
       deduped.push(message)
       for (const call of toolCalls) {
@@ -524,6 +538,7 @@ export function dedupeToolCallMessages(messages: JsonValue[]): JsonValue[] {
     if (!replaced) {
       const newIndex = deduped.length
       deduped.push(message)
+      toolOnlyIndices.add(newIndex)
       for (const call of toolCalls) {
         const signatureKey = getToolCallSignature(call)
         if (call.toolCallId) seenByKey.set(`id:${call.toolCallId}`, newIndex)
@@ -532,7 +547,8 @@ export function dedupeToolCallMessages(messages: JsonValue[]): JsonValue[] {
     }
   }
 
-  return deduped
+  // Filter out nullified (evicted) entries
+  return deduped.filter((msg) => msg !== null)
 }
 
 export function parseExplorationEventFromCommand(command: string): ExplorationEvent | null {

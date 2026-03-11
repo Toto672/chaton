@@ -24,7 +24,9 @@ Extensions add features to Chatons: sidebar views, LLM tools, storage, event han
 
 ## 1. What an Extension Is
 
-A Chatons extension is a folder containing a manifest (`chaton.extension.json`), HTML, CSS, and JavaScript files. Extensions run inside isolated webview iframes with access to a set of host APIs.
+A Chatons extension is a folder containing a manifest (`manifest.json` or `chaton.extension.json`), HTML, CSS, and JavaScript files. Extensions run inside isolated webview iframes with access to a set of host APIs.
+
+**Manifest file naming:** Chatons looks for either `manifest.json` (preferred) or `chaton.extension.json` (legacy). Both formats are supported. If both exist, `manifest.json` takes priority.
 
 An extension can contribute:
 

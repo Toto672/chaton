@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { InlineFileDiff } from '@/components/shell/mainView/InlineFileDiff'
+import { TypewriterText } from '@/components/shell/mainView/TypewriterText'
 import { CollapsibleToolBlock, LiveToolTrace } from '@/components/shell/mainView/ToolBlocks'
 import { useScrollShadow } from '@/hooks/useScrollShadow'
 import ClickableMessage from '@/components/ClickableMessage'
@@ -433,7 +434,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
         ) : null}
         {renderedText ? (
           shouldUseLightweightStreamingText ? (
-            <ClickableMessage text={renderedText} onLinkClick={setSelectedLink} />
+            <TypewriterText text={renderedText} active={isStreaming} onLinkClick={setSelectedLink} />
           ) : shouldThrottleMarkdownStreaming || hasMarkdownSyntax(renderedText) ? (
             <div className="chat-markdown">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>

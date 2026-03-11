@@ -754,4 +754,26 @@
     border: none;
     background: transparent;
   }
+
+  /* Typewriter fade-in effect for streaming messages */
+  .typewriter-container {
+    white-space: pre-wrap;
+  }
+
+  .typewriter-stable {
+    opacity: 1;
+  }
+
+  .typewriter-fade {
+    animation: typewriter-char-in 180ms ease-out forwards;
+  }
+
+  @keyframes typewriter-char-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }

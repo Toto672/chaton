@@ -1062,6 +1062,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       setAppMode: (mode: import('../types').AppMode) => dispatch({ type: 'setAppMode', payload: { mode } }),
       setAssistantView: (view: import('../types').AssistantView) => dispatch({ type: 'setAssistantView', payload: { view } }),
       closeAssistantExtensionView: () => dispatch({ type: 'setAssistantExtensionView', payload: { viewId: null } }),
+      openExtensionConfigSheet: (viewId: string, title: string) => dispatch({ type: 'openExtensionConfigSheet', payload: { viewId, title } }),
+      closeExtensionConfigSheet: () => dispatch({ type: 'closeExtensionConfigSheet' }),
       showRequirementSheet,
       dismissRequirementSheet,
       retryLastPiPrompt,

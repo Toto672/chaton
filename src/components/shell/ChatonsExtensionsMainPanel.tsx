@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { RefObject } from "react";
 import {
   FolderOpen,
   Loader2,
@@ -7,9 +8,10 @@ import {
   Square,
   X,
   Zap,
+  CheckCircle2,
 } from "lucide-react";
 
-import { getExtensionIcon } from "@/components/extensions/extension-icons";
+import { ExtensionIcon } from "@/components/extensions/extension-icons";
 import { useTranslation } from "react-i18next";
 
 import type {
@@ -41,6 +43,7 @@ export function ChatonsExtensionsMainPanel() {
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [installingId, setInstallingId] = useState<string | null>(null);
+  const [completedInstallationId, setCompletedInstallationId] = useState<string | null>(null);
   const [installMessage, setInstallMessage] = useState<string | null>(null);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const [logsById, setLogsById] = useState<Record<string, string>>({});
@@ -50,6 +53,9 @@ export function ChatonsExtensionsMainPanel() {
   >([]);
   const installPollRef = useRef<number | null>(null);
   const updatePollRef = useRef<number | null>(null);
+  const featuredSectionRef = useRef<HTMLElement | null>(null);
+  const newSectionRef = useRef<HTMLElement | null>(null);
+  const trendingSectionRef = useRef<HTMLElement | null>(null);
   const [serverStatusById, setServerStatusById] = useState<
     Record<string, { ready?: boolean; lastError?: string } | null>
   >({});
@@ -220,21 +226,39 @@ export function ChatonsExtensionsMainPanel() {
         stopInstallPolling();
         setInstallingId(null);
         setBusyId(null);
-        await load();
+        
         if (state.status === "done") {
+          // Show checkmark and update installed extensions without full marketplace refresh.
+          // We only fetch listExtensions() and checkExtensionUpdates(), not getExtensionMarketplace(),
+          // so marketplace cards stay in place and don't visually refresh. The installedIds computed
+          // value will automatically update to mark this extension as installed.
+          setCompletedInstallationId(id);
+          setTimeout(async () => {
+            setCompletedInstallationId(null);
+            setInstallMessage(null);
+            // Only refresh installed extensions and updates, not marketplace
+            const [installedResult, updatesResult] = await Promise.all([
+              workspaceIpc.listExtensions(),
+              workspaceIpc.checkExtensionUpdates(),
+            ]);
+            setExtensions(installedResult.extensions ?? []);
+            setUpdatesAvailable(updatesResult.updates ?? []);
+          }, 2000);
           setNotice(t("{{name}} installée.", { name }));
           return;
         }
         if (state.status === "cancelled") {
           setNotice(t("Installation annulée."));
+          setInstallMessage(null);
           return;
         }
         if (state.status === "error") {
           setNotice(state.message ?? t("Installation impossible."));
+          setInstallMessage(null);
         }
       }, 700);
     },
-    [load, setNotice, stopInstallPolling, t],
+    [setNotice, stopInstallPolling, t],
   );
 
   const beginUpdatePolling = useCallback(
@@ -527,6 +551,11 @@ export function ChatonsExtensionsMainPanel() {
     (filteredMarketplace?.new?.length ?? 0) > 0 ||
     (filteredMarketplace?.trending?.length ?? 0) > 0 ||
     (filteredMarketplace?.byCategory?.length ?? 0) > 0;
+  const quickNavCategories = filteredMarketplace?.byCategory ?? [];
+
+  const scrollToSection = useCallback((ref: RefObject<HTMLElement | null>) => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
   const activeLogsExtension = useMemo(
     () => extensions.find((extension) => extension.id === activeLogsExtensionId) ?? null,
     [activeLogsExtensionId, extensions],
@@ -632,6 +661,50 @@ export function ChatonsExtensionsMainPanel() {
                 </p>
               </div>
 
+              {!loading && quickNavCategories.length > 0 && (
+                <div className="ep-marketplace-quick-nav" aria-label={t("Navigation rapide des catégories")}> 
+                  <span className="ep-marketplace-quick-nav-label">{t("Accès rapide")}</span>
+                  <div className="ep-marketplace-quick-nav-buttons">
+                    {filteredMarketplace?.featured && filteredMarketplace.featured.length > 0 && (
+                      <button
+                        type="button"
+                        className="ep-marketplace-quick-nav-btn"
+                        onClick={() => scrollToSection(featuredSectionRef)}
+                      >
+                        {t("Recommandées")}
+                      </button>
+                    )}
+                    {filteredMarketplace?.new && filteredMarketplace.new.length > 0 && (
+                      <button
+                        type="button"
+                        className="ep-marketplace-quick-nav-btn"
+                        onClick={() => scrollToSection(newSectionRef)}
+                      >
+                        {t("Récemment ajoutées")}
+                      </button>
+                    )}
+                    {filteredMarketplace?.trending && filteredMarketplace.trending.length > 0 && (
+                      <button
+                        type="button"
+                        className="ep-marketplace-quick-nav-btn"
+                        onClick={() => scrollToSection(trendingSectionRef)}
+                      >
+                        {t("Les plus utiles")}
+                      </button>
+                    )}
+                    {quickNavCategories.map((category) => (
+                      <a
+                        key={category.name}
+                        href={`#extension-category-${category.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`}
+                        className="ep-marketplace-quick-nav-btn"
+                      >
+                        {category.name}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {loading ? (
                 <div className="text-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-[#978a80]" />
@@ -643,7 +716,7 @@ export function ChatonsExtensionsMainPanel() {
                 <>
                   {/* Featured Section */}
                   {filteredMarketplace?.featured && filteredMarketplace.featured.length > 0 && (
-                    <section className="ep-section">
+                    <section ref={featuredSectionRef} className="ep-section">
                       <div className="ep-marketplace-section-header">
                         <div>
                           <div className="ep-section-eyebrow">
@@ -661,6 +734,7 @@ export function ChatonsExtensionsMainPanel() {
                             item={item}
                             isInstalled={installedIds.has(item.id)}
                             isInstalling={installingId === item.id}
+                            isInstallComplete={completedInstallationId === item.id}
                             isBusy={busyId === item.id}
                             onInstall={() => void handleInstall(item)}
                             featured
@@ -672,7 +746,7 @@ export function ChatonsExtensionsMainPanel() {
 
                   {/* New Section */}
                   {filteredMarketplace?.new && filteredMarketplace.new.length > 0 && (
-                    <section className="ep-section">
+                    <section ref={newSectionRef} className="ep-section">
                       <div className="ep-marketplace-section-header">
                         <div>
                           <div className="ep-section-eyebrow">
@@ -690,6 +764,7 @@ export function ChatonsExtensionsMainPanel() {
                             item={item}
                             isInstalled={installedIds.has(item.id)}
                             isInstalling={installingId === item.id}
+                            isInstallComplete={completedInstallationId === item.id}
                             isBusy={busyId === item.id}
                             onInstall={() => void handleInstall(item)}
                           />
@@ -700,7 +775,7 @@ export function ChatonsExtensionsMainPanel() {
 
                   {/* Trending Section */}
                   {filteredMarketplace?.trending && filteredMarketplace.trending.length > 0 && (
-                    <section className="ep-section">
+                    <section ref={trendingSectionRef} className="ep-section">
                       <div className="ep-marketplace-section-header">
                         <div>
                           <div className="ep-section-eyebrow">
@@ -718,6 +793,7 @@ export function ChatonsExtensionsMainPanel() {
                             item={item}
                             isInstalled={installedIds.has(item.id)}
                             isInstalling={installingId === item.id}
+                            isInstallComplete={completedInstallationId === item.id}
                             isBusy={busyId === item.id}
                             onInstall={() => void handleInstall(item)}
                           />
@@ -731,7 +807,11 @@ export function ChatonsExtensionsMainPanel() {
                     filteredMarketplace.byCategory.length > 0 && (
                       <>
                         {filteredMarketplace.byCategory.map((category) => (
-                          <section key={category.name} className="ep-section">
+                          <section
+                            key={category.name}
+                            id={`extension-category-${category.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`}
+                            className="ep-section scroll-mt-24"
+                          >
                             <div className="ep-marketplace-section-header">
                               <div>
                                 <div className="ep-section-eyebrow">
@@ -752,6 +832,7 @@ export function ChatonsExtensionsMainPanel() {
                                   item={item}
                                   isInstalled={installedIds.has(item.id)}
                                   isInstalling={installingId === item.id}
+                                  isInstallComplete={completedInstallationId === item.id}
                                   isBusy={busyId === item.id}
                                   onInstall={() => void handleInstall(item)}
                                 />
@@ -820,25 +901,18 @@ export function ChatonsExtensionsMainPanel() {
                         if (!extension) return null;
                         const pending =
                           busyId === extension.id || busyId === "all";
-                        const iconValue = getExtensionIcon(
-                          typeof extension.config?.iconUrl === "string"
-                            ? extension.config.iconUrl
-                            : extension.config?.icon,
-                          extension.id,
-                        );
                         return (
                           <div key={extension.id} className="group ep-card-row">
                             <div className="ep-card-icon">
-                              {iconValue.kind === "image" ? (
-                                <img
-                                  src={iconValue.src}
-                                  alt=""
-                                  className="h-6 w-6 object-contain"
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <iconValue.Component className="h-5 w-5" />
-                              )}
+                              <ExtensionIcon
+                                iconName={
+                                  typeof extension.config?.iconUrl === "string"
+                                    ? extension.config.iconUrl
+                                    : extension.config?.icon
+                                }
+                                extensionId={extension.id}
+                                className="h-6 w-6 object-contain"
+                              />
                             </div>
                             <div className="ep-card-body">
                               <div className="ep-card-name">
@@ -923,26 +997,17 @@ export function ChatonsExtensionsMainPanel() {
                         extension.config?.requiresRestart === true;
                       const serverStatus =
                         serverStatusById[extension.id] ?? null;
-                      const iconValue = getExtensionIcon(
-                        extension.config?.iconUrl ?? extension.config?.icon,
-                        extension.id,
-                      );
                       const hasUpdate = updatesAvailable.some(
                         (u) => u.id === extension.id,
                       );
                       return (
                         <div key={extension.id} className="group ep-card-row">
                           <div className="ep-card-icon">
-                            {iconValue.kind === "image" ? (
-                              <img
-                                src={iconValue.src}
-                                alt=""
-                                className="h-6 w-6 object-contain"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <iconValue.Component className="h-5 w-5" />
-                            )}
+                            <ExtensionIcon
+                              iconName={extension.config?.iconUrl ?? extension.config?.icon}
+                              extensionId={extension.id}
+                              className="h-6 w-6 object-contain"
+                            />
                           </div>
                           <div className="ep-card-body">
                             <div className="ep-card-name">
@@ -1171,6 +1236,7 @@ interface MarketplaceExtensionCardProps {
   item: ChatonsExtensionCatalogItem;
   isInstalled: boolean;
   isInstalling: boolean;
+  isInstallComplete: boolean;
   isBusy: boolean;
   onInstall: () => void;
   featured?: boolean;
@@ -1180,12 +1246,12 @@ function MarketplaceExtensionCard({
   item,
   isInstalled,
   isInstalling,
+  isInstallComplete,
   isBusy,
   onInstall,
   featured,
 }: MarketplaceExtensionCardProps) {
   const { t } = useTranslation();
-  const iconValue = getExtensionIcon(item.iconUrl ?? item.icon, item.id);
 
   return (
     <div
@@ -1194,16 +1260,11 @@ function MarketplaceExtensionCard({
     >
       <div className="ep-marketplace-card-header">
         <div className="ep-marketplace-card-icon">
-          {iconValue.kind === "image" ? (
-            <img
-              src={iconValue.src}
-              alt=""
-              className="h-8 w-8 object-contain"
-              loading="lazy"
-            />
-          ) : (
-            <iconValue.Component className="h-6 w-6" />
-          )}
+          <ExtensionIcon
+            iconName={item.iconUrl ?? item.icon}
+            extensionId={item.id}
+            className="h-8 w-8 object-contain"
+          />
         </div>
         <div className="ep-marketplace-card-badges">
           {item.popularity === "new" && (
@@ -1257,10 +1318,15 @@ function MarketplaceExtensionCard({
         <button
           type="button"
           className="ep-marketplace-install-btn"
-          disabled={isBusy || isInstalled}
+          disabled={isBusy || isInstalled || isInstallComplete}
           onClick={onInstall}
         >
-          {isInstalling ? (
+          {isInstallComplete ? (
+            <>
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              {t("Installée")}
+            </>
+          ) : isInstalling ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : isInstalled ? (
             t("Installée")

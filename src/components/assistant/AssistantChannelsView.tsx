@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { workspaceIpc } from '@/services/ipc/workspace'
 import { useWorkspace } from '@/features/workspace/store'
 import type { AppMode, ChatonsExtension } from '@/features/workspace/types'
-import { getExtensionIcon } from '@/components/extensions/extension-icons'
+import { ExtensionIcon } from '@/components/extensions/extension-icons'
 
 type ExtensionUiEntry = {
   extensionId: string
@@ -159,18 +159,17 @@ function AssistantChannelsList({
       {channelExtensions.map((ext) => {
         const entry = entryMap.get(ext.id)
         const iconRaw = typeof entry?.iconUrl === 'string' ? entry.iconUrl : entry?.icon
-        const iconValue = getExtensionIcon(iconRaw, ext.id)
         const mainView = entry?.mainViews?.[0]
         const isConnected = statuses[ext.id] ?? (entry?.serverStatus?.ready ?? false)
 
         return (
           <div key={ext.id} className="ad-channel-full-row">
             <div className="ad-channel-full-icon">
-              {iconValue.kind === 'image' ? (
-                <img src={iconValue.src} alt="" className="h-5 w-5 object-contain" loading="lazy" />
-              ) : (
-                <iconValue.Component className="h-5 w-5" />
-              )}
+              <ExtensionIcon
+                iconName={iconRaw}
+                extensionId={ext.id}
+                className="h-5 w-5 object-contain"
+              />
             </div>
             <div className="ad-channel-full-content">
               <div className="ad-channel-full-name">{ext.name}</div>

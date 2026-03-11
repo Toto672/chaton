@@ -1167,6 +1167,18 @@
     @apply bg-[#253149] text-[#f8fbff];
   }
 
+  .dark .ep-marketplace-quick-nav {
+    @apply border-[#1e2a3d] bg-[#0f1520];
+  }
+
+  .dark .ep-marketplace-quick-nav-label {
+    @apply text-[#7a8aaa];
+  }
+
+  .dark .ep-marketplace-quick-nav-btn {
+    @apply border-[#2a3548] bg-[#141b29] text-[#d8e2f2] hover:border-[#3a4963] hover:bg-[#1a2434];
+  }
+
   .dark .ep-marketplace-card {
     @apply border-[#1e2a3d] hover:border-[#2a3548];
   }

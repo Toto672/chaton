@@ -18,6 +18,8 @@ import { buildExtensionToolDefinitions } from './runtime/tools.js'
 import { buildToolCatalogFromExposedTools, getToolCatalogEntry, searchToolCatalog } from './runtime/tool-catalog.js'
 import { extensionKvGet, extensionKvSet } from '../db/repos/extension-kv.js'
 import type { ChatonsExtensionRegistryEntry } from './manager.js'
+import { lookupMarketplaceIconUrl } from './manager.js'
+import { setMarketplaceIconUrlLookup } from './runtime/manifest.js'
 import type { ExposedExtensionToolDefinition, ExtensionHostCallResult, ExtensionManifest, HostEventTopic } from './runtime/types.js'
 import { createAutomationRuntime } from './runtime/automation.js'
 import { createPiInstructionExecutor } from './runtime/automation-pi-bridge.js'
@@ -107,6 +109,9 @@ configureRegistryRuntime({
   subscribeExtension,
   ensureExtensionServerStarted,
 })
+
+// Allow manifest icon resolution to look up CDN URLs from the marketplace catalog
+setMarketplaceIconUrlLookup(lookupMarketplaceIconUrl)
 
 export type * from './runtime/types.js'
 

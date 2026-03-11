@@ -19,12 +19,13 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
+import { useState, useCallback } from "react";
 import type { ComponentType, SVGProps } from "react";
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 type IconValue =
   | { kind: "svg"; Component: IconComponent }
-  | { kind: "image"; src: string };
+  | { kind: "image"; src: string; fallbacks?: string[] };
 
 const ICONS: Record<string, IconComponent> = {
   Blocks,
@@ -48,13 +49,18 @@ const ICONS: Record<string, IconComponent> = {
   GitBranch,
 };
 
+// Bundled icons exist as .svg or .png; try both extensions
+const STATIC_ICON_EXTENSIONS = ["svg", "png"] as const;
+
 /**
- * Resolve the static icon bundled with the app for a given extension ID.
- * Used as a fallback when no explicit URL is provided.
+ * Build candidate paths for the static icon bundled with the app.
+ * Icons may be stored as .svg or .png so we return both candidates.
  */
-function staticIconPath(extensionId: string): string {
+function staticIconCandidates(extensionId: string): string[] {
   const normalized = extensionId.replace(/\//g, "-");
-  return `/extension-icons/${normalized}.svg`;
+  return STATIC_ICON_EXTENSIONS.map(
+    (ext) => `/extension-icons/${normalized}.${ext}`,
+  );
 }
 
 /**
@@ -83,14 +89,67 @@ export function getExtensionIcon(
   // 2. Explicit image: data-URL (local installed), HTTP URL (marketplace CDN),
   //    or absolute path
   if (/^(data:image\/|https?:\/\/|\/)/i.test(normalized)) {
-    return { kind: "image", src: normalized };
+    // When an explicit src is provided, still attach static fallbacks
+    // in case the primary source fails to load
+    const fallbacks = extensionId ? staticIconCandidates(extensionId) : undefined;
+    return { kind: "image", src: normalized, fallbacks };
   }
 
-  // 3. Bundled static icon for this extension ID
+  // 3. Bundled static icon for this extension ID (try .svg then .png)
   if (extensionId) {
-    return { kind: "image", src: staticIconPath(extensionId) };
+    const [first, ...rest] = staticIconCandidates(extensionId);
+    return { kind: "image", src: first, fallbacks: rest };
   }
 
   // 4. Final fallback
   return { kind: "svg", Component: Puzzle };
+}
+
+/**
+ * Render an extension icon with automatic fallback handling.
+ *
+ * Tries the primary image source, then each fallback candidate,
+ * and finally renders the Puzzle lucide icon if all fail.
+ */
+export function ExtensionIcon({
+  iconName,
+  extensionId,
+  className,
+}: {
+  iconName?: string | null;
+  extensionId?: string;
+  className?: string;
+}) {
+  const iconValue = getExtensionIcon(iconName, extensionId);
+  const [fallbackIndex, setFallbackIndex] = useState(-1);
+  const [allFailed, setAllFailed] = useState(false);
+
+  const handleError = useCallback(() => {
+    if (iconValue.kind !== "image") return;
+    const fallbacks = iconValue.fallbacks ?? [];
+    const nextIndex = fallbackIndex + 1;
+    if (nextIndex < fallbacks.length) {
+      setFallbackIndex(nextIndex);
+    } else {
+      setAllFailed(true);
+    }
+  }, [iconValue, fallbackIndex]);
+
+  if (iconValue.kind === "svg" || allFailed) {
+    const Component = iconValue.kind === "svg" ? iconValue.Component : Puzzle;
+    return <Component className={className} />;
+  }
+
+  const src =
+    fallbackIndex >= 0 ? iconValue.fallbacks?.[fallbackIndex] ?? iconValue.src : iconValue.src;
+
+  return (
+    <img
+      src={src}
+      alt=""
+      className={className}
+      loading="lazy"
+      onError={handleError}
+    />
+  );
 }

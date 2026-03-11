@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { workspaceIpc } from "@/services/ipc/workspace";
 import type { ChatonsExtension } from "@/features/workspace/types";
 import { useWorkspace } from "@/features/workspace/store";
-import { getExtensionIcon } from "@/components/extensions/extension-icons";
+import { ExtensionIcon } from "@/components/extensions/extension-icons";
 
 function isChannelExtension(extension: ChatonsExtension): boolean {
   return extension.config?.kind === "channel";
@@ -32,7 +32,7 @@ type ExtensionUiEntry = {
 
 export function ChannelsMainPanel() {
   const { t } = useTranslation();
-  const { openExtensionMainView } = useWorkspace();
+  const { openExtensionConfigSheet } = useWorkspace();
   const [extensions, setExtensions] = useState<ChatonsExtension[]>([]);
   const [entries, setEntries] = useState<ExtensionUiEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,12 +118,6 @@ export function ChannelsMainPanel() {
             {channelExtensions.map((extension) => {
               const mainView = mainViewByExtensionId.get(extension.id);
               const entry = entryByExtensionId.get(extension.id);
-              const iconValue = getExtensionIcon(
-                typeof entry?.iconUrl === "string"
-                  ? entry.iconUrl
-                  : entry?.icon,
-                extension.id,
-              );
               const needsServer =
                 entry?.serverStatus && entry.serverStatus.ready === false;
               return (
@@ -131,16 +125,15 @@ export function ChannelsMainPanel() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3 min-w-0">
                       <div className="settings-provider-favicon flex items-center justify-center text-[#45464d] dark:text-[#d6def2]">
-                        {iconValue.kind === "image" ? (
-                          <img
-                            src={iconValue.src}
-                            alt=""
-                            className="h-4 w-4 object-contain"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <iconValue.Component className="h-3.5 w-3.5" />
-                        )}
+                        <ExtensionIcon
+                          iconName={
+                            typeof entry?.iconUrl === "string"
+                              ? entry.iconUrl
+                              : entry?.icon
+                          }
+                          extensionId={extension.id}
+                          className="h-4 w-4 object-contain"
+                        />
                       </div>
                       <div className="min-w-0">
                         <div className="settings-card-title">
@@ -167,8 +160,8 @@ export function ChannelsMainPanel() {
                       type="button"
                       className="settings-action shrink-0"
                       onClick={() => {
-                        if (mainView?.viewId) {
-                          openExtensionMainView(mainView.viewId);
+                        if (mainView?.viewId && mainView?.title) {
+                          openExtensionConfigSheet(mainView.viewId, mainView.title);
                         }
                       }}
                       disabled={!mainView?.viewId}

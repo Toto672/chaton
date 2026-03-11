@@ -963,6 +963,22 @@
 
   /* ── Extension Marketplace Styles ── */
 
+  .ep-marketplace-quick-nav {
+    @apply mb-8 flex flex-col gap-3 rounded-2xl border border-[#e6ddd3] bg-[#faf7f2] p-4;
+  }
+
+  .ep-marketplace-quick-nav-label {
+    @apply text-xs font-bold uppercase tracking-[0.18em] text-[#8b7768];
+  }
+
+  .ep-marketplace-quick-nav-buttons {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .ep-marketplace-quick-nav-btn {
+    @apply inline-flex items-center rounded-full border border-[#d8cec3] bg-white px-4 py-2 text-sm font-medium text-[#3a3540] transition-colors duration-200 hover:border-[#bcae9f] hover:bg-[#f3eee7];
+  }
+
   .ep-marketplace-section-header {
     @apply flex items-end justify-between gap-4 border-b-2 border-[#ede8df] pb-5 pt-2 mb-6;
   }

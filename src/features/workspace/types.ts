@@ -181,6 +181,11 @@ export type PiCommandResult = {
   message?: string
 }
 
+export type ExtensionConfigSheet = {
+  viewId: string
+  title: string
+}
+
 export type WorkspaceState = {
   projects: Project[]
   conversations: Conversation[]
@@ -192,6 +197,7 @@ export type WorkspaceState = {
   appMode: AppMode
   assistantView: AssistantView
   assistantExtensionViewId: string | null
+  extensionConfigSheet: ExtensionConfigSheet | null
   settings: SidebarSettings
   notice: string | null
   extensionUpdatesCount: number

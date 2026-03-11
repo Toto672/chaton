@@ -3,7 +3,7 @@ import { memo, type CSSProperties, type MouseEvent, useEffect, useRef, useState 
 import { useTranslation } from 'react-i18next'
 
 import type { Conversation } from '@/features/workspace/types'
-import { getExtensionIcon } from '@/components/extensions/extension-icons'
+import { ExtensionIcon } from '@/components/extensions/extension-icons'
 import { useConversationActivityStatus } from '@/features/workspace/store/pi-store'
 import { perfMonitor } from '@/features/workspace/store/perf-monitor'
 import { useTaskProgress } from '@/hooks/use-task-progress'
@@ -71,10 +71,6 @@ export const ConversationRow = memo(function ConversationRow({ conversation, isA
     ? extensions.find(ext => ext.id === conversation.channelExtensionId)
     : null
 
-  const channelIcon = channelExtension
-    ? getExtensionIcon(channelExtension.iconUrl ?? channelExtension.icon, channelExtension.id)
-    : null
-
   // Channel conversations should not show the completion indicator
   const shouldShowCompletionIndicator = !conversation.channelExtensionId && hasCompletedAction && !isActive
 
@@ -106,13 +102,13 @@ export const ConversationRow = memo(function ConversationRow({ conversation, isA
         {shouldShowCompletionIndicator && (
           <span className="thread-row-completed-indicator" aria-hidden="true" />
         )}
-        {channelIcon && (
+        {channelExtension && (
           <span className="thread-row-channel-icon" aria-hidden="true">
-            {channelIcon.kind === 'image' ? (
-              <img src={channelIcon.src} alt="" className="h-4 w-4 object-contain" loading="lazy" />
-            ) : (
-              <channelIcon.Component className="h-4 w-4" />
-            )}
+            <ExtensionIcon
+              iconName={channelExtension.iconUrl ?? channelExtension.icon}
+              extensionId={channelExtension.id}
+              className="h-4 w-4 object-contain"
+            />
           </span>
         )}
         <span className="thread-row-title-text">{conversation.title}</span>
