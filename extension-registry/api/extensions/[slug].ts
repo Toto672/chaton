@@ -6,6 +6,7 @@
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { loadCatalog } from "../../lib/storage.js";
+import { normalizeExtensionIconUrl } from "../../lib/icon-resolver.js";
 import type { ExtensionEntry } from "../../lib/types.js";
 
 const CACHE_MAX_AGE = 300;
@@ -42,12 +43,21 @@ export default async function handler(
     return res.status(404).json({ error: `Extension "${slug}" not found` });
   }
 
+  // Normalize icon URL to be absolute and accessible
+  const normalizedExt = normalizeExtensionIconUrl(ext);
+
   res.setHeader(
     "Cache-Control",
     `public, s-maxage=${CACHE_MAX_AGE}, stale-while-revalidate=${STALE_WHILE_REVALIDATE}`
   );
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  return res.status(200).json(ext);
+  // Handle OPTIONS preflight
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  return res.status(200).json(normalizedExt);
 }

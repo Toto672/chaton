@@ -10,6 +10,7 @@
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { loadCatalog } from "../../lib/storage.js";
+import { normalizeCatalogIconUrls } from "../../lib/icon-resolver.js";
 import type { ExtensionEntry, ExtensionCatalog } from "../../lib/types.js";
 
 const CACHE_MAX_AGE = 300; // 5 minutes
@@ -73,12 +74,22 @@ export default async function handler(
     result = catalog;
   }
 
+  // Normalize icon URLs to be absolute and accessible
+  result = normalizeCatalogIconUrls(result);
+
+  // Set CORS and caching headers
   res.setHeader(
     "Cache-Control",
     `public, s-maxage=${CACHE_MAX_AGE}, stale-while-revalidate=${STALE_WHILE_REVALIDATE}`
   );
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  // Handle OPTIONS preflight
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
   return res.status(200).json(result);
 }
