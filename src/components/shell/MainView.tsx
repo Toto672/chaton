@@ -15,6 +15,8 @@ import { ChatMessageItem } from '@/components/shell/mainView/ChatMessageItem'
 import { QUICK_ACTIONS_FADE_OUT_MS, THINKING_CAT_ANIMATIONS } from '@/components/shell/mainView/constants'
 import { ExtensionRequestModal } from '@/components/shell/mainView/ExtensionRequestModal'
 import { HeroMascot } from '@/components/shell/mainView/HeroMascot'
+import { LinkSheetContext } from '@/hooks/useLinkSheetContext'
+import LinkSheet from '@/components/LinkSheet'
 import {
   dedupeToolCallMessages,
   dedupeToolCalls,
@@ -40,6 +42,7 @@ export function MainView() {
   const { state, respondExtensionUi, dismissRequirementSheet, openSettings } = useWorkspace()
   const { setConversationId } = useConversationSidePanel()
   const [isAtBottom, setIsAtBottom] = useState(true)
+  const [selectedLink, setSelectedLink] = useState<string | null>(null)
   const [thinkingAnimationIndex, setThinkingAnimationIndex] = useState(() =>
     Math.floor(Math.random() * THINKING_CAT_ANIMATIONS.length),
   )
@@ -502,20 +505,21 @@ export function MainView() {
   }
 
   return (
-    <div className="conversation-side-panel-container">
-      <ConversationSidePanel />
-      <div className="main-content-wrapper">
-        <div
-          className="main-scroll"
-          ref={scrollRef}
-          onScroll={(event) => {
-            const target = event.currentTarget
-            const distance = target.scrollHeight - target.scrollTop - target.clientHeight
-            const atBottom = distance < 100
-            setIsAtBottom(atBottom)
-          }}
-        >
-        <section className="chat-section">
+    <LinkSheetContext.Provider value={{ selectedLink, setSelectedLink }}>
+      <div className="conversation-side-panel-container">
+        <ConversationSidePanel />
+        <div className="main-content-wrapper">
+          <div
+            className="main-scroll"
+            ref={scrollRef}
+            onScroll={(event) => {
+              const target = event.currentTarget
+              const distance = target.scrollHeight - target.scrollTop - target.clientHeight
+              const atBottom = distance < 100
+              setIsAtBottom(atBottom)
+            }}
+          >
+          <section className="chat-section">
           <div className="chat-timeline">
             <AnimatePresence>
               {shouldShowHeroSection ? (
@@ -646,6 +650,9 @@ export function MainView() {
       ) : null}
       </div>
 
-    </div>
+      {selectedLink && (
+        <LinkSheet url={selectedLink} onClose={() => setSelectedLink(null)} />
+      )}
+    </LinkSheetContext.Provider>
   )
 }

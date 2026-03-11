@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { Play, Square, Terminal, X } from "lucide-react";
+import { Play, Square, Terminal, X, Unlock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { sanitizeTerminalText } from "@/components/shell/mainView/terminal";
 import { workspaceIpc } from "@/services/ipc/workspace";
+import { useNotifications } from "@/features/notifications/NotificationContext";
 
 type CommandOption = {
   id: string;
@@ -43,11 +44,14 @@ export function ProjectTerminalDialog({
   conversationId,
   open,
   onClose,
+  setConversationAccessMode,
 }: {
   conversationId: string;
   open: boolean;
   onClose: () => void;
+  setConversationAccessMode: (conversationId: string, mode: "secure" | "open") => Promise<{ ok: boolean }>;
 }) {
+  const { addNotification } = useNotifications();
   const [loading, setLoading] = useState(false);
   const [projectType, setProjectType] = useState("unknown");
   const [commands, setCommands] = useState<CommandOption[]>([]);
@@ -58,6 +62,8 @@ export function ProjectTerminalDialog({
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [switchingToOpenMode, setSwitchingToOpenMode] = useState(false);
+  const [isAccessDenied, setIsAccessDenied] = useState(false);
   const backdropRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -166,6 +172,9 @@ export function ProjectTerminalDialog({
       );
       if (!result.ok) {
         setStartError(result.message ?? `Unable to start command (${result.reason}).`);
+        if (result.reason === "access_denied") {
+          setIsAccessDenied(true);
+        }
         return;
       }
       const snapshot = await workspaceIpc.readProjectCommandTerminal(result.runId);
@@ -216,6 +225,23 @@ export function ProjectTerminalDialog({
             },
       ),
     );
+  };
+
+  const handleSwitchToOpenMode = async () => {
+    setSwitchingToOpenMode(true);
+    try {
+      const result = await setConversationAccessMode(conversationId, "open");
+      if (!result.ok) {
+        addNotification("Failed to switch to open mode.", "error");
+        return;
+      }
+      setIsAccessDenied(false);
+      setStartError(null);
+      // Retry the command after switching to open mode
+      void startRun();
+    } finally {
+      setSwitchingToOpenMode(false);
+    }
   };
 
   const closeTab = async (runId: string) => {
@@ -307,7 +333,24 @@ export function ProjectTerminalDialog({
             : selectedCommandId.startsWith("custom:") || selectedCommandId === "custom:new"
               ? "Custom project command"
               : commands.find((item) => item.id === selectedCommandId)?.source ?? ""}
-          {startError ? <div className="project-terminal-start-error">{startError}</div> : null}
+          {startError ? (
+            <div className="project-terminal-start-error">
+              <div>{startError}</div>
+              {isAccessDenied ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSwitchToOpenMode}
+                  disabled={switchingToOpenMode}
+                  className="mt-2"
+                >
+                  <Unlock className="h-4 w-4" />
+                  {switchingToOpenMode ? "Switching..." : "Switch to open mode"}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="project-terminal-tabs" role="tablist" aria-label="Project terminal tabs">

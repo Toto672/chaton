@@ -430,6 +430,7 @@ export function Topbar() {
     pushWorktreeBranch,
     enableConversationWorktree,
     disableConversationWorktree,
+    setConversationAccessMode,
   } = useWorkspace();
   const [isWorktreeDialogOpen, setIsWorktreeDialogOpen] = useState(false);
   const [isProjectTerminalOpen, setIsProjectTerminalOpen] = useState(false);
@@ -852,6 +853,7 @@ export function Topbar() {
           conversationId={selectedConversation.id}
           open={isProjectTerminalOpen}
           onClose={() => setIsProjectTerminalOpen(false)}
+          setConversationAccessMode={setConversationAccessMode}
         />
       ) : null}
 
