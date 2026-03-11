@@ -1,38 +1,327 @@
-import { FolderGit2, X } from 'lucide-react'
+import { Check, ChevronRight, FolderGit2, FolderOpen, FolderPlus, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
 
 import { useWorkspace } from '@/features/workspace/store'
-import type { Project } from '@/features/workspace/types'
+import type { Project, ProjectSubFolder } from '@/features/workspace/types'
+import type { ResolvedSubFolder } from '@/components/sidebar/useProjectFolder'
+
+// ── Types ──────────────────────────────────────────────────────────
 
 type ProjectFolderProps = {
-  projects: Project[]
+  autoFoldedProjects: Project[]
+  subFolders: ResolvedSubFolder[]
   extensions?: Array<{ id: string; icon?: string; iconUrl?: string }>
 }
 
-export const ProjectFolder = memo(function ProjectFolder({ projects }: ProjectFolderProps) {
+// ── Helpers ────────────────────────────────────────────────────────
+
+function generateId(): string {
+  return `sf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+// ── SubFolderRow: a single named subfolder inside the popover ─────
+
+function SubFolderRow({
+  folder,
+  onOpenProject,
+  onRename,
+  onDelete,
+}: {
+  folder: ResolvedSubFolder
+  onOpenProject: (projectId: string) => void
+  onRename: (folderId: string, name: string) => void
+  onDelete: (folderId: string) => void
+}) {
   const { t } = useTranslation()
-  const { createConversationForProject } = useWorkspace()
+  const [expanded, setExpanded] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState(folder.name)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const deleteTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }
+  }, [editing])
+
+  useEffect(() => {
+    return () => {
+      if (deleteTimerRef.current !== null) window.clearTimeout(deleteTimerRef.current)
+    }
+  }, [])
+
+  const commitRename = () => {
+    const trimmed = editValue.trim()
+    if (trimmed && trimmed !== folder.name) {
+      onRename(folder.id, trimmed)
+    } else {
+      setEditValue(folder.name)
+    }
+    setEditing(false)
+  }
+
+  const handleDeleteClick = () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      if (deleteTimerRef.current !== null) window.clearTimeout(deleteTimerRef.current)
+      deleteTimerRef.current = window.setTimeout(() => {
+        setConfirmDelete(false)
+        deleteTimerRef.current = null
+      }, 2000)
+      return
+    }
+    if (deleteTimerRef.current !== null) {
+      window.clearTimeout(deleteTimerRef.current)
+      deleteTimerRef.current = null
+    }
+    setConfirmDelete(false)
+    onDelete(folder.id)
+  }
+
+  return (
+    <div className="pf-subfolder">
+      <div className="pf-subfolder-header">
+        <motion.button
+          type="button"
+          className="pf-subfolder-toggle"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          whileTap={{ scale: 0.97 }}
+        >
+          <motion.span
+            className="pf-subfolder-chevron"
+            animate={{ rotate: expanded ? 90 : 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <ChevronRight className="h-3 w-3" />
+          </motion.span>
+          <FolderOpen className="h-3.5 w-3.5 pf-subfolder-icon" />
+          {editing ? (
+            <input
+              ref={inputRef}
+              className="pf-subfolder-name-input"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename()
+                if (e.key === 'Escape') {
+                  setEditValue(folder.name)
+                  setEditing(false)
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="pf-subfolder-name truncate">{folder.name}</span>
+          )}
+          <span className="pf-subfolder-count">{folder.projects.length}</span>
+        </motion.button>
+        <div className="pf-subfolder-actions">
+          <button
+            type="button"
+            className="pf-action-btn"
+            onClick={(e) => {
+              e.stopPropagation()
+              setEditing(true)
+              setEditValue(folder.name)
+            }}
+            aria-label={t('Renommer')}
+            title={t('Renommer')}
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            className={`pf-action-btn ${confirmDelete ? 'pf-action-btn-danger' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDeleteClick()
+            }}
+            aria-label={confirmDelete ? t('Confirmer la suppression') : t('Supprimer le dossier')}
+            title={confirmDelete ? t('Cliquer pour confirmer') : t('Supprimer le dossier')}
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            className="pf-subfolder-list"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {folder.projects.length === 0 ? (
+              <div className="pf-empty">{t('Aucun projet')}</div>
+            ) : (
+              folder.projects.map((project, i) => (
+                <motion.button
+                  key={project.id}
+                  type="button"
+                  className="pf-project-item"
+                  onClick={() => onOpenProject(project.id)}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.025, duration: 0.15, ease: 'easeOut' }}
+                  whileHover={{ x: 2 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <FolderGit2 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="pf-project-name truncate">{project.name}</span>
+                </motion.button>
+              ))
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ── CreateSubFolderInline: inline form to create a new subfolder ──
+
+function CreateSubFolderInline({
+  autoFoldedProjects,
+  onCreate,
+  onCancel,
+}: {
+  autoFoldedProjects: Project[]
+  onCreate: (name: string, projectIds: string[]) => void
+  onCancel: () => void
+}) {
+  const { t } = useTranslation()
+  const [name, setName] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  const toggleProject = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleSubmit = () => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    onCreate(trimmed, Array.from(selectedIds))
+  }
+
+  return (
+    <motion.div
+      className="pf-create-form"
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div className="pf-create-header">
+        <FolderPlus className="h-3.5 w-3.5 pf-create-icon" />
+        <span className="pf-create-title">{t('Nouveau dossier')}</span>
+      </div>
+      <input
+        ref={inputRef}
+        className="pf-create-input"
+        placeholder={t('Nom du dossier')}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleSubmit()
+          if (e.key === 'Escape') onCancel()
+        }}
+      />
+      {autoFoldedProjects.length > 0 && (
+        <div className="pf-create-project-picker">
+          <span className="pf-create-picker-label">{t('Ajouter des projets')}</span>
+          <div className="pf-create-picker-list">
+            {autoFoldedProjects.map((project) => {
+              const selected = selectedIds.has(project.id)
+              return (
+                <button
+                  key={project.id}
+                  type="button"
+                  className={`pf-create-picker-item ${selected ? 'pf-create-picker-item-selected' : ''}`}
+                  onClick={() => toggleProject(project.id)}
+                >
+                  <span className={`pf-create-picker-check ${selected ? 'pf-create-picker-check-on' : ''}`}>
+                    {selected && <Check className="h-2.5 w-2.5" />}
+                  </span>
+                  <FolderGit2 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{project.name}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      <div className="pf-create-actions">
+        <button type="button" className="pf-btn-secondary" onClick={onCancel}>
+          {t('Annuler')}
+        </button>
+        <button
+          type="button"
+          className="pf-btn-primary"
+          disabled={!name.trim()}
+          onClick={handleSubmit}
+        >
+          {t('Creer')}
+        </button>
+      </div>
+    </motion.div>
+  )
+}
+
+// ── Main ProjectFolder component ──────────────────────────────────
+
+export const ProjectFolder = memo(function ProjectFolder({
+  autoFoldedProjects,
+  subFolders,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  extensions: _extensions,
+}: ProjectFolderProps) {
+  const { t } = useTranslation()
+  const { state, createConversationForProject, updateSettings } = useWorkspace()
   const [isOpen, setIsOpen] = useState(false)
-  const folderRef = useRef<HTMLDivElement>(null)
+  const [isCreating, setIsCreating] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
+
+  // All projects in the folder section (auto-folded + subfolder contents)
+  const allFoldedCount = autoFoldedProjects.length + subFolders.reduce((n, sf) => n + sf.projects.length, 0)
 
   // Close on click outside
   useEffect(() => {
     if (!isOpen) return
     function handleClickOutside(event: MouseEvent) {
       if (
-        folderRef.current &&
-        !folderRef.current.contains(event.target as Node) &&
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node) &&
         popoverRef.current &&
         !popoverRef.current.contains(event.target as Node)
       ) {
         setIsOpen(false)
+        setIsCreating(false)
       }
     }
     function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') setIsOpen(false)
+      if (event.key === 'Escape') {
+        if (isCreating) setIsCreating(false)
+        else setIsOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     document.addEventListener('keydown', handleEscape)
@@ -40,34 +329,84 @@ export const ProjectFolder = memo(function ProjectFolder({ projects }: ProjectFo
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('keydown', handleEscape)
     }
-  }, [isOpen])
+  }, [isOpen, isCreating])
 
-  const handleProjectClick = useCallback(
-    async (projectId: string) => {
+  // ── Settings mutations ──
+
+  const persistSubFolders = useCallback(
+    (nextDefs: ProjectSubFolder[]) => {
+      void updateSettings({
+        ...state.settings,
+        projectSubFolders: nextDefs,
+      })
+    },
+    [state.settings, updateSettings],
+  )
+
+  const handleCreateSubFolder = useCallback(
+    (name: string, projectIds: string[]) => {
+      const newFolder: ProjectSubFolder = {
+        id: generateId(),
+        name,
+        projectIds,
+      }
+      persistSubFolders([...(state.settings.projectSubFolders ?? []), newFolder])
+      setIsCreating(false)
+    },
+    [state.settings.projectSubFolders, persistSubFolders],
+  )
+
+  const handleRenameSubFolder = useCallback(
+    (folderId: string, newName: string) => {
+      const updated = (state.settings.projectSubFolders ?? []).map((sf) =>
+        sf.id === folderId ? { ...sf, name: newName } : sf,
+      )
+      persistSubFolders(updated)
+    },
+    [state.settings.projectSubFolders, persistSubFolders],
+  )
+
+  const handleDeleteSubFolder = useCallback(
+    (folderId: string) => {
+      const updated = (state.settings.projectSubFolders ?? []).filter((sf) => sf.id !== folderId)
+      persistSubFolders(updated)
+    },
+    [state.settings.projectSubFolders, persistSubFolders],
+  )
+
+  const handleOpenProject = useCallback(
+    (projectId: string) => {
       setIsOpen(false)
-      await createConversationForProject(projectId)
+      setIsCreating(false)
+      void createConversationForProject(projectId)
     },
     [createConversationForProject],
   )
 
-  if (projects.length === 0) return null
+  if (allFoldedCount === 0 && subFolders.length === 0) return null
 
-  // Show up to 4 mini icons in the row
-  const previewCount = Math.min(projects.length, 4)
-  const extraCount = projects.length - previewCount
+  // Show up to 4 mini icons in the row preview
+  const previewProjects = [
+    ...subFolders.flatMap((sf) => sf.projects),
+    ...autoFoldedProjects,
+  ].slice(0, 4)
+  const extraCount = Math.max(0, allFoldedCount - previewProjects.length)
 
   return (
-    <div className="project-folder-container" ref={folderRef}>
+    <div className="project-folder-container" ref={containerRef}>
       <motion.button
         type="button"
         className="project-folder-row"
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => {
+          setIsOpen((prev) => !prev)
+          if (isOpen) setIsCreating(false)
+        }}
         aria-expanded={isOpen}
-        aria-label={t('{{count}} projets groupes', { count: projects.length })}
+        aria-label={t('{{count}} projets groupes', { count: allFoldedCount })}
         whileTap={{ scale: 0.98 }}
       >
         <span className="project-folder-icons">
-          {projects.slice(0, previewCount).map((project, i) => (
+          {previewProjects.map((project, i) => (
             <motion.span
               key={project.id}
               className="project-folder-icon-slot"
@@ -83,7 +422,7 @@ export const ProjectFolder = memo(function ProjectFolder({ projects }: ProjectFo
           )}
         </span>
         <span className="project-folder-label">
-          {t('{{count}} projets', { count: projects.length })}
+          {t('{{count}} projets', { count: allFoldedCount })}
         </span>
       </motion.button>
 
@@ -97,28 +436,71 @@ export const ProjectFolder = memo(function ProjectFolder({ projects }: ProjectFo
             exit={{ opacity: 0, y: -8, scale: 0.95 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
+            {/* Header */}
             <div className="project-folder-popover-header">
               <span className="project-folder-popover-title">
                 {t('Projets groupes')}
               </span>
-              <button
-                type="button"
-                className="project-folder-popover-close"
-                onClick={() => setIsOpen(false)}
-                aria-label={t('Fermer')}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              <div className="pf-header-actions">
+                <button
+                  type="button"
+                  className="pf-header-action-btn"
+                  onClick={() => setIsCreating((v) => !v)}
+                  aria-label={t('Nouveau dossier')}
+                  title={t('Nouveau dossier')}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  className="project-folder-popover-close"
+                  onClick={() => {
+                    setIsOpen(false)
+                    setIsCreating(false)
+                  }}
+                  aria-label={t('Fermer')}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
+
+            {/* Content */}
             <div className="project-folder-popover-list">
-              {projects.map((project, i) => (
+              {/* Create form */}
+              <AnimatePresence>
+                {isCreating && (
+                  <CreateSubFolderInline
+                    autoFoldedProjects={autoFoldedProjects}
+                    onCreate={handleCreateSubFolder}
+                    onCancel={() => setIsCreating(false)}
+                  />
+                )}
+              </AnimatePresence>
+
+              {/* User-created subfolders */}
+              {subFolders.map((folder) => (
+                <SubFolderRow
+                  key={folder.id}
+                  folder={folder}
+                  onOpenProject={handleOpenProject}
+                  onRename={handleRenameSubFolder}
+                  onDelete={handleDeleteSubFolder}
+                />
+              ))}
+
+              {/* Divider between subfolders and loose auto-folded projects */}
+              {subFolders.length > 0 && autoFoldedProjects.length > 0 && (
+                <div className="pf-divider" />
+              )}
+
+              {/* Auto-folded projects (not in any subfolder) */}
+              {autoFoldedProjects.map((project, i) => (
                 <motion.button
                   key={project.id}
                   type="button"
-                  className="project-folder-popover-item"
-                  onClick={() => {
-                    void handleProjectClick(project.id)
-                  }}
+                  className="pf-project-item"
+                  onClick={() => handleOpenProject(project.id)}
                   initial={{ opacity: 0, x: -12 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{
@@ -141,11 +523,4 @@ export const ProjectFolder = memo(function ProjectFolder({ projects }: ProjectFo
       </AnimatePresence>
     </div>
   )
-}, (prevProps, nextProps) => {
-  if (prevProps.projects.length !== nextProps.projects.length) return false
-  for (let i = 0; i < prevProps.projects.length; i++) {
-    if (prevProps.projects[i].id !== nextProps.projects[i].id) return false
-    if (prevProps.projects[i].name !== nextProps.projects[i].name) return false
-  }
-  return true
 })

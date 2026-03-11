@@ -363,6 +363,34 @@ contextBridge.exposeInMainWorld("chaton", {
     ipcRenderer.invoke("settings:getLanguagePreference"),
   updateLanguagePreference: (language: string) =>
     ipcRenderer.invoke("settings:updateLanguagePreference", language),
+  // Memory model preference
+  getMemoryModelPreference: () =>
+    ipcRenderer.invoke("memory:getModelPreference") as Promise<{
+      ok: boolean;
+      modelKey: string | null;
+    }>,
+  setMemoryModelPreference: (modelKey: string | null) =>
+    ipcRenderer.invoke("memory:setModelPreference", modelKey),
+  onMemorySaving: (
+    listener: (payload: {
+      conversationId: string;
+      status: "started" | "completed" | "skipped" | "error";
+      memoryId?: string | null;
+    }) => void,
+  ) => {
+    const wrapped = (_event: unknown, payload: unknown) =>
+      listener(
+        payload as {
+          conversationId: string;
+          status: "started" | "completed" | "skipped" | "error";
+          memoryId?: string | null;
+        },
+      );
+    ipcRenderer.on("memory:saving", wrapped);
+    return () => {
+      ipcRenderer.removeListener("memory:saving", wrapped);
+    };
+  },
   detectVscode: () => ipcRenderer.invoke("vscode:detect"),
   detectExternalCommand: (command: string) =>
     ipcRenderer.invoke("app:detectExternalCommand", command),

@@ -5,6 +5,13 @@ import type {
   RpcResponse,
 } from "../pi-sdk-runtime.js";
 import {
+  summarizeAndStoreConversation,
+  consolidateMemory,
+  buildMemoryContextMessage,
+  getMemoryModelPreference,
+  setMemoryModelPreference,
+} from "../extensions/runtime/memory-lifecycle.js";
+import {
   cancelChatonsExtensionInstall,
   checkForExtensionUpdates,
   checkStoredNpmToken,
@@ -283,6 +290,10 @@ type RegisterWorkspaceHandlersDeps = {
 };
 
 let extensionQueueWorker: NodeJS.Timeout | null = null;
+let memoryConsolidationWorker: NodeJS.Timeout | null = null;
+
+// Track which conversations have already had memory context injected
+const memoryInjectedConversations = new Set<string>();
 
 function buildHostTerminalEnv(cwd?: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
@@ -622,6 +633,19 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
     runExtensionsQueueWorkerCycle();
   }, 1500);
 
+  // Memory consolidation runs every 30 minutes
+  if (memoryConsolidationWorker) {
+    clearInterval(memoryConsolidationWorker);
+  }
+  const CONSOLIDATION_INTERVAL_MS = 30 * 60 * 1000;
+  memoryConsolidationWorker = setInterval(() => {
+    void consolidateMemory(
+      deps.piRuntimeManager as unknown as Parameters<typeof consolidateMemory>[0],
+    ).catch((err) =>
+      console.warn("[Memory] Consolidation cycle failed:", err),
+    );
+  }, CONSOLIDATION_INTERVAL_MS);
+
   deps.piRuntimeManager.subscribe((event: PiRendererEvent) => {
     if (event.event.type === "agent_start") {
       emitHostEvent("conversation.agent.started", {
@@ -638,6 +662,47 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
           deps.cacheMessagesFromSnapshot(event.conversationId, snapshot),
         )
         .catch(() => undefined);
+
+      // Auto-summarize conversation to memory (fire-and-forget)
+      // Skip ephemeral/hidden conversations (automations, memory tasks, channels)
+      const convForMemory = findConversationById(getDb(), event.conversationId);
+      const isEphemeral =
+        !convForMemory ||
+        convForMemory.hidden_from_sidebar === 1 ||
+        event.conversationId.startsWith("automation-") ||
+        event.conversationId.startsWith("memory-") ||
+        event.conversationId.startsWith("__channel_subagent__");
+      if (!isEphemeral) {
+        // Notify renderer that memory save is starting
+        for (const win of BrowserWindow.getAllWindows()) {
+          win.webContents.send("memory:saving", {
+            conversationId: event.conversationId,
+            status: "started",
+          });
+        }
+        void summarizeAndStoreConversation(
+          event.conversationId,
+          deps.piRuntimeManager as unknown as Parameters<typeof summarizeAndStoreConversation>[1],
+        )
+          .then((memoryId) => {
+            for (const win of BrowserWindow.getAllWindows()) {
+              win.webContents.send("memory:saving", {
+                conversationId: event.conversationId,
+                status: memoryId ? "completed" : "skipped",
+                memoryId,
+              });
+            }
+          })
+          .catch((err) => {
+            console.warn("[Memory] Auto-summarize failed:", err);
+            for (const win of BrowserWindow.getAllWindows()) {
+              win.webContents.send("memory:saving", {
+                conversationId: event.conversationId,
+                status: "error",
+              });
+            }
+          });
+      }
     }
     // Emit turn_end with usage data for token tracking extensions
     if (event.event.type === "turn_end") {
@@ -2110,7 +2175,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
   );
   ipcMain.handle(
     "pi:sendCommand",
-    (
+    async (
       _event,
       conversationId: string,
       command: RpcCommand,
@@ -2125,6 +2190,30 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
           message: command.message,
         });
       }
+
+      // Inject memory context as a hidden steer before the first prompt
+      if (command.type === "prompt") {
+        const alreadyInjected = memoryInjectedConversations.has(conversationId);
+        if (!alreadyInjected) {
+          memoryInjectedConversations.add(conversationId);
+          try {
+            const memoryContext = buildMemoryContextMessage(
+              conversationId,
+              command.message,
+            );
+            if (memoryContext) {
+              // Send memory context as a steer (hidden from user)
+              await deps.piRuntimeManager.sendCommand(conversationId, {
+                type: "steer",
+                message: memoryContext,
+              });
+            }
+          } catch (err) {
+            console.warn("[Memory] Failed to inject memory context:", err);
+          }
+        }
+      }
+
       return deps.piRuntimeManager.sendCommand(conversationId, command);
     },
   );
@@ -2144,6 +2233,21 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
     "settings:updateLanguagePreference",
     (_event, language: string) => {
       saveLanguagePreference(getDb(), language);
+    },
+  );
+
+  // Memory model preference
+  ipcMain.handle("memory:getModelPreference", () => ({
+    ok: true as const,
+    modelKey: getMemoryModelPreference(),
+  }));
+  ipcMain.handle(
+    "memory:setModelPreference",
+    (_event, modelKey: string | null) => {
+      setMemoryModelPreference(
+        typeof modelKey === "string" && modelKey.trim() ? modelKey.trim() : null,
+      );
+      return { ok: true as const };
     },
   );
 
@@ -2225,6 +2329,10 @@ export async function stopWorkspaceHandlers(piRuntimeManager: {
   if (extensionQueueWorker) {
     clearInterval(extensionQueueWorker);
     extensionQueueWorker = null;
+  }
+  if (memoryConsolidationWorker) {
+    clearInterval(memoryConsolidationWorker);
+    memoryConsolidationWorker = null;
   }
   // Terminate all sandboxed extension workers
   shutdownExtensionWorkers();

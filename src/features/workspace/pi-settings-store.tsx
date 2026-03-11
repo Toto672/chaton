@@ -9,8 +9,7 @@ import type {
   PiModelsJson,
   PiSettingsJson,
 } from './types'
-
-type SettingsSection = 'general' | 'behavior' | 'sidebar' | 'audio' | 'language' | 'providersModels' | 'sessions' | 'commands' | 'diagnostics'
+import type { SettingsSection } from '@/components/sidebar/settings/sections/constants'
 
 type PiSettingsContextValue = {
   activeSection: SettingsSection

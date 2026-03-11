@@ -6,6 +6,7 @@ import { DiagnosticsSection } from "@/components/sidebar/settings/sections/Diagn
 import { BehaviorSection } from "@/components/sidebar/settings/sections/BehaviorSection";
 import { GeneralSection } from "@/components/sidebar/settings/sections/GeneralSection";
 import { LanguageSection } from "@/components/sidebar/settings/sections/LanguageSection";
+import { MemorySection } from "@/components/sidebar/settings/sections/MemorySection";
 import { ProvidersModelsSection } from "@/components/sidebar/settings/sections/ProvidersModelsSection";
 import { SessionsSection } from "@/components/sidebar/settings/sections/SessionsSection";
 import { SidebarSection } from "@/components/sidebar/settings/sections/SidebarSection";
@@ -120,6 +121,9 @@ export function PiSettingsMainPanel() {
               await refresh();
             }}
           />
+        ) : null}
+        {activeSection === "memory" ? (
+          <MemorySection />
         ) : null}
         {activeSection === "sessions" ? (
           <SessionsSection

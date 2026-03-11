@@ -779,4 +779,13 @@
       opacity: 1;
     }
   }
+
+  /* Memory saving badge */
+  .memory-saving-badge {
+    @apply pointer-events-none fixed bottom-28 left-1/2 z-50 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-[#1f2430]/90 px-3 py-1.5 text-[11px] font-medium text-white/90 shadow-lg backdrop-blur-sm;
+  }
+
+  .memory-saving-badge--done {
+    @apply bg-emerald-700/90 text-white;
+  }
 }

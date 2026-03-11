@@ -25,6 +25,8 @@ type ThreadModelControlsProps = {
   showScopeToggle?: boolean;
   showThinking?: boolean;
   showAccessMode?: boolean;
+  /** "up" opens above the trigger (default, for composer), "down" opens below */
+  dropdownDirection?: "up" | "down";
   onOpenModelsMenu?: () => void;
 };
 
@@ -44,6 +46,7 @@ export function ThreadModelControls({
   showScopeToggle = true,
   showThinking = true,
   showAccessMode = true,
+  dropdownDirection = "up",
   onOpenModelsMenu,
 }: ThreadModelControlsProps) {
   const [modelsMenuOpen, setModelsMenuOpen] = useState(false);
@@ -161,7 +164,7 @@ export function ThreadModelControls({
 
         {modelsMenuOpen ? (
           <div
-            className="models-menu"
+            className={`models-menu ${dropdownDirection === "down" ? "models-menu-down" : ""}`}
             role="menu"
             aria-label="Sélecteur de modèle"
           >

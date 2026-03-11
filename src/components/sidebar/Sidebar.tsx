@@ -52,11 +52,12 @@ export function Sidebar({ width }: { width: number }) {
     [extensions]
   )
 
-  // Split projects into visible and folded groups
-  const { visible: visibleProjects, folded: foldedProjects } = useProjectFolder(
+  // Split projects into visible, auto-folded, and user subfolders
+  const { visible: visibleProjects, autoFolded: autoFoldedProjects, subFolders } = useProjectFolder(
     state.projects,
     state.conversations,
     state.selectedProjectId,
+    state.settings.projectSubFolders ?? [],
   )
 
   if (state.sidebarMode === 'settings') {
@@ -162,8 +163,12 @@ export function Sidebar({ width }: { width: number }) {
                   ))}
                 </section>
                 {visibleProjects.map((project) => <ProjectGroup key={project.id} project={project} extensions={extensionsData} />)}
-                {foldedProjects.length > 0 && (
-                  <ProjectFolder projects={foldedProjects} extensions={extensionsData} />
+                {(autoFoldedProjects.length > 0 || subFolders.length > 0) && (
+                  <ProjectFolder
+                    autoFoldedProjects={autoFoldedProjects}
+                    subFolders={subFolders}
+                    extensions={extensionsData}
+                  />
                 )}
               </>
             )}

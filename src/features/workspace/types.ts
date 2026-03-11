@@ -46,6 +46,13 @@ export type CreateConversationResult =
 export type DeleteConversationResult = { ok: true } | { ok: false; reason: 'conversation_not_found' | 'has_uncommitted_changes' | 'user_cancelled' | 'unknown' }
 export type DeleteProjectResult = { ok: true } | { ok: false; reason: 'project_not_found' | 'unknown' }
 
+/** A named sub-folder that holds a set of project IDs. */
+export type ProjectSubFolder = {
+  id: string
+  name: string
+  projectIds: string[]
+}
+
 export type SidebarSettings = {
   organizeBy: 'project' | 'chronological'
   sortBy: 'created' | 'updated'
@@ -65,6 +72,8 @@ export type SidebarSettings = {
   assistantName: string
   assistantUserName: string
   assistantChannelId: string | null
+  /** User-created sub-folders inside the auto-folded projects section. */
+  projectSubFolders: ProjectSubFolder[]
 }
 
 export type SidebarMode = 'default' | 'settings' | 'skills' | 'extensions' | 'channels' | 'extension-main-view'

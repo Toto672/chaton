@@ -9,6 +9,7 @@ import { PiSettingsMainPanel } from '@/components/shell/PiSettingsMainPanel'
 import { PiSkillsMainPanel } from '@/components/shell/PiSkillsMainPanel'
 import { QuickActionCards } from '@/components/shell/QuickActionCards'
 import { RequirementSheet } from '@/components/shell/RequirementSheet'
+import { MemorySavingBadge } from '@/components/shell/MemorySavingBadge'
 import { ConversationSidePanel } from '@/components/shell/ConversationSidePanel'
 import { useConversationSidePanel } from '@/hooks/use-conversation-side-panel'
 import { ChatMessageItem } from '@/components/shell/mainView/ChatMessageItem'
@@ -629,6 +630,8 @@ export function MainView() {
             {t('Aller en bas')}
           </button>
         ) : null}
+
+        <MemorySavingBadge conversationId={selectedConversation?.id ?? null} />
         </div>
         </div>
 

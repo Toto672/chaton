@@ -970,6 +970,19 @@ export const workspaceIpc = {
   stopTracing: (): Promise<
     { ok: true; filePath?: string; cancelled?: boolean } | { ok: false; message: string }
   > => getApi().stopTracing(),
+
+  // Memory model preference
+  getMemoryModelPreference: (): Promise<{ ok: boolean; modelKey: string | null }> =>
+    getApi().getMemoryModelPreference(),
+  setMemoryModelPreference: (modelKey: string | null): Promise<{ ok: boolean }> =>
+    getApi().setMemoryModelPreference(modelKey),
+  onMemorySaving: (
+    listener: (payload: {
+      conversationId: string;
+      status: "started" | "completed" | "skipped" | "error";
+      memoryId?: string | null;
+    }) => void,
+  ) => getApi().onMemorySaving(listener),
 };
 
 export type { ImportProjectResult, WorkspacePayload };

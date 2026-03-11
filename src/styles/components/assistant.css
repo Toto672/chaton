@@ -882,6 +882,32 @@
     background: #fef2f2;
   }
 
+  /* Memory settings */
+
+  .ad-memory-settings-btn {
+    @apply ml-auto flex h-7 w-7 items-center justify-center rounded-md transition-colors;
+    color: #9ca3af;
+  }
+
+  .ad-memory-settings-btn:hover {
+    color: #6b7280;
+    background: #f3f4f6;
+  }
+
+  .ad-memory-settings-panel {
+    @apply mx-1 mb-3 rounded-xl border p-3;
+    background: #f9fafb;
+    border-color: #e5e7eb;
+  }
+
+  .ad-memory-settings-label {
+    @apply text-xs font-semibold text-[#374151];
+  }
+
+  .ad-memory-settings-hint {
+    @apply mt-0.5 text-[11px] text-[#9ca3af];
+  }
+
   /* ─── Automations full view ─── */
 
   .ad-automation-full-list {
@@ -1158,6 +1184,28 @@
   .dark .ad-memory-delete:hover {
     color: #f87171;
     background: #3b1111;
+  }
+
+  .dark .ad-memory-settings-btn {
+    color: #5a6580;
+  }
+
+  .dark .ad-memory-settings-btn:hover {
+    color: #b0b5c0;
+    background: #1f2430;
+  }
+
+  .dark .ad-memory-settings-panel {
+    background: #151922;
+    border-color: #2a3040;
+  }
+
+  .dark .ad-memory-settings-label {
+    color: #e7e9ef;
+  }
+
+  .dark .ad-memory-settings-hint {
+    color: #5a6580;
   }
 
   /* Dark Automations */

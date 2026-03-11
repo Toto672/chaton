@@ -95,7 +95,7 @@
   }
 
   .project-action-button-confirm {
-    @apply bg-[#ffe9e3] text-[#b9412d] opacity-100;
+    @apply w-auto px-2 bg-[#ffe9e3] text-[#b9412d] opacity-100;
   }
 
   .project-action-button-confirm:hover {
@@ -103,7 +103,7 @@
   }
 
   .project-delete-confirm-text {
-    @apply ml-1 whitespace-nowrap text-xs font-medium;
+    @apply ml-1 max-w-[60px] truncate text-xs font-medium;
   }
 
   .sidebar-thread-list {
@@ -176,7 +176,7 @@
   }
 
   .thread-delete-button-confirm {
-    @apply bg-[#ffe9e3] text-[#b9412d] opacity-100;
+    @apply w-auto px-2 bg-[#ffe9e3] text-[#b9412d] opacity-100;
   }
 
   .thread-delete-button-confirm:hover {
@@ -189,7 +189,7 @@
   }
 
   .thread-delete-confirm-text {
-    @apply ml-1 whitespace-nowrap text-xs font-medium;
+    @apply ml-1 max-w-[60px] truncate text-xs font-medium;
   }
 
   .empty-thread-state {
@@ -205,6 +205,7 @@
   .project-folder-container {
     -webkit-app-region: no-drag;
     @apply relative rounded-lg;
+    z-index: 10;
   }
 
   .project-folder-row {
@@ -230,9 +231,11 @@
   }
 
   .project-folder-popover {
-    @apply absolute left-1 right-1 z-30 mt-1 rounded-xl border border-[#d8dce4] bg-white shadow-lg;
-    max-height: 320px;
+    @apply absolute left-1 right-1 z-50 rounded-xl border border-[#d8dce4] bg-white shadow-lg;
+    max-height: 420px;
     overflow: hidden;
+    bottom: 100%;
+    margin-bottom: 8px;
   }
 
   .project-folder-popover-header {
@@ -243,22 +246,169 @@
     @apply text-xs font-semibold uppercase tracking-[0.06em] text-[#8d8e95];
   }
 
+  .pf-header-actions {
+    @apply flex items-center gap-0.5;
+  }
+
+  .pf-header-action-btn {
+    @apply inline-flex h-6 w-6 items-center justify-center rounded-md text-[#8d8e95] transition-colors hover:bg-[#eeeeef] hover:text-[#4f5060];
+  }
+
   .project-folder-popover-close {
     @apply inline-flex h-6 w-6 items-center justify-center rounded-md text-[#8d8e95] transition-colors hover:bg-[#eeeeef] hover:text-[#4f5060];
   }
 
   .project-folder-popover-list {
-    @apply overflow-y-auto p-1;
-    max-height: 280px;
-  }
-
-  .project-folder-popover-item {
-    @apply flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[#303139] transition-colors hover:bg-[#f0f0f2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+    @apply overflow-y-auto p-1.5;
+    max-height: 370px;
   }
 
   .project-folder-popover-name {
     font-size: var(--ui-font-body);
     @apply min-w-0 flex-1;
+  }
+
+  /* ── Shared project item (used in loose list + subfolder contents) ── */
+
+  .pf-project-item {
+    @apply flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[#303139] transition-colors hover:bg-[#f0f0f2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+    font-size: var(--ui-font-body);
+  }
+
+  .pf-project-name {
+    @apply min-w-0 flex-1;
+  }
+
+  /* ── Subfolder row ── */
+
+  .pf-subfolder {
+    @apply rounded-lg;
+  }
+
+  .pf-subfolder-header {
+    @apply flex items-center gap-1;
+  }
+
+  .pf-subfolder-toggle {
+    @apply flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[#f0f0f2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+  }
+
+  .pf-subfolder-chevron {
+    @apply flex h-4 w-4 shrink-0 items-center justify-center text-[#a0a1a8];
+  }
+
+  .pf-subfolder-icon {
+    @apply shrink-0 text-[#7b7c85];
+  }
+
+  .pf-subfolder-name {
+    font-size: var(--ui-font-body);
+    @apply min-w-0 flex-1 font-medium text-[#303139];
+  }
+
+  .pf-subfolder-name-input {
+    font-size: var(--ui-font-body);
+    @apply min-w-0 flex-1 rounded-md border border-[#d0d1d6] bg-white px-1.5 py-0.5 font-medium text-[#303139] outline-none focus:border-[#93a3c0] focus:ring-1 focus:ring-[#c5cfe0];
+  }
+
+  .pf-subfolder-count {
+    @apply ml-auto flex min-w-[18px] items-center justify-center rounded-full bg-[#e8e9ec] px-1 text-[10px] font-semibold text-[#8d8e95];
+    height: 18px;
+  }
+
+  .pf-subfolder-actions {
+    @apply flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity;
+  }
+
+  .pf-subfolder-header:hover .pf-subfolder-actions,
+  .pf-subfolder-header:focus-within .pf-subfolder-actions {
+    @apply opacity-100;
+  }
+
+  .pf-action-btn {
+    @apply inline-flex items-center justify-center rounded-md text-[#a0a1a8] transition-colors hover:bg-[#e8e9ec] hover:text-[#5a5b63];
+    height: 22px;
+    width: 22px;
+  }
+
+  .pf-action-btn-danger {
+    @apply bg-[#ffe9e3] text-[#b9412d] hover:bg-[#ffddd4] hover:text-[#a03425];
+  }
+
+  .pf-subfolder-list {
+    @apply overflow-hidden pl-5;
+  }
+
+  .pf-empty {
+    @apply px-2.5 py-1.5 text-xs text-[#a0a1a8];
+  }
+
+  /* ── Divider ── */
+
+  .pf-divider {
+    @apply my-1.5 mx-2 h-px bg-[#e8e9ec];
+  }
+
+  /* ── Create subfolder form ── */
+
+  .pf-create-form {
+    @apply mb-1.5 overflow-hidden rounded-lg border border-[#d8dce4] bg-[#f8f8fa] p-2.5;
+  }
+
+  .pf-create-header {
+    @apply mb-2 flex items-center gap-1.5;
+  }
+
+  .pf-create-icon {
+    @apply text-[#7b7c85];
+  }
+
+  .pf-create-title {
+    @apply text-xs font-semibold text-[#5a5b63];
+  }
+
+  .pf-create-input {
+    @apply w-full rounded-lg border border-[#d0d1d6] bg-white px-2.5 py-1.5 text-sm text-[#303139] outline-none transition-colors placeholder:text-[#b0b1b8] focus:border-[#93a3c0] focus:ring-1 focus:ring-[#c5cfe0];
+  }
+
+  .pf-create-project-picker {
+    @apply mt-2;
+  }
+
+  .pf-create-picker-label {
+    @apply mb-1 block text-[10px] font-semibold uppercase tracking-[0.06em] text-[#a0a1a8];
+  }
+
+  .pf-create-picker-list {
+    @apply max-h-[120px] space-y-0.5 overflow-y-auto;
+  }
+
+  .pf-create-picker-item {
+    @apply flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs text-[#505158] transition-colors hover:bg-[#eeeeef];
+  }
+
+  .pf-create-picker-item-selected {
+    @apply bg-[#eef2fb] text-[#2c4a8a];
+  }
+
+  .pf-create-picker-check {
+    @apply flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border border-[#d0d1d6] bg-white transition-colors;
+  }
+
+  .pf-create-picker-check-on {
+    @apply border-[#4a7bde] bg-[#4a7bde] text-white;
+  }
+
+  .pf-create-actions {
+    @apply mt-2.5 flex items-center justify-end gap-1.5;
+  }
+
+  .pf-btn-secondary {
+    @apply rounded-lg border border-[#d0d1d6] bg-white px-2.5 py-1 text-xs font-medium text-[#5a5b63] transition-colors hover:bg-[#f0f0f2];
+  }
+
+  .pf-btn-primary {
+    @apply rounded-lg border border-[#3a6fd8] bg-[#4a7bde] px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-[#3a6fd8] disabled:opacity-40;
   }
 
   .sidebar-resize-handle {

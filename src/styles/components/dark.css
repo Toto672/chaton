@@ -149,12 +149,100 @@
     @apply text-[#7f8da8];
   }
 
+  .dark .pf-header-action-btn {
+    @apply text-[#7f8da8] hover:bg-[#162132] hover:text-[#ecf2ff];
+  }
+
   .dark .project-folder-popover-close {
     @apply text-[#7f8da8] hover:bg-[#162132] hover:text-[#ecf2ff];
   }
 
-  .dark .project-folder-popover-item {
+  .dark .pf-project-item {
     @apply text-[#d6deef] hover:bg-[#162132];
+  }
+
+  .dark .pf-subfolder-toggle {
+    @apply hover:bg-[#121722];
+  }
+
+  .dark .pf-subfolder-chevron {
+    @apply text-[#5a6680];
+  }
+
+  .dark .pf-subfolder-icon {
+    @apply text-[#7f8da8];
+  }
+
+  .dark .pf-subfolder-name {
+    @apply text-[#d6deef];
+  }
+
+  .dark .pf-subfolder-name-input {
+    @apply border-[#2a3548] bg-[#0f1520] text-[#e4eaf8] focus:border-[#3a5080] focus:ring-[#2a4070]/40;
+  }
+
+  .dark .pf-subfolder-count {
+    @apply bg-[#1e2a3d] text-[#7f8da8];
+  }
+
+  .dark .pf-action-btn {
+    @apply text-[#5a6680] hover:bg-[#1e2a3d] hover:text-[#c8d4ec];
+  }
+
+  .dark .pf-action-btn-danger {
+    @apply bg-[#3a1518] text-[#ff8f80] hover:bg-[#4a1c20] hover:text-[#ffb0a0];
+  }
+
+  .dark .pf-empty {
+    @apply text-[#5a6680];
+  }
+
+  .dark .pf-divider {
+    @apply bg-[#1e2634];
+  }
+
+  .dark .pf-create-form {
+    @apply border-[#273244] bg-[#111822];
+  }
+
+  .dark .pf-create-icon {
+    @apply text-[#7f8da8];
+  }
+
+  .dark .pf-create-title {
+    @apply text-[#c8d4ec];
+  }
+
+  .dark .pf-create-input {
+    @apply border-[#2a3548] bg-[#0a0e16] text-[#e4eaf8] placeholder:text-[#5a6680] focus:border-[#3a5080] focus:ring-[#2a4070]/40;
+  }
+
+  .dark .pf-create-picker-label {
+    @apply text-[#5a6680];
+  }
+
+  .dark .pf-create-picker-item {
+    @apply text-[#c8d4ec] hover:bg-[#162132];
+  }
+
+  .dark .pf-create-picker-item-selected {
+    @apply bg-[#1a2740] text-[#eef3ff];
+  }
+
+  .dark .pf-create-picker-check {
+    @apply border-[#2a3548] bg-[#0a0e16];
+  }
+
+  .dark .pf-create-picker-check-on {
+    @apply border-[#4a7bde] bg-[#4a7bde] text-white;
+  }
+
+  .dark .pf-btn-secondary {
+    @apply border-[#2a3548] bg-[#0f1520] text-[#c8d4ec] hover:bg-[#1a2336];
+  }
+
+  .dark .pf-btn-primary {
+    @apply border-[#3a6fd8] bg-[#4a7bde] text-white hover:bg-[#3a6fd8];
   }
 
   .dark .hero-title {
@@ -645,6 +733,12 @@
     @apply text-[#8e9cb7];
   }
 
+  /* Extension icons loaded as <img> tags don't inherit currentColor,
+     so we invert + adjust to approximate the sidebar icon color. */
+  .dark img.sidebar-nav-icon {
+    filter: invert(70%) sepia(10%) saturate(500%) hue-rotate(185deg) brightness(90%);
+  }
+
   .dark .settings-head-title {
     @apply text-[#e0e5f0];
   }
@@ -1087,7 +1181,7 @@
   }
 
   .dark .ep-btn-primary {
-    @apply bg-[#e7eefc] text-[#0f172a] hover:bg-white;
+    @apply bg-[#4a7bde] text-white hover:bg-[#3a6fd8];
   }
 
   .dark .ep-btn-ghost-sm {

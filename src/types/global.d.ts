@@ -1013,6 +1013,21 @@ declare global {
         | { ok: true; filePath?: string; cancelled?: boolean }
         | { ok: false; message: string }
       >;
+      // Memory model preference
+      getMemoryModelPreference: () => Promise<{
+        ok: boolean;
+        modelKey: string | null;
+      }>;
+      setMemoryModelPreference: (
+        modelKey: string | null,
+      ) => Promise<{ ok: boolean }>;
+      onMemorySaving: (
+        listener: (payload: {
+          conversationId: string;
+          status: "started" | "completed" | "skipped" | "error";
+          memoryId?: string | null;
+        }) => void,
+      ) => () => void;
     };
     pi: {
       getModels: () => Promise<PiModel[]>;

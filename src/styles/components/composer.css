@@ -373,6 +373,13 @@
     animation: fade-slide-in 160ms ease-out;
   }
 
+  .models-menu-down {
+    bottom: auto;
+    top: 100%;
+    margin-bottom: 0;
+    @apply mt-2;
+  }
+
   .models-menu-header {
     @apply mt-1 flex items-center justify-center;
   }
