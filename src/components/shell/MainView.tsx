@@ -519,8 +519,8 @@ export function MainView() {
               setIsAtBottom(atBottom)
             }}
           >
-          <section className="chat-section">
-          <div className="chat-timeline">
+            <section className="chat-section">
+            <div className="chat-timeline">
             <AnimatePresence>
               {shouldShowHeroSection ? (
                 <motion.section
