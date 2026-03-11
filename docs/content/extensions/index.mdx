@@ -422,6 +422,96 @@ Every topbar widget also receives a standard `chaton.extension.topbarContext` po
 - current project name and repo path when applicable
 - a normalized thread kind: `project`, `global`, or `none`
 
+### Small example: project status pill widget
+
+Below is a minimal widget that shows whether the current thread is attached to a project.
+
+**Manifest:**
+
+```json
+{
+  "id": "@yourname/project-pill",
+  "name": "Project Pill",
+  "version": "1.0.0",
+  "capabilities": ["ui.mainView"],
+  "ui": {
+    "topbarItems": [
+      {
+        "id": "project-pill.topbar",
+        "label": "Project status",
+        "context": "always",
+        "order": 60,
+        "widget": {
+          "viewId": "project-pill.widget",
+          "width": 96,
+          "minWidth": 96
+        }
+      }
+    ],
+    "mainViews": [
+      {
+        "viewId": "project-pill.widget",
+        "title": "Project Pill Widget",
+        "webviewUrl": "chaton-extension://@yourname/project-pill/widget.html"
+      }
+    ]
+  }
+}
+```
+
+**widget.html:**
+
+```html
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      body {
+        margin: 0;
+        font: 12px/1.2 system-ui, sans-serif;
+        background: transparent;
+      }
+      .pill {
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 96px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: rgba(96, 165, 250, 0.14);
+        color: #1d4ed8;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="pill" class="pill">No thread</div>
+    <script>
+      const pill = document.getElementById('pill')
+
+      window.addEventListener('message', (event) => {
+        const message = event.data
+        if (message?.type !== 'chaton.extension.topbarContext') return
+
+        const kind = message.payload?.thread?.kind || 'none'
+        const projectName = message.payload?.project?.name || null
+
+        if (kind === 'project' && projectName) {
+          pill.textContent = `Project: ${projectName}`
+        } else if (kind === 'global') {
+          pill.textContent = 'Global thread'
+        } else {
+          pill.textContent = 'No thread'
+        }
+      })
+    </script>
+  </body>
+</html>
+```
+
+This example is intentionally simple, but it shows the full pattern for a live topbar widget: declare `widget.viewId`, provide an HTML file, and react to `chaton.extension.topbarContext` updates.
+
 ### Main views
 
 Your view runs in a full-width, full-height iframe. It is not constrained to the centered conversation column -- your extension gets the full application content area.
