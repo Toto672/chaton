@@ -208,6 +208,13 @@ export type DbComposerDraft = {
   updated_at: string
 }
 
+export type DbComposerQueuedMessages = {
+  key: string
+  messages_json: string
+  created_at: string
+  updated_at: string
+}
+
 export function saveComposerDraft(db: Database.Database, key: string, content: string): void {
   const now = new Date().toISOString()
   if (content.length === 0) {
@@ -232,5 +239,32 @@ export function getComposerDrafts(db: Database.Database): DbComposerDraft[] {
 
 export function deleteComposerDraft(db: Database.Database, key: string): boolean {
   const result = db.prepare('DELETE FROM composer_drafts WHERE key = ?').run(key)
+  return result.changes > 0
+}
+
+export function saveComposerQueuedMessages(db: Database.Database, key: string, messages: string[]): void {
+  const now = new Date().toISOString()
+  if (messages.length === 0) {
+    db.prepare('DELETE FROM composer_queued_messages WHERE key = ?').run(key)
+  } else {
+    const messagesJson = JSON.stringify(messages)
+    db.prepare(
+      `INSERT INTO composer_queued_messages(key, messages_json, created_at, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET messages_json = ?, updated_at = ?`
+    ).run(key, messagesJson, now, now, messagesJson, now)
+  }
+}
+
+export function getComposerQueuedMessages(db: Database.Database, key: string): DbComposerQueuedMessages | undefined {
+  return db.prepare('SELECT * FROM composer_queued_messages WHERE key = ?').get(key) as DbComposerQueuedMessages | undefined
+}
+
+export function getAllComposerQueuedMessages(db: Database.Database): DbComposerQueuedMessages[] {
+  return db.prepare('SELECT * FROM composer_queued_messages ORDER BY updated_at DESC').all() as DbComposerQueuedMessages[]
+}
+
+export function deleteComposerQueuedMessages(db: Database.Database, key: string): boolean {
+  const result = db.prepare('DELETE FROM composer_queued_messages WHERE key = ?').run(key)
   return result.changes > 0
 }

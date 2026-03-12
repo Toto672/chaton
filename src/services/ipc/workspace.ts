@@ -973,6 +973,14 @@ export const workspaceIpc = {
     getApi().getAllDrafts(),
   deleteDraft: (key: string): Promise<{ ok: boolean; error?: string }> =>
     getApi().deleteDraft(key),
+  saveQueuedMessages: (key: string, messages: string[]): Promise<{ ok: boolean; error?: string }> =>
+    getApi().saveQueuedMessages(key, messages),
+  getQueuedMessages: (key: string): Promise<{ ok: boolean; messages: string[]; error?: string }> =>
+    getApi().getQueuedMessages(key),
+  getAllQueuedMessages: (): Promise<{ ok: boolean; queuedMessages: Record<string, string[]>; error?: string }> =>
+    getApi().getAllQueuedMessages(),
+  deleteQueuedMessages: (key: string): Promise<{ ok: boolean; error?: string }> =>
+    getApi().deleteQueuedMessages(key),
 
   // Performance tracing
   startTracing: (): Promise<{ ok: true } | { ok: false; message: string }> =>

@@ -2756,6 +2756,76 @@ export function registerSystemHandlers() {
     }
   });
 
+  ipcMain.handle(
+    "composer:saveQueuedMessages",
+    async (_event, key: string, messages: string[]) => {
+      try {
+        const { saveComposerQueuedMessages } =
+          await import("../db/repos/conversations.js");
+        saveComposerQueuedMessages(getDb(), key, messages);
+        return { ok: true };
+      } catch (error) {
+        console.error("Failed to save queued composer messages:", error);
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  ipcMain.handle("composer:getQueuedMessages", async (_event, key: string) => {
+    try {
+      const { getComposerQueuedMessages } =
+        await import("../db/repos/conversations.js");
+      const queued = getComposerQueuedMessages(getDb(), key);
+      return {
+        ok: true,
+        messages: queued ? JSON.parse(queued.messages_json) : [],
+      };
+    } catch (error) {
+      console.error("Failed to get queued composer messages:", error);
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  });
+
+  ipcMain.handle("composer:getAllQueuedMessages", async () => {
+    try {
+      const { getAllComposerQueuedMessages } =
+        await import("../db/repos/conversations.js");
+      const queuedEntries = getAllComposerQueuedMessages(getDb());
+      const result: Record<string, string[]> = {};
+      for (const entry of queuedEntries) {
+        result[entry.key] = JSON.parse(entry.messages_json);
+      }
+      return { ok: true, queuedMessages: result };
+    } catch (error) {
+      console.error("Failed to get all queued composer messages:", error);
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  });
+
+  ipcMain.handle("composer:deleteQueuedMessages", async (_event, key: string) => {
+    try {
+      const { deleteComposerQueuedMessages } =
+        await import("../db/repos/conversations.js");
+      deleteComposerQueuedMessages(getDb(), key);
+      return { ok: true };
+    } catch (error) {
+      console.error("Failed to delete queued composer messages:", error);
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  });
+
   // Performance tracing (dev mode)
   let tracingActive = false;
 

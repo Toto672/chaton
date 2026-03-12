@@ -110,6 +110,7 @@ export function useComposerMessaging({
   const [envoiFileAttenteEnCoursByKey, setEnvoiFileAttenteEnCoursByKey] = useState<Record<string, boolean>>({});
   const [isSubmittingByKey, setIsSubmittingByKey] = useState<Record<string, boolean>>({});
   const draftsLoadedRef = useRef(false);
+  const queuedMessagesLoadedRef = useRef(false);
 
   // Load drafts from database on mount
   useEffect(() => {
@@ -128,6 +129,24 @@ export function useComposerMessaging({
     };
 
     void loadDrafts();
+  }, []);
+
+  useEffect(() => {
+    if (queuedMessagesLoadedRef.current) return;
+    queuedMessagesLoadedRef.current = true;
+
+    const loadQueuedMessages = async () => {
+      try {
+        const result = await workspaceIpc.getAllQueuedMessages();
+        if (result.ok && result.queuedMessages) {
+          setFileAttenteMessagesByKey(result.queuedMessages);
+        }
+      } catch (error) {
+        console.error("Failed to load queued composer messages:", error);
+      }
+    };
+
+    void loadQueuedMessages();
   }, []);
 
   const message = useMemo(() => draftsByKey[composerKey] ?? "", [composerKey, draftsByKey]);
@@ -188,7 +207,7 @@ export function useComposerMessaging({
   const draftSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
     const currentMessage = draftsByKey[composerKey] ?? "";
-    
+
     if (draftSaveTimerRef.current) {
       clearTimeout(draftSaveTimerRef.current);
     }
@@ -210,6 +229,29 @@ export function useComposerMessaging({
       }
     };
   }, [composerKey, draftsByKey]);
+
+  const queuedMessagesSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    const currentQueuedMessages = fileAttenteMessagesByKey[composerKey] ?? [];
+
+    if (queuedMessagesSaveTimerRef.current) {
+      clearTimeout(queuedMessagesSaveTimerRef.current);
+    }
+
+    queuedMessagesSaveTimerRef.current = setTimeout(() => {
+      if (currentQueuedMessages.length === 0) {
+        void workspaceIpc.deleteQueuedMessages(composerKey);
+      } else {
+        void workspaceIpc.saveQueuedMessages(composerKey, currentQueuedMessages);
+      }
+    }, 150);
+
+    return () => {
+      if (queuedMessagesSaveTimerRef.current) {
+        clearTimeout(queuedMessagesSaveTimerRef.current);
+      }
+    };
+  }, [composerKey, fileAttenteMessagesByKey]);
 
   const envoyerMessage = useCallback(
     async (messageATraiter: string, piecesJointes: PendingAttachment[] = []) => {

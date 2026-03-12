@@ -438,6 +438,14 @@ contextBridge.exposeInMainWorld("chaton", {
     ipcRenderer.invoke("composer:getAllDrafts"),
   deleteDraft: (key: string) =>
     ipcRenderer.invoke("composer:deleteDraft", key),
+  saveQueuedMessages: (key: string, messages: string[]) =>
+    ipcRenderer.invoke("composer:saveQueuedMessages", key, messages),
+  getQueuedMessages: (key: string) =>
+    ipcRenderer.invoke("composer:getQueuedMessages", key),
+  getAllQueuedMessages: () =>
+    ipcRenderer.invoke("composer:getAllQueuedMessages"),
+  deleteQueuedMessages: (key: string) =>
+    ipcRenderer.invoke("composer:deleteQueuedMessages", key),
   // Sandboxed command execution
   executeNodeCommand: (
     command: string,

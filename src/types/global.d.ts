@@ -1010,6 +1010,23 @@ declare global {
       deleteDraft: (
         key: string,
       ) => Promise<{ ok: boolean; error?: string }>;
+      saveQueuedMessages: (
+        key: string,
+        messages: string[],
+      ) => Promise<{ ok: boolean; error?: string }>;
+      getQueuedMessages: (key: string) => Promise<{
+        ok: boolean;
+        messages: string[];
+        error?: string;
+      }>;
+      getAllQueuedMessages: () => Promise<{
+        ok: boolean;
+        queuedMessages: Record<string, string[]>;
+        error?: string;
+      }>;
+      deleteQueuedMessages: (
+        key: string,
+      ) => Promise<{ ok: boolean; error?: string }>;
       // Performance tracing
       startTracing: () => Promise<
         { ok: true } | { ok: false; message: string }
