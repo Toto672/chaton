@@ -22,6 +22,7 @@ export const AUTOMATION_TRIGGER_TOPICS = [
   'conversation.message.received',
   'project.created',
   'conversation.agent.ended',
+  'cron',
 ] as const
 export const PI_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/
 export const ICON_EXTENSIONS = new Map([
@@ -99,19 +100,23 @@ export const AUTOMATION_MANIFEST: ExtensionManifest = {
       {
         name: 'automation.schedule_task',
         label: 'Schedule automation task',
-        description: 'Create or update an automation rule that schedules a recurring or event-driven task for the user.',
+        description: 'Create or update an automation rule that schedules a recurring or event-driven task for the user. Supports cron expressions and natural language scheduling.',
         promptSnippet: 'Program a user automation task by creating an automation rule.',
         promptGuidelines: [
           'Use this tool when the user asks to program, schedule, or automate a recurring task.',
           'Always provide a clear human-readable rule name and the task instruction to run.',
+          'For cron-based scheduling, you can use standard cron expressions (e.g., "0 9 * * *" for 9am daily) or natural language patterns like "every day at 9am", "every monday at 2pm", "every 5 minutes", etc.',
+          'The trigger parameter can be: "conversation.created", "conversation.message.received", "project.created", "conversation.agent.ended", or "cron".',
+          'If the user describes a time-based schedule, use trigger="cron" and let the system parse the natural language or provide explicit cron syntax.',
         ],
         parameters: {
           type: 'object',
           properties: {
             name: { type: 'string', description: 'Human-readable automation name.' },
             instruction: { type: 'string', description: 'Natural-language task to automate.' },
-            trigger: { type: 'string', description: 'Trigger topic, e.g. conversation.created or conversation.message.received.' },
-            cooldown: { type: 'number', description: 'Cooldown in milliseconds between runs.' },
+            trigger: { type: 'string', description: 'Trigger topic: "conversation.created", "conversation.message.received", "project.created", "conversation.agent.ended", or "cron" for time-based scheduling.' },
+            cronExpression: { type: 'string', description: 'For cron triggers: optional explicit cron expression (e.g., "0 9 * * *"). If omitted, will try to parse from trigger or instruction.' },
+            cooldown: { type: 'number', description: 'Cooldown in milliseconds between runs (optional).' },
             projectId: { type: 'string', description: 'Optional target project id.' },
             modelKey: { type: 'string', description: 'Optional provider/model key to store with the task.' },
             notifyMessage: { type: 'string', description: 'Optional notification message.' },
@@ -122,7 +127,7 @@ export const AUTOMATION_MANIFEST: ExtensionManifest = {
       {
         name: 'automation.list_scheduled_tasks',
         label: 'List scheduled automation tasks',
-        description: 'List existing automation rules so the LLM can inspect already programmed tasks before creating or updating one.',
+        description: 'List existing automation rules so the LLM can inspect already programmed tasks before creating or updating one. Shows cron expressions for scheduled tasks.',
         promptSnippet: 'List current automation rules.',
         parameters: {
           type: 'object',

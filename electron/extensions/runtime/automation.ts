@@ -3,7 +3,8 @@ import { getDb } from '../../db/index.js'
 import { deleteAutomationRule, insertAutomationRun, listAutomationRules, listAutomationRuns, markAutomationRuleTriggered, saveAutomationRule } from '../../db/repos/automation.js'
 
 import { BUILTIN_AUTOMATION_ID, AUTOMATION_TRIGGER_TOPICS } from './constants.js'
-import { asRecord, parseCooldownToMs, parseTriggerDescription, safeParseJson } from './helpers.js'
+import { asRecord, parseCooldownToMs, parseTriggerDescription, safeParseJson, parseCronExpression, isValidCronExpression } from './helpers.js'
+import { getCronScheduler, shutdownCronScheduler } from './cron-scheduler.js'
 import type { ExtensionHostCallResult } from './types.js'
 
 export type AutomationTriggerTopic = (typeof AUTOMATION_TRIGGER_TOPICS)[number]
@@ -147,6 +148,63 @@ export function createAutomationRuntime(deps: {
     }
   }
 
+  async function initializeCronTasks() {
+    const db = getDb()
+    const rules = listAutomationRules(db)
+    const scheduler = await getCronScheduler()
+
+    for (const rule of rules) {
+      if (!rule.enabled || rule.trigger_topic !== 'cron') continue
+
+      const cronExpression = rule.trigger_data || rule.trigger_topic
+      if (!isValidCronExpression(cronExpression)) {
+        console.warn(`[Automation] Invalid cron expression for rule "${rule.id}": ${cronExpression}`)
+        continue
+      }
+
+      const onTick = async () => {
+        await runAutomationOnEvent(BUILTIN_AUTOMATION_ID, 'cron', { ruleId: rule.id, triggeredAt: new Date().toISOString() })
+      }
+
+      const scheduled = await scheduler.schedule(rule.id, cronExpression, onTick)
+      if (scheduled) {
+        console.log(`[Automation] Cron task scheduled: "${rule.name}" (${rule.id}) at "${cronExpression}"`)
+      }
+    }
+  }
+
+  async function updateCronTask(ruleId: string, enabled: boolean, cronExpression?: string) {
+    const scheduler = await getCronScheduler()
+
+    if (!enabled) {
+      scheduler.stop(ruleId)
+      return
+    }
+
+    if (!cronExpression) {
+      const db = getDb()
+      const rules = listAutomationRules(db)
+      const rule = rules.find((r) => r.id === ruleId)
+      if (!rule) return
+      cronExpression = rule.trigger_data || rule.trigger_topic
+    }
+
+    if (!isValidCronExpression(cronExpression)) {
+      console.error(`[Automation] Invalid cron expression for rule "${ruleId}": ${cronExpression}`)
+      return
+    }
+
+    const db = getDb()
+    const rule = listAutomationRules(db).find((r) => r.id === ruleId)
+    if (!rule) return
+
+    const onTick = async () => {
+      await runAutomationOnEvent(BUILTIN_AUTOMATION_ID, 'cron', { ruleId, triggeredAt: new Date().toISOString() })
+    }
+
+    await scheduler.schedule(ruleId, cronExpression, onTick)
+  }
+
   function extensionsCallAutomation(apiName: string, payload: unknown, context?: { conversationId?: string }): ExtensionHostCallResult | null {
     const db = getDb()
     if (apiName === 'automation.rules.list') {
@@ -201,7 +259,8 @@ export function createAutomationRuntime(deps: {
       if (!payload || typeof payload !== 'object' || Array.isArray(payload) || typeof (payload as Record<string, unknown>).id !== 'string') {
         return { ok: false, error: { code: 'invalid_args', message: 'id is required' } }
       }
-      const ok = deleteAutomationRule(db, (payload as Record<string, string>).id)
+      const ruleId = (payload as Record<string, string>).id
+      const ok = deleteAutomationRule(db, ruleId)
       return ok ? { ok: true } : { ok: false, error: { code: 'not_found', message: 'rule not found' } }
     }
     if (apiName === 'automation.runs.list') {
@@ -231,6 +290,23 @@ export function createAutomationRuntime(deps: {
         : instruction.slice(0, 80) || 'Scheduled task'
       const triggerInput = typeof params.trigger === 'string' ? params.trigger.trim() : ''
       const trigger = isAutomationTriggerTopic(triggerInput) ? triggerInput : parseTriggerDescription(triggerInput || instruction)
+      
+      // If trigger is 'cron', try to parse cron expression
+      let cronExpression: string | undefined
+      if (trigger === 'cron') {
+        cronExpression = parseCronExpression(triggerInput) || (typeof params.cronExpression === 'string' ? params.cronExpression : undefined)
+        if (!cronExpression) {
+          // Try to infer from instruction if no explicit cron expression
+          cronExpression = parseCronExpression(instruction)
+        }
+        if (!cronExpression) {
+          return { ok: false, error: { code: 'invalid_args', message: 'Could not parse cron expression. Please provide a valid cron expression or natural language pattern like "every day at 9am".' } }
+        }
+        if (!isValidCronExpression(cronExpression)) {
+          return { ok: false, error: { code: 'invalid_args', message: `Invalid cron expression: "${cronExpression}". Expected format: "minute hour day month dayOfWeek" (e.g., "0 9 * * *")` } }
+        }
+      }
+      
       const cooldown = typeof params.cooldown === 'number' && Number.isFinite(params.cooldown)
         ? Math.max(0, Math.floor(params.cooldown))
         : parseCooldownToMs(instruction)
@@ -250,6 +326,7 @@ export function createAutomationRuntime(deps: {
         name,
         enabled: params.enabled !== false,
         triggerTopic: trigger,
+        triggerData: cronExpression,
         conditionsJson: JSON.stringify(Array.isArray(params.conditions) ? params.conditions : []),
         actionsJson: JSON.stringify([action]),
         cooldownMs: cooldown,
@@ -262,6 +339,7 @@ export function createAutomationRuntime(deps: {
           trigger,
           cooldown,
           instruction,
+          ...(cronExpression && { cronExpression }),
         },
       }
     }
@@ -281,6 +359,7 @@ export function createAutomationRuntime(deps: {
           lastTriggeredAt: rule.last_triggered_at,
           actions: safeParseJson(rule.actions_json, []),
           updatedAt: rule.updated_at,
+          ...(rule.trigger_topic === 'cron' && rule.trigger_data && { cronExpression: rule.trigger_data }),
         }))
       return { ok: true, data: rules }
     }
@@ -325,5 +404,8 @@ export function createAutomationRuntime(deps: {
     runAutomationOnEvent,
     extensionsCallAutomation,
     runExtensionsQueueWorkerCycle,
+    initializeCronTasks,
+    updateCronTask,
+    shutdownCronScheduler,
   }
 }

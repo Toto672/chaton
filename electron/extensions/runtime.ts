@@ -163,6 +163,8 @@ export function getExposedToolDetail(toolName: string) {
 
 export function initializeExtensionsRuntime() {
   initializeRegistry()
+  // Initialize cron scheduler for automation tasks
+  void automationRuntime.initializeCronTasks()
 }
 
 export function subscribeExtension(
@@ -309,6 +311,8 @@ export function runExtensionsQueueWorkerCycle() {
 export function shutdownExtensionWorkers() {
   closeAllBrowserSessions()
   terminateAllWorkers()
+  // Shutdown cron scheduler
+  void automationRuntime.shutdownCronScheduler()
 }
 
 export function getExtensionRuntimeHealth() {

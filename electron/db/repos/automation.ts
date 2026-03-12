@@ -5,6 +5,7 @@ export type DbAutomationRule = {
   name: string
   enabled: number
   trigger_topic: string
+  trigger_data?: string | null
   conditions_json: string
   actions_json: string
   cooldown_ms: number
@@ -28,6 +29,7 @@ export function saveAutomationRule(
     name: string
     enabled: boolean
     triggerTopic: string
+    triggerData?: string
     conditionsJson: string
     actionsJson: string
     cooldownMs: number
@@ -38,12 +40,13 @@ export function saveAutomationRule(
   if (existing) {
     db.prepare(
       `UPDATE automation_rules
-       SET name = ?, enabled = ?, trigger_topic = ?, conditions_json = ?, actions_json = ?, cooldown_ms = ?, updated_at = ?
+       SET name = ?, enabled = ?, trigger_topic = ?, trigger_data = ?, conditions_json = ?, actions_json = ?, cooldown_ms = ?, updated_at = ?
        WHERE id = ?`,
     ).run(
       params.name,
       params.enabled ? 1 : 0,
       params.triggerTopic,
+      params.triggerData ?? null,
       params.conditionsJson,
       params.actionsJson,
       params.cooldownMs,
@@ -54,13 +57,14 @@ export function saveAutomationRule(
   }
 
   db.prepare(
-    `INSERT INTO automation_rules(id, name, enabled, trigger_topic, conditions_json, actions_json, cooldown_ms, last_triggered_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+    `INSERT INTO automation_rules(id, name, enabled, trigger_topic, trigger_data, conditions_json, actions_json, cooldown_ms, last_triggered_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
   ).run(
     params.id,
     params.name,
     params.enabled ? 1 : 0,
     params.triggerTopic,
+    params.triggerData ?? null,
     params.conditionsJson,
     params.actionsJson,
     params.cooldownMs,

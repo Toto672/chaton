@@ -119,6 +119,7 @@
     "wait-on": "^9.0.4"
   },
   "optionalDependencies": {
-    "better-sqlite3": "^12.6.2"
+    "better-sqlite3": "^12.6.2",
+    "cron": "^3.1.7"
   }
 }
