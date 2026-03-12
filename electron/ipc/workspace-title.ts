@@ -12,6 +12,11 @@ const LONGUEUR_MAX_TITRE = 60;
 const NOMBRE_MOTS_MIN_TITRE = 3;
 const NOMBRE_MOTS_MAX_TITRE = 7;
 export const AFFINAGE_TITRE_IA_ACTIVE = true;
+const MODELES_TITRE_PREFERES = [
+  "openai-codex/gpt-5.3-codex",
+  "openai-codex/gpt-5.2-codex",
+  "openai-codex/gpt-5.1-codex",
+] as const;
 
 function normaliserTitre(raw: string): string {
   return raw
@@ -91,6 +96,56 @@ function generateConversationTitlePrompt(firstMessage: string): string {
   ].join("\n");
 }
 
+function extraireErreurPi(stdout: string): string | null {
+  const texte = `${stdout ?? ""}`.trim();
+  if (!texte) {
+    return null;
+  }
+  const lignes = texte
+    .split(/\r?\n/)
+    .map((ligne) => ligne.trim())
+    .filter(Boolean);
+  if (lignes.length === 0) {
+    return null;
+  }
+  const premiere = lignes[0] ?? "";
+  return /^error[:\s]/i.test(premiere) ? premiere : null;
+}
+
+function choisirModelePourTitre(params: {
+  preferredModelKey: string;
+  availableModelKeys?: string[];
+  fallbackModelKey?: string | null;
+}): string[] {
+  const disponibles = new Set(
+    (params.availableModelKeys ?? []).filter((item) => typeof item === "string" && item.trim().length > 0),
+  );
+  const candidats: string[] = [];
+  const ajouter = (value: string | null | undefined) => {
+    const propre = typeof value === "string" ? value.trim() : "";
+    if (!propre) return;
+    if (disponibles.size > 0 && !disponibles.has(propre)) return;
+    if (!candidats.includes(propre)) {
+      candidats.push(propre);
+    }
+  };
+
+  ajouter(params.preferredModelKey);
+  for (const modelKey of MODELES_TITRE_PREFERES) {
+    ajouter(modelKey);
+  }
+  ajouter(params.fallbackModelKey ?? null);
+
+  if (candidats.length === 0 && disponibles.size > 0) {
+    for (const modelKey of disponibles) {
+      candidats.push(modelKey);
+      break;
+    }
+  }
+
+  return candidats;
+}
+
 export async function generateConversationTitleFromPi(params: {
   provider: string;
   modelId: string;
@@ -98,29 +153,66 @@ export async function generateConversationTitleFromPi(params: {
   firstMessage: string;
   runPiExec: RunPiExec;
   getPiBinaryPath: GetPiBinaryPath;
+  availableModelKeys?: string[];
+  fallbackModelKey?: string | null;
+  log?: (message: string, details?: Record<string, unknown>) => void;
 }): Promise<string | null> {
   const piPath = params.getPiBinaryPath();
   if (!piPath || !fs.existsSync(piPath)) {
+    params.log?.("Pi CLI unavailable for auto-title generation", {
+      piPath,
+    });
     return null;
   }
 
   const prompt = generateConversationTitlePrompt(params.firstMessage);
   const modelKey = `${params.provider}/${params.modelId}`;
-  const primary = await params.runPiExec(
-    ["--model", modelKey, "-p", prompt],
-    20_000,
-    params.repoPath,
-  );
-  const result = primary.ok
-    ? primary
-    : await params.runPiExec(
-      ["-m", modelKey, "-p", prompt],
+  const modelesAChercher = choisirModelePourTitre({
+    preferredModelKey: modelKey,
+    availableModelKeys: params.availableModelKeys,
+    fallbackModelKey: params.fallbackModelKey,
+  });
+
+  for (const modele of modelesAChercher) {
+    const primary = await params.runPiExec(
+      ["--model", modele, "-p", prompt],
       20_000,
       params.repoPath,
     );
-  if (!result.ok) {
-    return null;
+    const result = primary.ok
+      ? primary
+      : await params.runPiExec(
+        ["-m", modele, "-p", prompt],
+        20_000,
+        params.repoPath,
+      );
+
+    if (!result.ok) {
+      params.log?.("Auto-title generation command failed", {
+        requestedModel: modele,
+      });
+      continue;
+    }
+
+    const erreurPi = extraireErreurPi(result.stdout);
+    if (erreurPi) {
+      params.log?.("Auto-title generation returned CLI error text", {
+        requestedModel: modele,
+        error: erreurPi,
+      });
+      continue;
+    }
+
+    const titre = sanitiserTitreStrict(result.stdout);
+    if (titre) {
+      return titre;
+    }
+
+    params.log?.("Auto-title generation returned unusable title", {
+      requestedModel: modele,
+      rawOutputPreview: normaliserTitre(result.stdout).slice(0, 160),
+    });
   }
 
-  return sanitiserTitreStrict(result.stdout);
+  return null;
 }

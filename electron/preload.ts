@@ -4,8 +4,15 @@ const { contextBridge, ipcRenderer } = electron;
 contextBridge.exposeInMainWorld("desktop", {
   platform: process.platform,
   isWindowFocused: () => ipcRenderer.invoke("window:isFocused"),
-  showNotification: (title: string, body: string) =>
-    ipcRenderer.invoke("window:showNotification", title, body),
+  showNotification: (title: string, body: string, conversationId?: string) =>
+    ipcRenderer.invoke("window:showNotification", title, body, conversationId),
+  onNotificationClick: (listener: (payload: { conversationId?: string }) => void) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+      listener((payload as { conversationId?: string }) ?? {})
+    }
+    ipcRenderer.on("desktop:notification-clicked", wrapped)
+    return () => ipcRenderer.removeListener("desktop:notification-clicked", wrapped)
+  },
 });
 
 contextBridge.exposeInMainWorld("electronAPI", {

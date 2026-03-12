@@ -1788,13 +1788,28 @@ async function generateConversationTitleFromPi(params: {
   repoPath: string;
   firstMessage: string;
 }): Promise<string | null> {
+  const modelsResult = await listPiModelsCached();
+  const availableModelKeys =
+    modelsResult.ok
+      ? modelsResult.models.map((model) => model.key)
+      : undefined;
+  const fallbackModelKey =
+    modelsResult.ok && modelsResult.models.length > 0
+      ? modelsResult.models[0]?.key ?? null
+      : null;
+
   return generateConversationTitleFromPiInModule({
     ...params,
+    availableModelKeys,
+    fallbackModelKey,
     runPiExec: async (args: string[], timeoutMs?: number, cwd?: string) => {
       const result = await runPiExec(args, timeoutMs, cwd);
       return { ok: result.ok, stdout: result.stdout };
     },
     getPiBinaryPath,
+    log: (message, details) => {
+      console.warn("[conversation-title]", message, details ?? {});
+    },
   });
 }
 

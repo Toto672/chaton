@@ -14,5 +14,6 @@ declare global {
 interface DesktopAPI {
   platform: string
   isWindowFocused: () => Promise<boolean>
-  showNotification: (title: string, body: string) => Promise<boolean>
+  showNotification: (title: string, body: string, conversationId?: string) => Promise<boolean>
+  onNotificationClick: (listener: (payload: { conversationId?: string }) => void) => () => void
 }

@@ -33,13 +33,13 @@ import {
 } from "../extensions/manager.js";
 import {
   clearConversationWorktreePath,
-  deleteConversationById,
   findConversationById,
   insertConversation,
   listConversationMessagesCache,
   listConversationsByProjectId,
   replaceConversationMessagesCache,
   saveConversationPiRuntime,
+  updateConversationStatus,
   updateConversationTitle,
 } from "../db/repos/conversations.js";
 import {
@@ -1771,8 +1771,8 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       }
 
       await deps.piRuntimeManager.stop(conversationId);
-      const deleted = deleteConversationById(db, conversationId);
-      if (!deleted) {
+      const archived = updateConversationStatus(db, conversationId, "archived");
+      if (!archived) {
         return {
           ok: false as const,
           reason: "conversation_not_found" as const,
@@ -1783,7 +1783,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       }
       emitHostEvent("conversation.updated", {
         conversationId,
-        type: "deleted",
+        type: "archived",
       });
       return { ok: true as const };
     },
@@ -2029,6 +2029,13 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       });
 
       if (!titreAffine || titreAffine === titreDeterministe) {
+        if (!titreAffine) {
+          console.warn("[conversation-title] AI refinement unavailable", {
+            conversationId,
+            provider,
+            modelId,
+          });
+        }
         return {
           ok: true as const,
           title: titreDeterministe,

@@ -34,8 +34,8 @@ export type DbConversationMessageCache = {
 
 export function listConversations(db: Database.Database): DbConversation[] {
   return db
-    .prepare('SELECT * FROM conversations WHERE status != ? ORDER BY updated_at DESC')
-    .all('archived') as DbConversation[]
+    .prepare('SELECT * FROM conversations ORDER BY updated_at DESC')
+    .all() as DbConversation[]
 }
 
 export function insertConversation(
@@ -91,6 +91,22 @@ export function listConversationsByProjectId(db: Database.Database, projectId: s
 
 export function deleteConversationById(db: Database.Database, id: string): boolean {
   const result = db.prepare('DELETE FROM conversations WHERE id = ?').run(id)
+  return result.changes > 0
+}
+
+export function updateConversationStatus(
+  db: Database.Database,
+  id: string,
+  status: DbConversation['status'],
+): boolean {
+  const now = new Date().toISOString()
+  const result = db
+    .prepare(
+      `UPDATE conversations
+       SET status = ?, updated_at = ?
+       WHERE id = ?`,
+    )
+    .run(status, now, id)
   return result.changes > 0
 }
 

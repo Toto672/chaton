@@ -509,6 +509,31 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [])
 
+  useEffect(() => {
+    if (!window.desktop?.onNotificationClick) {
+      return
+    }
+
+    return window.desktop.onNotificationClick((payload) => {
+      const conversationId = typeof payload?.conversationId === 'string' ? payload.conversationId : null
+      if (!conversationId) {
+        return
+      }
+
+      void (async () => {
+        const conversationExists = stateRef.current.conversations.some((conversation) => conversation.id === conversationId)
+        if (!conversationExists) {
+          return
+        }
+        dispatch({ type: 'setSidebarMode', payload: { mode: 'default' } })
+        await hydrateConversationCache(conversationId)
+        dispatch({ type: 'selectConversation', payload: { conversationId } })
+        dispatch({ type: 'clearConversationActionCompleted', payload: { conversationId } })
+        await hydrateConversationRuntime(conversationId)
+      })()
+    })
+  }, [dispatch, hydrateConversationCache, hydrateConversationRuntime])
+
   const archiveProject = useCallback(
     async (projectId: string, isArchived: boolean) => {
       const project = state.projects.find((p) => p.id === projectId)
@@ -800,8 +825,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         return result
       }
 
-      // Only do optimistic UI if deletion was successful
-      dispatch({ type: 'removeConversation', payload: { conversationId } })
+      // Keep archived conversations in state for future archive UI, but hide them from current selectors.
+      dispatch({ type: 'archiveConversation', payload: { conversationId } })
       dispatch({ type: 'clearConversationActionCompleted', payload: { conversationId } })
       
       await workspaceIpc.piStopSession(conversationId)

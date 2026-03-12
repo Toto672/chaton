@@ -354,7 +354,7 @@ function doesMessageContainToolCall(message: JsonValue, toolCallId?: string | nu
   )
 }
 
-async function showConversationCompletedNotification(conversationTitle: string): Promise<void> {
+async function showConversationCompletedNotification(conversationId: string, conversationTitle: string): Promise<void> {
   try {
     // Check if window.desktop API is available
     if (!window.desktop) {
@@ -375,7 +375,7 @@ async function showConversationCompletedNotification(conversationTitle: string):
     const title = 'Conversation terminée'
     const body = `La conversation "${conversationTitle}" a terminé son action`
     
-    await window.desktop.showNotification(title, body)
+    await window.desktop.showNotification(title, body, conversationId)
   } catch (error) {
     console.error('Failed to show notification:', error)
   }
@@ -663,7 +663,7 @@ export function applyPiEvent(
     if (conversation && (options?.shouldNotifyConversationCompleted?.(conversationId) ?? true)) {
       const enableChime = stateRef.current.settings.enableConversationChime ?? true
       void playConversationSuccessChime(enableChime)
-      void showConversationCompletedNotification(conversation.title)
+      void showConversationCompletedNotification(conversationId, conversation.title)
     }
   }
 

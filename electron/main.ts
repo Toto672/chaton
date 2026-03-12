@@ -215,7 +215,7 @@ function createWindow() {
   });
 
   // Expose method to show notification
-  electron.ipcMain.handle('window:showNotification', (_event, title: string, body: string) => {
+  electron.ipcMain.handle('window:showNotification', (_event, title: string, body: string, conversationId?: string) => {
     if (!mainWindow) return false;
     
     // Only show notification if window is not focused
@@ -231,7 +231,14 @@ function createWindow() {
     
     notification.on('click', () => {
       if (mainWindow) {
+        if (mainWindow.isMinimized()) {
+          mainWindow.restore();
+        }
+        mainWindow.show();
         mainWindow.focus();
+        if (conversationId) {
+          mainWindow.webContents.send('desktop:notification-clicked', { conversationId });
+        }
       }
     });
     

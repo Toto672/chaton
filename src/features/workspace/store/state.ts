@@ -4,6 +4,7 @@ import type {
   AppMode,
   AssistantView,
   Conversation,
+  ConversationStatus,
   Project,
   SidebarSettings,
   WorkspaceState,
@@ -30,6 +31,7 @@ export type Action =
   | { type: 'updateProject'; payload: { project: Project } }
   | { type: 'addConversation'; payload: { conversation: Conversation } }
   | { type: 'removeConversation'; payload: { conversationId: string } }
+  | { type: 'archiveConversation'; payload: { conversationId: string; updatedAt?: string } }
   | { type: 'removeProject'; payload: { projectId: string } }
   | { type: 'setNotice'; payload: { notice: string | null } }
   | { type: 'setExtensionUpdatesCount'; payload: { count: number } }
@@ -469,6 +471,32 @@ export function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         selectedProjectId: fallbackConversation?.projectId ?? state.selectedProjectId,
       }
     }
+    case 'archiveConversation': {
+      const archivedStatus: ConversationStatus = 'archived'
+      const nextConversations = state.conversations.map((conversation) =>
+        conversation.id === action.payload.conversationId
+          ? {
+              ...conversation,
+              status: archivedStatus,
+              updatedAt: action.payload.updatedAt ?? conversation.updatedAt,
+            }
+          : conversation,
+      )
+      const visibleConversations = nextConversations.filter((conversation) => conversation.status !== 'archived')
+      const selectedConversationId = state.selectedConversationId === action.payload.conversationId ? null : state.selectedConversationId
+      const selectedStillExists =
+        selectedConversationId !== null && visibleConversations.some((conversation) => conversation.id === selectedConversationId)
+      const fallbackConversation = selectedStillExists
+        ? visibleConversations.find((conversation) => conversation.id === selectedConversationId) ?? null
+        : visibleConversations.find((conversation) => conversation.projectId === state.selectedProjectId) ?? visibleConversations[0] ?? null
+
+      return {
+        ...state,
+        conversations: nextConversations,
+        selectedConversationId: fallbackConversation?.id ?? null,
+        selectedProjectId: fallbackConversation?.projectId ?? state.selectedProjectId,
+      }
+    }
     case 'removeProject': {
       const nextProjects = state.projects.filter((project) => project.id !== action.payload.projectId)
       const removedConversationIds = new Set(
@@ -626,6 +654,8 @@ export function piReducer(piState: PiStoreState, action: Action): PiStoreState {
       delete nextCompleted[action.payload.conversationId]
       return { piByConversation: nextPi, completedActionByConversation: nextCompleted }
     }
+    case 'archiveConversation':
+      return piState
     case 'removeProject': {
       // Need conversations list to know which to remove. Provider passes it.
       // For now, this is handled in the provider dispatch wrapper.

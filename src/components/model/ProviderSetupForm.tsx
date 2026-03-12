@@ -72,9 +72,9 @@ export function ProviderSetupForm({
       ),
     [draft.providerPreset, providerGroups],
   );
-  const [expandedGroupId, setExpandedGroupId] = useState(
-    providerGroups[0]?.id ?? "",
-  );
+  const [expandedGroupId, setExpandedGroupId] = useState(() => {
+    return matchedProviderGroup?.id ?? providerGroups[0]?.id ?? "";
+  });
   useEffect(() => {
     if (matchedProviderGroup?.id) {
       setExpandedGroupId(matchedProviderGroup.id);
@@ -83,14 +83,7 @@ export function ProviderSetupForm({
   const expandedGroup =
     providerGroups.find((group) => group.id === expandedGroupId) ??
     providerGroups[0];
-  
-  // Auto-select single-preset groups
-  useEffect(() => {
-    if (expandedGroup && expandedGroup.presets.length === 1) {
-      selectProviderPreset(expandedGroup.presets[0]);
-    }
-  }, [expandedGroupId]);
-  
+
   const selectProviderPreset = (preset: ProviderPreset) => {
     onDraftChange({
       providerPreset: preset.provider,
@@ -158,7 +151,12 @@ export function ProviderSetupForm({
               className={`onboarding-provider-card group ${isGroupSelected ? "is-selected" : ""} ${
                 isPreferredGroup ? "is-preferred" : ""
               }`}
-              onClick={() => setExpandedGroupId(group.id)}
+              onClick={() => {
+                setExpandedGroupId(group.id);
+                if (group.presets.length === 1) {
+                  selectProviderPreset(group.presets[0]);
+                }
+              }}
             >
               {isPreferredGroup ? (
                 <span

@@ -7,6 +7,10 @@ function sortConversations(items: Conversation[], settings: SidebarSettings) {
 
 function applyFilters(items: Conversation[], settings: SidebarSettings) {
   return items.filter((conversation) => {
+    if (conversation.status === 'archived') {
+      return false
+    }
+
     if (settings.show === 'relevant' && !conversation.isRelevant) {
       return false
     }
