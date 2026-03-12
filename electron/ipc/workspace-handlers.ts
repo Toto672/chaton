@@ -48,6 +48,7 @@ import {
   findProjectByRepoPath,
   insertProject,
   listProjects,
+  updateProjectIsArchived,
 } from "../db/repos/projects.js";
 import {
   emitHostEvent,
@@ -1813,6 +1814,25 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
     emitHostEvent("project.deleted", { projectId });
     return { ok: true as const };
   });
+
+  ipcMain.handle(
+    "projects:setArchived",
+    async (_event, projectId: string, isArchived: boolean) => {
+      const db = getDb();
+      const project = findProjectById(db, projectId);
+      if (!project) {
+        return { ok: false as const, reason: "project_not_found" as const };
+      }
+
+      const updated = updateProjectIsArchived(db, projectId, isArchived);
+      if (!updated) {
+        return { ok: false as const, reason: "unknown" as const };
+      }
+
+      emitHostEvent("project.archived", { projectId, isArchived });
+      return { ok: true as const };
+    }
+  );
 
   ipcMain.handle(
     "conversations:getMessageCache",

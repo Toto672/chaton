@@ -343,6 +343,25 @@
     @apply px-2.5 py-1.5 text-xs text-[#a0a1a8];
   }
 
+  /* ── Project item wrapper (for archived projects with action button) ── */
+
+  .pf-project-item-wrapper {
+    @apply flex w-full items-center gap-1 rounded-lg px-2.5 py-1.5;
+  }
+
+  .pf-project-item-wrapper .pf-project-item {
+    @apply flex-1;
+  }
+
+  .pf-project-action {
+    @apply rounded p-1 transition-colors hover:bg-[#f0f0f2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1] text-[#303139];
+    flex-shrink: 0;
+  }
+
+  .pf-section-label {
+    @apply px-2.5 py-1 text-xs font-semibold text-[#a0a1a8] uppercase tracking-wider;
+  }
+
   /* ── Divider ── */
 
   .pf-divider {

@@ -84,7 +84,9 @@ export function useProjectFolder(
   const piState = usePiStore((s) => s)
 
   return useMemo(() => {
-    const projectMap = new Map(projects.map((p) => [p.id, p]))
+    // Filter out archived projects
+    const visibleProjects = projects.filter((p) => !p.isArchived)
+    const projectMap = new Map(visibleProjects.map((p) => [p.id, p]))
 
     // Resolve subfolder definitions into actual project objects,
     // filtering out any stale project IDs that no longer exist
@@ -98,7 +100,7 @@ export function useProjectFolder(
     const inSubFolder = new Set(subFolderDefs.flatMap((sf) => sf.projectIds))
 
     // Projects not in any subfolder are candidates for auto-folding
-    const unassigned = projects.filter((p) => !inSubFolder.has(p.id))
+    const unassigned = visibleProjects.filter((p) => !inSubFolder.has(p.id))
 
     // If not enough unassigned projects, don't auto-fold
     if (unassigned.length <= MIN_PROJECTS_TO_FOLD) {

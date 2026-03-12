@@ -161,6 +161,14 @@
     @apply text-[#d6deef] hover:bg-[#162132];
   }
 
+  .dark .pf-project-action {
+    @apply text-[#5a6680] hover:bg-[#1e2a3d] hover:text-[#c8d4ec] focus-visible:ring-[#2a4070]/40;
+  }
+
+  .dark .pf-section-label {
+    @apply text-[#5a6680];
+  }
+
   .dark .pf-subfolder-toggle {
     @apply hover:bg-[#121722];
   }

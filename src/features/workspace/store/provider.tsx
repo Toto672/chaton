@@ -509,6 +509,43 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [])
 
+  const archiveProject = useCallback(
+    async (projectId: string, isArchived: boolean) => {
+      const project = state.projects.find((p) => p.id === projectId)
+      if (!project) {
+        return { ok: false as const, reason: 'project_not_found' as const }
+      }
+
+      // Optimistic UI: update project state immediately
+      dispatch({
+        type: 'updateProject',
+        payload: {
+          project: { ...project, isArchived },
+        },
+      })
+
+      const result = await workspaceIpc.archiveProject(projectId, isArchived)
+      if (!result.ok) {
+        // Revert optimistic update on failure
+        dispatch({
+          type: 'updateProject',
+          payload: {
+            project,
+          },
+        })
+        dispatch({
+          type: 'setNotice',
+          payload: { notice: isArchived ? 'Impossible de masquer ce projet.' : 'Impossible d\'afficher ce projet.' },
+        })
+        return result
+      }
+
+      dispatch({ type: 'setNotice', payload: { notice: null } })
+      return result
+    },
+    [state.projects],
+  )
+
   const createConversationForProject = useCallback(
     async (projectId: string, options?: { modelProvider?: string; modelId?: string; thinkingLevel?: string; accessMode?: 'secure' | 'open'; channelExtensionId?: string }) => {
       const result = await workspaceIpc.createConversationForProject(projectId, options)
@@ -518,6 +555,12 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           payload: { notice: 'Impossible de créer un fil pour ce projet.' },
         })
         return null
+      }
+
+      // If the project is archived, unhide it
+      const project = state.projects.find((p) => p.id === projectId)
+      if (project?.isArchived) {
+        void archiveProject(projectId, false)
       }
 
       dispatch({
@@ -548,7 +591,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       
       return result.conversation
     },
-    [hydrateConversationRuntime, state.settings.collapsedProjectIds, toggleProjectCollapsed],
+    [hydrateConversationRuntime, state.settings.collapsedProjectIds, toggleProjectCollapsed, archiveProject, state.projects],
   )
 
   const createConversationGlobal = useCallback(
@@ -1026,6 +1069,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       disableConversationWorktree,
       deleteConversation,
       deleteProject,
+      archiveProject,
       updateSettings: persistSettings,
       setSearchQuery: async (query: string) => {
         await persistSettings({ ...state.settings, searchQuery: query })
@@ -1075,6 +1119,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       disableConversationWorktree,
       deleteConversation,
       deleteProject,
+      archiveProject,
       hydrateConversationCache,
       hydrateConversationRuntime,
       importProject,

@@ -29,6 +29,12 @@ export function insertProject(db: Database.Database, params: { id: string; name:
   ).run(params.id, params.name, params.repoPath, params.repoName, now, now)
 }
 
+export function updateProjectIsArchived(db: Database.Database, id: string, isArchived: boolean): boolean {
+  const now = new Date().toISOString()
+  const result = db.prepare('UPDATE projects SET is_archived = ?, updated_at = ? WHERE id = ?').run(isArchived ? 1 : 0, now, id)
+  return result.changes > 0
+}
+
 export function deleteProjectById(db: Database.Database, id: string): boolean {
   const result = db.prepare('DELETE FROM projects WHERE id = ?').run(id)
   return result.changes > 0

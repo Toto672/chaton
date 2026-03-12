@@ -244,6 +244,8 @@ export const workspaceIpc = {
     getApi().importProjectFromFolder(folderPath),
   deleteProject: (projectId: string): Promise<DeleteProjectResult> =>
     getApi().deleteProject(projectId),
+  archiveProject: (projectId: string, isArchived: boolean): Promise<{ ok: boolean; reason?: string }> =>
+    getApi().archiveProject(projectId, isArchived),
   updateSettings: (settings: SidebarSettings) =>
     getApi().updateSettings(settings),
   createConversationForProject: (

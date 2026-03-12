@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld("chaton", {
     ipcRenderer.invoke("projects:importFromFolder", folderPath),
   deleteProject: (projectId: string) =>
     ipcRenderer.invoke("projects:delete", projectId),
+  archiveProject: (projectId: string, isArchived: boolean) =>
+    ipcRenderer.invoke("projects:setArchived", projectId, isArchived),
   getInitialState: () => ipcRenderer.invoke("workspace:getInitialState"),
   getGitDiffSummary: (conversationId: string) =>
     ipcRenderer.invoke("workspace:getGitDiffSummary", conversationId),

@@ -73,7 +73,7 @@ export function parseModelKey(modelKey: string): { provider: string; modelId: st
  * Parse natural language cron patterns and convert them to standard cron expressions.
  * Examples:
  *   "every day at 9am" -> "0 9 * * *"
- *   "every 5 minutes" -> "*/5 * * * *"
+ *   "every 5 minutes" -> "* /5 * * * *"
  *   "every monday at 2pm" -> "0 14 * * 1"
  *   "0 9 * * *" -> "0 9 * * *" (returns as-is if already valid)
  */

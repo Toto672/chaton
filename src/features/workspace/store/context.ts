@@ -52,6 +52,7 @@ export type WorkspaceContextValue = {
   ) => Promise<{ ok: true; changed: boolean } | { ok: false; reason: 'conversation_not_found' | 'project_not_found' | 'has_uncommitted_changes' | 'unknown' }>
   deleteConversation: (conversationId: string, force?: boolean) => Promise<DeleteConversationResult>
   deleteProject: (projectId: string) => Promise<DeleteProjectResult>
+  archiveProject: (projectId: string, isArchived: boolean) => Promise<{ ok: boolean; reason?: string }>
   updateSettings: (settings: SidebarSettings) => Promise<void>
   setSearchQuery: (query: string) => Promise<void>
   toggleSidebarSearch: () => Promise<void>

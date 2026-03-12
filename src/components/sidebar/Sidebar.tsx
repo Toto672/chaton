@@ -60,6 +60,12 @@ export function Sidebar({ width }: { width: number }) {
     state.settings.projectSubFolders ?? [],
   )
 
+  // Collect archived projects
+  const archivedProjects = useMemo(() => 
+    state.projects.filter(p => p.isArchived),
+    [state.projects]
+  )
+
   if (state.sidebarMode === 'settings') {
     return (
       <aside className="sidebar-panel" style={{ width: `${width}px` }}>
@@ -163,9 +169,10 @@ export function Sidebar({ width }: { width: number }) {
                   ))}
                 </section>
                 {visibleProjects.map((project) => <ProjectGroup key={project.id} project={project} extensions={extensionsData} />)}
-                {(autoFoldedProjects.length > 0 || subFolders.length > 0) && (
+                {(autoFoldedProjects.length > 0 || subFolders.length > 0 || archivedProjects.length > 0) && (
                   <ProjectFolder
                     autoFoldedProjects={autoFoldedProjects}
+                    archivedProjects={archivedProjects}
                     subFolders={subFolders}
                     extensions={extensionsData}
                   />

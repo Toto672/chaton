@@ -1,4 +1,4 @@
-import { Check, ChevronRight, FolderGit2, FolderOpen, FolderPlus, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Check, ChevronRight, FolderGit2, FolderOpen, FolderPlus, Pencil, Plus, Trash2, X, Eye } from 'lucide-react'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -11,6 +11,7 @@ import type { ResolvedSubFolder } from '@/components/sidebar/useProjectFolder'
 
 type ProjectFolderProps = {
   autoFoldedProjects: Project[]
+  archivedProjects?: Project[]
   subFolders: ResolvedSubFolder[]
   extensions?: Array<{ id: string; icon?: string; iconUrl?: string }>
 }
@@ -289,19 +290,20 @@ function CreateSubFolderInline({
 
 export const ProjectFolder = memo(function ProjectFolder({
   autoFoldedProjects,
+  archivedProjects = [],
   subFolders,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   extensions: _extensions,
 }: ProjectFolderProps) {
   const { t } = useTranslation()
-  const { state, createConversationForProject, updateSettings } = useWorkspace()
+  const { state, createConversationForProject, updateSettings, archiveProject } = useWorkspace()
   const [isOpen, setIsOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
 
-  // All projects in the folder section (auto-folded + subfolder contents)
-  const allFoldedCount = autoFoldedProjects.length + subFolders.reduce((n, sf) => n + sf.projects.length, 0)
+  // All projects in the folder section (auto-folded + subfolder contents + archived)
+  const allFoldedCount = autoFoldedProjects.length + archivedProjects.length + subFolders.reduce((n, sf) => n + sf.projects.length, 0)
 
   // Close on click outside
   useEffect(() => {
@@ -490,7 +492,54 @@ export const ProjectFolder = memo(function ProjectFolder({
               ))}
 
               {/* Divider between subfolders and loose auto-folded projects */}
-              {subFolders.length > 0 && autoFoldedProjects.length > 0 && (
+              {subFolders.length > 0 && (autoFoldedProjects.length > 0 || archivedProjects.length > 0) && (
+                <div className="pf-divider" />
+              )}
+
+              {/* Archived projects section */}
+              {archivedProjects.length > 0 && (
+                <>
+                  <div className="pf-section-label">{t('Projets masqués')}</div>
+                  {archivedProjects.map((project, i) => (
+                    <div key={project.id} className="pf-project-item-wrapper">
+                      <motion.button
+                        type="button"
+                        className="pf-project-item"
+                        onClick={() => handleOpenProject(project.id)}
+                        initial={{ opacity: 0, x: -12 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{
+                          delay: i * 0.03,
+                          duration: 0.18,
+                          ease: 'easeOut',
+                        }}
+                        whileHover={{ x: 2 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <FolderGit2 className="h-4 w-4 shrink-0 opacity-50" />
+                        <span className="project-folder-popover-name truncate opacity-50">
+                          {project.name}
+                        </span>
+                      </motion.button>
+                      <button
+                        type="button"
+                        className="pf-project-action"
+                        title={t('Afficher le projet')}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          void archiveProject(project.id, false)
+                        }}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {/* Divider between archived and auto-folded projects */}
+              {archivedProjects.length > 0 && autoFoldedProjects.length > 0 && (
                 <div className="pf-divider" />
               )}
 

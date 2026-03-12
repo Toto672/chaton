@@ -27,6 +27,7 @@ export type Action =
   | { type: 'setSearchQuery'; payload: { query: string } }
   | { type: 'updateSettings'; payload: SidebarSettings }
   | { type: 'addProject'; payload: { project: Project } }
+  | { type: 'updateProject'; payload: { project: Project } }
   | { type: 'addConversation'; payload: { conversation: Conversation } }
   | { type: 'removeConversation'; payload: { conversationId: string } }
   | { type: 'removeProject'; payload: { projectId: string } }
@@ -434,6 +435,14 @@ export function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         },
       }
     }
+    case 'updateProject': {
+      return {
+        ...state,
+        projects: state.projects.map((project) =>
+          project.id === action.payload.project.id ? action.payload.project : project,
+        ),
+      }
+    }
     case 'addConversation': {
       // Pi state handled by piReducer
       return {
@@ -620,6 +629,10 @@ export function piReducer(piState: PiStoreState, action: Action): PiStoreState {
     case 'removeProject': {
       // Need conversations list to know which to remove. Provider passes it.
       // For now, this is handled in the provider dispatch wrapper.
+      return piState
+    }
+    case 'updateProject': {
+      // Project metadata updates don't affect Pi state
       return piState
     }
     case 'setPiRuntime': {

@@ -1,4 +1,4 @@
-import { FolderGit2, PencilLine, Trash2 } from 'lucide-react'
+import { FolderGit2, PencilLine, Trash2, EyeOff } from 'lucide-react'
 import { memo, type MouseEvent, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -18,7 +18,7 @@ type ProjectGroupProps = {
 export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [] }: ProjectGroupProps) {
   perfMonitor.recordComponentRender('ProjectGroup')
   const { t } = useTranslation()
-  const { state, selectConversation, selectProject, createConversationForProject, toggleProjectCollapsed, deleteConversation, deleteProject } =
+  const { state, selectConversation, selectProject, createConversationForProject, toggleProjectCollapsed, deleteConversation, deleteProject, archiveProject } =
     useWorkspace()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [afficherTousLesFils, setAfficherTousLesFils] = useState(false)
@@ -129,6 +129,19 @@ export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [
           }}
         >
           <PencilLine className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          className="project-action-button"
+          aria-label={`Masquer ${project.name}`}
+          title="Masquer le projet"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            void archiveProject(project.id, true)
+          }}
+        >
+          <EyeOff className="h-4 w-4" />
         </button>
         <button
           type="button"
