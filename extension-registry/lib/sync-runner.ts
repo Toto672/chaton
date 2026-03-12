@@ -5,16 +5,11 @@
  * Usage: npx tsx lib/sync-runner.ts
  */
 
-import fs from "node:fs";
-import path from "node:path";
 import { syncExtensions } from "./sync.js";
+import { loadRegistrySource } from "./registry-source.js";
 import { saveCatalogLocal, saveIconLocal } from "./storage-local.js";
-import type { RegistrySource } from "./types.js";
 
-const registryPath = path.join(process.cwd(), "data", "registry.json");
-const registry: RegistrySource = JSON.parse(
-  fs.readFileSync(registryPath, "utf-8")
-);
+const registry = loadRegistrySource();
 
 async function main() {
   const catalog = await syncExtensions({

@@ -6,11 +6,9 @@
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { syncExtensions } from "../../lib/sync.js";
+import { loadRegistrySource } from "../../lib/registry-source.js";
 import { saveCatalog, saveIcon } from "../../lib/storage.js";
-import type { RegistrySource } from "../../lib/types.js";
 
 export default async function handler(
   req: VercelRequest,
@@ -28,10 +26,7 @@ export default async function handler(
   }
 
   try {
-    const registryPath = join(process.cwd(), "data", "registry.json");
-    const registry: RegistrySource = JSON.parse(
-      readFileSync(registryPath, "utf-8")
-    );
+    const registry = loadRegistrySource();
 
     const catalog = await syncExtensions({
       registry,

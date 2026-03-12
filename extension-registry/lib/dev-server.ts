@@ -6,11 +6,10 @@
  */
 
 import http from "node:http";
-import fs from "node:fs";
-import path from "node:path";
 import { syncExtensions } from "./sync.js";
+import { loadRegistrySource } from "./registry-source.js";
 import { saveCatalogLocal, saveIconLocal, readIconLocal, loadCatalogLocal } from "./storage-local.js";
-import type { ExtensionEntry, ExtensionCatalog, RegistrySource } from "./types.js";
+import type { ExtensionEntry, ExtensionCatalog } from "./types.js";
 
 process.on("uncaughtException", (err) => {
   console.error("Uncaught exception:", err);
@@ -26,8 +25,7 @@ const PORT = parseInt(
   10
 );
 
-const registryPath = path.join(process.cwd(), "data", "registry.json");
-const registry: RegistrySource = JSON.parse(fs.readFileSync(registryPath, "utf-8"));
+const registry = loadRegistrySource();
 
 function matchesSearch(ext: ExtensionEntry, query: string): boolean {
   const q = query.toLowerCase();
