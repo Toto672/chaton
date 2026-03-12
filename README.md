@@ -104,16 +104,16 @@ For project workflows, import a Git repository and create project-scoped threads
 
 | Doc | Description |
 |-----|-------------|
-| [User Guide](docs/CHATONS_USER_GUIDE.md) | Feature walkthrough and everyday workflows |
-| [Developer Guide](docs/CHATONS_DEVELOPER_GUIDE.md) | Architecture, setup, and contributing |
-| [Extensions](docs/EXTENSIONS.md) | Build custom extensions |
-| [Automations](docs/AUTOMATION_EXTENSION.md) | Create event-driven automation rules |
+| [User Guide](https://docs.chatons.ai/user-guide) | Feature walkthrough and everyday workflows |
+| [Developer Guide](https://docs.chatons.ai/developer-guide) | Architecture, setup, and contributing |
+| [Extensions](https://docs.chatons.ai/extensions) | Build custom extensions |
+| [Automations](https://docs.chatons.ai/automation-extension) | Create event-driven automation rules |
 
 ---
 
 ## Contributing
 
-Contributions are welcome! See the [Developer Guide](docs/CHATONS_DEVELOPER_GUIDE.md) for setup instructions.
+Contributions are welcome! See the [Developer Guide](https://docs.chatons.ai/developer-guide) for setup instructions.
 
 ---
 
