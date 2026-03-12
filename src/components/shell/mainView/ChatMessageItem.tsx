@@ -45,9 +45,28 @@ type ChatMessageItemProps = {
 import { perfMonitor } from '@/features/workspace/store/perf-monitor'
 
 const STREAMING_MARKDOWN_FLUSH_MS = 120
+const EXPLORATION_COMMAND_PREVIEW_MAX = 120
+
+function formatExplorationSummary(readCount: number, searchCount: number, isRunning: boolean) {
+  const parts: string[] = []
+  if (readCount > 0) {
+    parts.push(`${readCount} fichier${readCount > 1 ? 's' : ''}`)
+  }
+  if (searchCount > 0) {
+    parts.push(`${searchCount} recherche${searchCount > 1 ? 's' : ''}`)
+  }
+  const suffix = parts.join(', ')
+  return isRunning ? `Exploration en cours ${suffix}` : `Exploration ${suffix}`
+}
+
+function truncateCommandPreview(command: string) {
+  const compact = command.replace(/\s+/g, ' ').trim()
+  if (compact.length <= EXPLORATION_COMMAND_PREVIEW_MAX) return compact
+  return `${compact.slice(0, EXPLORATION_COMMAND_PREVIEW_MAX - 1)}…`
+}
 
 function shouldRenderMarkdownDuringStreaming(text: string): boolean {
-  return /```|`[^`]|^#{1,6}\s|\n#{1,6}\s|^[-*+]\s|\n[-*+]\s|\d+\.\s|\n\d+\.\s|\[[^\]]+\]\([^\)]+\)|\*\*|__|~~|>\s|\n>\s/.test(text)
+  return /```|`[^`]|^#{1,6}\s|\n#{1,6}\s|^[-*+]\s|\n[-*+]\s|\d+\.\s|\n\d+\.\s|\[[^\]]+\]\([^)]+\)|\*\*|__|~~|>\s|\n>\s/.test(text)
 }
 
 export const ChatMessageItem = memo(function ChatMessageItem({
@@ -235,6 +254,9 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                   )
                   const hasError = statuses.includes('error')
                   const isRunning = statuses.includes('running')
+                  const commandPreview = groupedCalls
+                    .map((call) => truncateCommandPreview(summarizeToolCall(call.name, call.arguments)))
+                    .join('\n')
                   
                   // Calculate duration for grouped calls
                   const groupedTimings = groupedCalls
@@ -266,12 +288,12 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                   rendered.push(
                     <CollapsibleToolBlock
                       key={traceId}
-                      title={<>{`${readCount} fichiers,${searchCount} recherche exploré(s)`}</>}
+                      title={<>{formatExplorationSummary(readCount, searchCount, isRunning)}</>}
                       badge={badge}
                       startExpanded={shouldExpandConsideringUserIntent}
                       maxHeight={180}
                     >
-                      <pre className="chat-tool-code-preview">{events.map((item) => item.label).join('\n')}</pre>
+                      <pre className="chat-tool-code chat-tool-code-preview">{commandPreview}</pre>
                     </CollapsibleToolBlock>,
                   )
                   groupIndex += 1

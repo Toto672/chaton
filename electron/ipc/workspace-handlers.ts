@@ -980,9 +980,79 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         message: "models.json invalide: objet attendu.",
       };
     }
-    const sanitized = await deps.sanitizeModelsJsonWithResolvedBaseUrls(
-      next as Record<string, unknown>,
+    const incoming = next as Record<string, unknown>;
+    const incomingProviders =
+      incoming.providers &&
+      typeof incoming.providers === "object" &&
+      !Array.isArray(incoming.providers)
+        ? (incoming.providers as Record<string, unknown>)
+        : {};
+    const enrichedProviders: Record<string, unknown> = { ...incomingProviders };
+
+    await Promise.all(
+      Object.entries(incomingProviders).map(async ([providerName, providerValue]) => {
+        if (
+          !providerValue ||
+          typeof providerValue !== "object" ||
+          Array.isArray(providerValue)
+        ) {
+          return;
+        }
+        const providerConfig = providerValue as Record<string, unknown>;
+        const existingModels = providerConfig.models;
+        if (Array.isArray(existingModels) && existingModels.length > 0) {
+          return;
+        }
+        const discovered = await deps.discoverProviderModels(
+          providerConfig,
+          providerName,
+        );
+        if (!discovered || typeof discovered !== "object" || !("ok" in discovered)) {
+          return;
+        }
+        const typedDiscovered = discovered as {
+          ok: boolean;
+          models?: Array<{
+            id: string;
+            contextWindow?: number;
+            contextWindowSource?: "provider" | "pi";
+            maxTokens?: number;
+            reasoning?: boolean;
+            imageInput?: boolean;
+          }>;
+        };
+        if (!typedDiscovered.ok || !Array.isArray(typedDiscovered.models) || typedDiscovered.models.length === 0) {
+          return;
+        }
+        enrichedProviders[providerName] = {
+          ...providerConfig,
+          models: typedDiscovered.models.map((model) => {
+            const entry: Record<string, unknown> = { id: model.id };
+            if (
+              typeof model.contextWindow === "number" &&
+              model.contextWindowSource === "provider"
+            ) {
+              entry.contextWindow = model.contextWindow;
+            }
+            if (typeof model.maxTokens === "number") {
+              entry.maxTokens = model.maxTokens;
+            }
+            if (model.reasoning) {
+              entry.reasoning = true;
+            }
+            if (model.imageInput) {
+              entry.imageInput = true;
+            }
+            return entry;
+          }),
+        };
+      }),
     );
+
+    const sanitized = await deps.sanitizeModelsJsonWithResolvedBaseUrls({
+      ...incoming,
+      providers: enrichedProviders,
+    });
     const error = deps.validateModelsJson(sanitized);
     if (error) {
       return { ok: false as const, message: error };
