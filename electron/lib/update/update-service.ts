@@ -31,13 +31,17 @@ export class UpdateService {
   private static readonly REPO_OWNER = 'thibautrey'
   private static readonly REPO_NAME = 'chaton'
   private static readonly UPDATE_DIR = join(app.getPath('userData'), 'updates')
+  private static readonly UPDATE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
   private static readonly CURRENT_VERSION = app.getVersion() || '0.1.0'
   private static lastUpdateCheckAt: number | null = null
   private static cachedUpdateCheck: GitHubRelease | null = null
   private static updateCheckInFlight: Promise<GitHubRelease | null> | null = null
   private static changelogsPrefetched = false
+  private static updateArtifactsCleaned = false
 
   static async checkForUpdates(): Promise<GitHubRelease | null> {
+    await this.cleanupUpdateArtifacts()
+
     // Return cached result only if cache is valid AND had a successful result
     if (this.lastUpdateCheckAt) {
       console.log('Update check already performed this session; using cached result')
@@ -466,7 +470,6 @@ export class UpdateService {
 
       const files = readdirSync(this.UPDATE_DIR)
       for (const file of files) {
-        // Clean up .tmp files and old installers (older than 7 days)
         if (file.endsWith('.tmp') || file.endsWith('.exe.bak') || file.endsWith('.dmg.bak')) {
           const filePath = join(this.UPDATE_DIR, file)
           try {
@@ -481,6 +484,78 @@ export class UpdateService {
       console.warn('Error cleaning up partial downloads:', error)
       // Don't fail if cleanup fails
     }
+  }
+
+  private static async cleanupUpdateArtifacts(): Promise<void> {
+    if (this.updateArtifactsCleaned) {
+      return
+    }
+
+    this.updateArtifactsCleaned = true
+
+    try {
+      if (!existsSync(this.UPDATE_DIR)) {
+        return
+      }
+
+      const files = readdirSync(this.UPDATE_DIR)
+      const pendingUpdateVersion = this.readPendingUpdateVersion()
+      const currentVersion = this.CURRENT_VERSION.replace(/^v/i, '')
+      const hasInstalledNewerVersion = pendingUpdateVersion !== null && this.isNewerVersion(currentVersion, pendingUpdateVersion)
+      const now = Date.now()
+
+      for (const file of files) {
+        const filePath = join(this.UPDATE_DIR, file)
+        const shouldDeleteAfterInstall = hasInstalledNewerVersion && this.isUpdateArtifact(file)
+
+        if (!shouldDeleteAfterInstall) {
+          const stats = statSync(filePath)
+          const isExpired = now - stats.mtimeMs > this.UPDATE_RETENTION_MS
+          if (!isExpired || !this.isUpdateArtifact(file)) {
+            continue
+          }
+        }
+
+        try {
+          rmSync(filePath, { force: true })
+          console.log(`Removed stale update artifact: ${file}`)
+        } catch (error) {
+          console.warn(`Failed to remove update artifact ${file}:`, error)
+        }
+      }
+    } catch (error) {
+      console.warn('Error cleaning update artifacts:', error)
+    }
+  }
+
+  private static readPendingUpdateVersion(): string | null {
+    try {
+      const flagFile = join(this.UPDATE_DIR, '.update-pending')
+      if (!existsSync(flagFile)) {
+        return null
+      }
+
+      const content = readFileSync(flagFile, 'utf-8')
+      const parsed = JSON.parse(content) as { version?: string }
+      return typeof parsed.version === 'string' ? parsed.version.replace(/^v/i, '') : null
+    } catch (error) {
+      console.warn('Failed to read pending update flag:', error)
+      return null
+    }
+  }
+
+  private static isUpdateArtifact(fileName: string): boolean {
+    return fileName === '.update-pending'
+      || fileName === 'install-update.sh'
+      || fileName === 'install-update.bat'
+      || fileName.endsWith('.tmp')
+      || fileName.endsWith('.exe')
+      || fileName.endsWith('.dmg')
+      || fileName.endsWith('.AppImage')
+      || fileName.endsWith('.deb')
+      || fileName.endsWith('.rpm')
+      || fileName.endsWith('.exe.bak')
+      || fileName.endsWith('.dmg.bak')
   }
 
   private static findAssetForPlatform(assets: GitHubRelease['assets']): GitHubRelease['assets'][0] | null {

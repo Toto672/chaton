@@ -40,11 +40,13 @@ import {
 import { piStoreGetState, piStoreReplace, piStoreReplaceSync } from './pi-store'
 import { perfMonitor } from './perf-monitor'
 import { useNotifications } from '@/features/notifications/NotificationContext'
+import type { ChatonsExtensionDeeplink } from '../types'
 
 export function WorkspaceProvider({ children }: PropsWithChildren) {
   const [state, rawDispatch] = useReducer(reducer, initialState)
   const [isLoading, setIsLoading] = useState(true)
   const { addNotification } = useNotifications()
+  const pendingAutomationSuggestionDeeplinkRef = useRef<ChatonsExtensionDeeplink | null>(null)
 
   // Combined dispatch: routes Pi actions to the external store,
   // non-Pi actions to the React reducer. Some actions (hydrate,
@@ -384,6 +386,45 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     const unsubscribe = workspaceIpc.onExtensionNotification((payload) => {
       if (!payload?.title) return
+      const suggestionDraft =
+        payload.meta &&
+        typeof payload.meta === 'object' &&
+        !Array.isArray(payload.meta) &&
+        'automationSuggestionDraft' in payload.meta
+          ? (payload.meta as {
+              automationSuggestionDraft?: {
+                name?: unknown
+                instruction?: unknown
+                trigger?: unknown
+                actionType?: unknown
+                cooldown?: unknown
+              }
+            }).automationSuggestionDraft
+          : null
+      if (
+        payload.link?.type === 'deeplink' &&
+        payload.link.href === 'automation-suggestion:open' &&
+        suggestionDraft
+      ) {
+        pendingAutomationSuggestionDeeplinkRef.current = {
+          viewId: 'automation.main',
+          target: 'open-create-automation-suggestion',
+          params: {
+            name: typeof suggestionDraft.name === 'string' ? suggestionDraft.name : '',
+            instruction: typeof suggestionDraft.instruction === 'string' ? suggestionDraft.instruction : '',
+            trigger: suggestionDraft.trigger === 'cron' ? 'cron' : 'cron',
+            actionType:
+              suggestionDraft.actionType === 'executeAndNotify'
+                ? 'executeAndNotify'
+                : 'executeAndNotify',
+            cooldown:
+              typeof suggestionDraft.cooldown === 'number' && Number.isFinite(suggestionDraft.cooldown)
+                ? suggestionDraft.cooldown
+                : 86400000,
+          },
+        }
+      }
+      addNotification(payload.body ? `${payload.title}: ${payload.body}` : payload.title, 'info', 0, payload.link)
       dispatch({
         type: 'setNotice',
         payload: {
@@ -397,7 +438,34 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     return () => {
       unsubscribe()
     }
-  }, [])
+  }, [addNotification])
+
+  const openAutomationSuggestionReview = useCallback(async () => {
+    if (stateRef.current.appMode === 'assistant') {
+      dispatch({ type: 'setAssistantExtensionView', payload: { viewId: 'automation.main' } })
+    } else {
+      dispatch({
+        type: 'setSidebarMode',
+        payload: {
+          mode: 'extension-main-view',
+          activeExtensionViewId: 'automation.main',
+        },
+      })
+    }
+
+    const deeplink = pendingAutomationSuggestionDeeplinkRef.current
+    if (!deeplink) return
+
+    window.dispatchEvent(
+      new CustomEvent('chaton:extension:deeplink', {
+        detail: {
+          viewId: deeplink.viewId,
+          target: deeplink.target,
+          params: deeplink.params,
+        },
+      }),
+    )
+  }, [dispatch])
 
   // Listen for deep link events to open the extensions marketplace
   useEffect(() => {
@@ -1179,6 +1247,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         workspaceIpc.runPiCommand(action, params),
       getPiDiagnostics: () => workspaceIpc.getPiDiagnostics(),
       openPiPath: (target: 'settings' | 'models' | 'sessions') => workspaceIpc.openPath(target),
+      openAutomationSuggestionReview,
       exportPiSessionHtml: (sessionFile: string, outputFile?: string) => workspaceIpc.exportPiSessionHtml(sessionFile, outputFile),
       getWorktreeGitInfo: (conversationId: string) => workspaceIpc.getWorktreeGitInfo(conversationId),
       generateWorktreeCommitMessage: (conversationId: string) => workspaceIpc.generateWorktreeCommitMessage(conversationId),

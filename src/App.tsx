@@ -85,7 +85,7 @@ function LoadingSplash() {
 
 function AppShell() {
   const { t } = useTranslation()
-  const { state, isLoading, updateSettings, selectConversation, selectProject, openSettings, closeSettings } = useWorkspace()
+  const { state, isLoading, updateSettings, selectConversation, selectProject, openSettings, closeSettings, openAutomationSuggestionReview } = useWorkspace()
   const [forceOnboardingOpen, setForceOnboardingOpen] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
   const [isResizing, setIsResizing] = useState(false)
@@ -101,8 +101,9 @@ function AppShell() {
       selectProject,
       openSettings,
       closeSettings,
+      openAutomationSuggestionReview,
     })
-  }, [selectConversation, selectProject, openSettings, closeSettings])
+  }, [selectConversation, selectProject, openSettings, closeSettings, openAutomationSuggestionReview])
 
   useEffect(() => {
     if (isLoading || hasHydratedSidebarWidthRef.current) {

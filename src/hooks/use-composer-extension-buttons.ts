@@ -7,29 +7,13 @@ import type {
   ComposerContextUsageData,
 } from '@/extensions/composer-button-sdk';
 import { composerButtonRegistry, startExtensionLoader } from '@/extensions/composer-button-sdk';
+import { computeComposerContextUsage } from '@/components/shell/composer/context-usage';
 
 /**
  * Extended button action type that includes extension ID
  */
 interface ComposerButtonActionWithExtension extends ComposerButtonAction {
   _extensionId?: string;
-}
-
-/**
- * Extract total token count from a single Pi message's usage field.
- */
-function extractUsageTotal(message: unknown): number {
-  if (!message || typeof message !== 'object' || Array.isArray(message)) {
-    return 0;
-  }
-  const record = message as Record<string, unknown>;
-  const usage =
-    record.usage && typeof record.usage === 'object' && !Array.isArray(record.usage)
-      ? (record.usage as Record<string, unknown>)
-      : null;
-  return typeof usage?.totalTokens === 'number' && Number.isFinite(usage.totalTokens)
-    ? Math.max(0, usage.totalTokens)
-    : 0;
 }
 
 /**
@@ -72,24 +56,10 @@ export function useComposerExtensionButtons(options?: {
 
   // Compute context usage from messages and context window
   const contextUsage = useMemo((): ComposerContextUsageData | null => {
-    const capacity =
-      typeof options?.contextWindow === 'number' && Number.isFinite(options.contextWindow)
-        ? Math.max(0, options.contextWindow)
-        : 0;
-    const messages = options?.messages ?? [];
-    const totalUsed = messages.reduce<number>(
-      (sum, msg) => sum + extractUsageTotal(msg),
-      0,
+    return computeComposerContextUsage(
+      options?.messages ?? [],
+      options?.contextWindow,
     );
-    const safeUsed = Math.max(0, totalUsed);
-    const boundedUsed = capacity > 0 ? Math.min(safeUsed, capacity) : 0;
-    const ratio = capacity > 0 ? boundedUsed / capacity : 0;
-    const percentage = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
-    return {
-      usedTokens: capacity > 0 ? boundedUsed : safeUsed,
-      contextWindow: capacity,
-      percentage,
-    };
   }, [options?.messages, options?.contextWindow]);
 
   /**

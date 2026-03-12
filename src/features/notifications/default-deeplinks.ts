@@ -11,6 +11,7 @@ export type WorkspaceDeeplinkDispatcher = {
   selectProject: (projectId: string) => Promise<void>
   openSettings: () => void
   closeSettings: () => void
+  openAutomationSuggestionReview: () => Promise<void> | void
 }
 
 /**
@@ -104,6 +105,24 @@ export function initializeDefaultDeeplinks(): void {
       }
     } catch (error) {
       console.error(`Failed to execute workspace action ${action}:`, error)
+      return false
+    }
+  })
+
+  registerDeeplinkHandler('automation-suggestion', async (action) => {
+    if (!workspaceDispatcher) {
+      console.warn('Workspace dispatcher not initialized for deeplink')
+      return false
+    }
+
+    try {
+      if (action === 'open') {
+        await workspaceDispatcher.openAutomationSuggestionReview()
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error(`Failed to open automation suggestion review ${action}:`, error)
       return false
     }
   })

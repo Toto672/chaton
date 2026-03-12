@@ -16,6 +16,24 @@ Related:
 
 ## March 12, 2026
 
+### Added conservative background automation suggestions
+
+**Change:** Added a lightweight background analyzer that reviews completed conversations for repeated request patterns and can raise a notification suggesting an automation.
+
+**Why:** Chatons already had memory summarization and an automation runtime, but it did not proactively connect repeated user behavior to automation opportunities.
+
+**Files updated:**
+
+- `electron/extensions/runtime/automation-suggestions.ts` -- Pattern detection, persistence, and suggestion throttling
+- `electron/ipc/workspace-handlers.ts` -- Triggers the analyzer after conversation completion
+- `electron/extensions/runtime/host.ts` -- Extended host notifications with optional links
+- `src/features/workspace/store/provider.tsx` -- Surfaces linked extension notifications in the renderer
+- `src/types/global.d.ts` -- Updated notification payload typing
+- `src/features/notifications/default-deeplinks.ts` -- Added automation suggestion deeplink routing
+- `electron/extensions/builtin/automation/index.js` -- Added prefilled suggestion target in the automation UI
+- `docs/content/developer-guide.mdx` -- Documented the new background suggestion flow
+- `docs/content/user-guide.mdx` -- Documented user-facing automation suggestions
+
 ### Base URL probing now prefers generation-compatible endpoints
 
 **Issue:** Some provider setups passed onboarding tests but failed at runtime with errors like `404 Cannot POST /chat/completions` because base URL probing could accept a candidate that only worked for `/models`.
@@ -30,6 +48,24 @@ Related:
 - `docs/content/developer-guide.mdx` -- Documented updated probing behavior
 - `docs/content/pi-integration.mdx` -- Added integration-level note on probing behavior
 - `AGENTS.md` -- Updated maintainer guidance and troubleshooting notes
+
+### Preserved provider model lists when credentials live in auth.json
+
+**Issue:** Custom providers added from the packaged app could be discovered successfully, then later appear as `0 models` because a normalization pass removed `provider.models` from `models.json` whenever `apiKey` was absent there.
+
+**Root cause:** Chatons migrates API keys into `auth.json`, but the normalizer still treated the absence of `apiKey` inside `models.json` as a signal to delete the provider's `models` array. That made model visibility depend on duplicate credential storage and disproportionately affected packaged-app refresh flows.
+
+**Change:** Stopped deleting `provider.models` during `models.json` normalization when credentials are stored in `auth.json`. Added targeted persistence logs so packaged-app runs can confirm the final stored `baseUrl` and model count per provider.
+
+**Why:** Provider metadata and credentials are separate concerns. Once discovery succeeds, `models.json` must remain authoritative for model visibility regardless of where credentials are stored.
+
+**Files updated:**
+
+- `electron/ipc/workspace-pi.ts` -- Removed destructive normalization of provider model lists
+- `electron/ipc/workspace-handlers.ts` -- Added persistence logging for discovered providers
+- `docs/content/developer-guide.mdx` -- Clarified `models.json` vs `auth.json` responsibilities
+- `docs/content/pi-integration.mdx` -- Documented that model lists persist independently of credential storage
+- `AGENTS.md` -- Added maintainer note about preserving provider models during credential migration
 
 ---
 
@@ -630,3 +666,31 @@ The rewrite rechecked these implementation points:
 ### Ongoing rule
 
 Any future change that affects user workflows, extension contracts, settings behavior, architecture, or configuration file semantics should update the relevant guide in the same change.
+
+---
+
+## March 12, 2026
+
+### Update artifact cleanup now removes old installers
+
+Adjusted the update-service documentation after implementing actual cleanup of downloaded installers and helper files.
+
+- `electron/lib/update/update-service.ts` -- Added cleanup for stale update artifacts in `<userData>/updates/`, including removal after a successful install is detected on a later launch and time-based purging after 7 days.
+- `docs/content/developer-guide.mdx` -- Updated the Updates section to document the real cleanup behavior.
+- `docs/content/documentation-audit.mdx` -- This entry.
+
+Reason:
+
+- Previously, downloaded update installers and helper scripts could accumulate indefinitely. The code now matches the expected lifecycle more closely and the docs reflect the behavior.
+
+### Composer context usage calculation corrected
+
+Updated the composer context-usage contract and extension documentation to match the runtime behavior after fixing an incorrect estimation path.
+
+- `src/extensions/composer-button-sdk.ts` -- Clarified that `contextUsage.usedTokens` is an estimate of tokens currently occupying the active thread context window, not a cumulative sum of historical `usage.totalTokens`.
+- `docs/content/extensions/composer-buttons.mdx` -- Updated the public extension docs to match the corrected semantics.
+- `docs/content/documentation-audit.mdx` -- This entry.
+
+Reason:
+
+- The previous wording implied cumulative token accounting across the conversation, which did not match the intended UI signal and encouraged incorrect implementations.

@@ -111,7 +111,7 @@ interface ComposerButtonContext {
 
 ```typescript
 interface ComposerContextUsageData {
-  usedTokens: number;       // Total tokens consumed so far
+  usedTokens: number;       // Estimated tokens currently occupying the thread context
   contextWindow: number;    // Model context window capacity (0 if unknown)
   percentage: number;       // Percentage of context window used (0-100)
 }
@@ -445,7 +445,7 @@ async onAction(context) {
 
 ## Built-in: Context Usage Widget
 
-The context usage circular progress ring is implemented as a built-in widget-mode composer button (`@chaton/context-usage`). It shows how much of the current model's context window has been consumed.
+The context usage circular progress ring is implemented as a built-in widget-mode composer button (`@chaton/context-usage`). It shows an estimate of how much of the active model's context window is currently occupied by the thread.
 
 The widget:
 

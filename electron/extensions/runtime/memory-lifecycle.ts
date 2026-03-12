@@ -241,28 +241,64 @@ export function buildMemoryContextMessage(
 
   const projectId = conversation.project_id
 
-  // Search for relevant memories scoped to this project (or global)
-  const searchResult = memorySearch({
-    query,
-    scope: projectId ? 'project' : 'global',
-    projectId: projectId ?? undefined,
-    limit: 8,
-    includeArchived: false,
-  })
+  const collectEntries = (result: ReturnType<typeof memorySearch>) => {
+    if (!result.ok || !Array.isArray(result.data)) return []
+    return result.data as Array<{
+      id: string
+      title: string | null
+      content: string
+      kind: string
+      score: number
+      tags: string[]
+    }>
+  }
 
-  if (!searchResult.ok) return null
+  // Project conversations should use both project memory and global preferences.
+  const entries = projectId
+    ? [
+        ...collectEntries(
+          memorySearch({
+            query,
+            scope: 'project',
+            projectId,
+            limit: 8,
+            includeArchived: false,
+          }),
+        ),
+        ...collectEntries(
+          memorySearch({
+            query,
+            scope: 'global',
+            limit: 6,
+            includeArchived: false,
+          }),
+        ),
+      ]
+    : collectEntries(
+        memorySearch({
+          query,
+          scope: 'global',
+          limit: 8,
+          includeArchived: false,
+        }),
+      )
 
-  const entries = searchResult.data as Array<{
+  const deduped = Array.from(
+    new Map(entries.map((entry) => [entry.id, entry])).values(),
+  )
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+
+  const relevant = deduped.filter((e) => e.score > 0.15)
+  if (relevant.length === 0) return null
+
+  const typedRelevant = relevant as Array<{
     title: string | null
     content: string
     kind: string
     score: number
     tags: string[]
   }>
-
-  // Filter out low-relevance matches
-  const relevant = entries.filter((e) => e.score > 0.15)
-  if (relevant.length === 0) return null
 
   const lines = [
     '## Context from Past Memories',
@@ -273,7 +309,7 @@ export function buildMemoryContextMessage(
     '',
   ]
 
-  for (const entry of relevant) {
+  for (const entry of typedRelevant) {
     const title = entry.title ? `**${entry.title}**` : ''
     const kindTag = entry.kind !== 'fact' ? ` [${entry.kind}]` : ''
     lines.push(`- ${title}${kindTag}: ${entry.content}`)

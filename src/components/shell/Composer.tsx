@@ -207,6 +207,20 @@ export function Composer() {
   const diffErrorByPath = diffErrorByPathByKey[composerKey] ?? {};
   const currentChangeIndexByPath = currentChangeIndexByPathByKey[composerKey] ?? {};
   const hasInlineDiffOpen = Object.values(openDiffPaths).some(Boolean);
+  const runtimeModelKey = selectedRuntime?.state?.model
+    ? `${selectedRuntime.state.model.provider}/${selectedRuntime.state.model.id}`
+    : null;
+  const conversationModelKey =
+    selectedConversation?.modelProvider && selectedConversation?.modelId
+      ? `${selectedConversation.modelProvider}/${selectedConversation.modelId}`
+      : null;
+  const activeContextModelKey =
+    conversationModelKey ??
+    runtimeModelKey ??
+    (selectedConversation ? selectedModelKey : null);
+  const activeContextModel = activeContextModelKey
+    ? models.find((model) => model.key === activeContextModelKey)
+    : undefined;
 
   const {
     message,
@@ -282,7 +296,7 @@ export function Composer() {
     accessMode: selectedAccessMode,
     notify: (title, body, type) => addNotification(body ?? title, type ?? 'info'),
     messages: selectedMessages,
-    contextWindow: models.find((model) => model.key === selectedModelKey)?.contextWindow,
+    contextWindow: activeContextModel?.contextWindow,
   });
 
   useLayoutEffect(() => {

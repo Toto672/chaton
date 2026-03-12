@@ -35,8 +35,8 @@ export function AssistantMemoryView() {
         { scope: 'all', limit: 50 },
       )
       if (result.ok && result.data) {
-        const data = result.data as { entries?: MemoryEntry[] }
-        setMemories(data.entries ?? [])
+        const data = result.data as MemoryEntry[]
+        setMemories(Array.isArray(data) ? data : [])
       }
     } catch {
       // Extension not available

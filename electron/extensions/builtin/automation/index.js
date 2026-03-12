@@ -937,6 +937,25 @@
     refs.nameInput.focus();
   }
 
+  function prefillSuggestion(params) {
+    resetForm();
+    var data = params && typeof params === "object" ? params : {};
+    refs.modalTitle.textContent = "Review automation suggestion";
+    refs.saveBtn.textContent = "Create";
+    refs.nameInput.value = String(data.name || "");
+    refs.instructionInput.value = String(data.instruction || "");
+    refs.requestInput.value = String(data.instruction || "");
+    refs.triggerSelect.value = String(data.trigger || "cron");
+    refs.actionTypeSelect.value = String(data.actionType || "executeAndNotify");
+    var suggestionCooldown = Math.max(0, Number(data.cooldown) || 0);
+    var opts = [0, 60000, 300000, 900000, 3600000, 86400000];
+    var best = "0";
+    opts.forEach(function (v) { if (v <= suggestionCooldown) best = String(v); });
+    refs.cooldownInput.value = best;
+    refs.modalBg.classList.add("is-open");
+    refs.nameInput.focus();
+  }
+
   function closeModal() {
     refs.modalBg.classList.remove("is-open");
     resetForm();
@@ -1109,6 +1128,9 @@
     var payload = data.payload || {};
     if (payload.viewId !== "automation.main") return;
     if (payload.target === "open-create-automation") openModal();
+    if (payload.target === "open-create-automation-suggestion") {
+      prefillSuggestion(payload.params || {});
+    }
   });
 
   if (

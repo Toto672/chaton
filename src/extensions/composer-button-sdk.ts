@@ -104,7 +104,7 @@ export interface ComposerButtonRequirement {
  * Live context usage stats for the active conversation.
  */
 export interface ComposerContextUsageData {
-  /** Total tokens consumed so far (sum of usage.totalTokens across messages) */
+  /** Estimated tokens currently occupying the active thread context window */
   usedTokens: number
   /** Model context window capacity, 0 if unknown */
   contextWindow: number
@@ -720,8 +720,8 @@ function generateSpeechToTextRequirementHTML(): string {
 
 /**
  * Register the Context Usage widget extension.
- * Displays a circular progress ring showing how much of the model's
- * context window has been consumed by the current conversation.
+ * Displays a circular progress ring showing how much of the active model's
+ * context window is currently occupied by the conversation.
  */
 function registerContextUsageExtension(): void {
   const extension: ComposerButtonExtension = {

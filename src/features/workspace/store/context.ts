@@ -70,6 +70,7 @@ export type WorkspaceContextValue = {
   runPiCommand: (action: PiCommandAction, params?: { search?: string; source?: string; local?: boolean }) => Promise<PiCommandResult>
   getPiDiagnostics: () => Promise<PiDiagnostics>
   openPiPath: (target: 'settings' | 'models' | 'sessions') => Promise<{ ok: boolean; message?: string }>
+  openAutomationSuggestionReview: () => Promise<void> | void
   exportPiSessionHtml: (sessionFile: string, outputFile?: string) => Promise<PiCommandResult>
   getWorktreeGitInfo: (
     conversationId: string,

@@ -850,7 +850,12 @@ export const workspaceIpc = {
     listener: (payload: { extensionId: string; viewId: string }) => void,
   ): (() => void) => getApi().onExtensionOpenMainView(listener),
   onExtensionNotification: (
-    listener: (payload: { title: string; body: string }) => void,
+    listener: (payload: {
+      title: string;
+      body: string;
+      link?: { type: 'deeplink' | 'url'; href: string; label?: string };
+      meta?: unknown;
+    }) => void,
   ): (() => void) => getApi().onExtensionNotification(listener),
   onDeeplinkExtensionInstall: (
     listener: (payload: { extensionId: string }) => void,

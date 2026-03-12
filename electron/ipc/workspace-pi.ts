@@ -668,17 +668,6 @@ function normalizeModelsJsonForPiSchema(next: Record<string, unknown>): {
       }
     }
 
-    const hasModels =
-      Array.isArray(providerConfig.models) &&
-      (providerConfig.models as unknown[]).length > 0;
-    const hasApiKey =
-      typeof providerConfig.apiKey === "string" &&
-      providerConfig.apiKey.trim().length > 0;
-    if (hasModels && !hasApiKey) {
-      delete providerConfig.models;
-      providerChanged = true;
-    }
-
     if (providerChanged) {
       nextProviders[providerName] = providerConfig;
       changed = true;

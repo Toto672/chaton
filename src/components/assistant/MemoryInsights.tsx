@@ -37,9 +37,10 @@ export function MemoryInsights() {
         if (cancelled) return
 
         if (result.ok && result.data) {
-          const data = result.data as { entries?: MemoryEntry[]; total?: number }
-          setMemories(data.entries ?? [])
-          setTotalCount(data.total ?? data.entries?.length ?? 0)
+          const data = result.data as MemoryEntry[]
+          const entries = Array.isArray(data) ? data : []
+          setMemories(entries)
+          setTotalCount(entries.length)
         }
       } catch {
         // Memory extension may not be installed

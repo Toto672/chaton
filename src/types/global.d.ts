@@ -889,7 +889,12 @@ declare global {
         listener: (payload: { extensionId: string; viewId: string }) => void,
       ) => () => void;
       onExtensionNotification: (
-        listener: (payload: { title: string; body: string }) => void,
+        listener: (payload: {
+          title: string;
+          body: string;
+          link?: { type: "deeplink" | "url"; href: string; label?: string };
+          meta?: unknown;
+        }) => void,
       ) => () => void;
       onDeeplinkExtensionInstall: (
         listener: (payload: { extensionId: string }) => void,

@@ -23,8 +23,26 @@ export function createHostCall(emitHostEvent: HostEventEmitter) {
           trackCapability(extensionId, 'host.notifications')
           const title = typeof params?.title === 'string' ? params.title : 'Notification'
           const body = typeof params?.body === 'string' ? params.body : ''
+          const linkInput =
+            params?.link && typeof params.link === 'object' && !Array.isArray(params.link)
+              ? (params.link as { type?: unknown; href?: unknown; label?: unknown })
+              : null
+          const meta =
+            params?.meta && typeof params.meta === 'object' && !Array.isArray(params.meta)
+              ? params.meta
+              : undefined
+          const link =
+            linkInput &&
+            (linkInput.type === 'deeplink' || linkInput.type === 'url') &&
+            typeof linkInput.href === 'string'
+              ? {
+                  type: linkInput.type,
+                  href: linkInput.href,
+                  label: typeof linkInput.label === 'string' ? linkInput.label : undefined,
+                }
+              : undefined
           for (const win of BrowserWindow.getAllWindows()) {
-            win.webContents.send('extension:notification', { title, body })
+            win.webContents.send('extension:notification', { title, body, link, meta })
           }
           return { ok: true }
         }

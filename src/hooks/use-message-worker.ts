@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { computeComposerContextUsage } from '@/components/shell/composer/context-usage';
 
 interface UseMessageWorkerOptions {
   enabled?: boolean;
@@ -83,30 +84,15 @@ export function useMessageWorker(options?: UseMessageWorkerOptions) {
     } else {
       // Fallback: compute on main thread
       // (This maintains compatibility if worker fails)
-      const capacity = Math.max(0, contextWindow);
-      const totalUsed = messages.reduce<number>((sum, msg: unknown) => {
-        if (!msg || typeof msg !== 'object' || Array.isArray(msg)) return sum;
-        const record = msg as Record<string, unknown>;
-        const usage = record.usage && typeof record.usage === 'object' && !Array.isArray(record.usage)
-          ? (record.usage as Record<string, unknown>)
-          : null;
-        const tokens = typeof usage?.totalTokens === 'number' && Number.isFinite(usage.totalTokens)
-          ? Math.max(0, usage.totalTokens)
-          : 0;
-        return sum + tokens;
-      }, 0);
-      
-      const safeUsed = Math.max(0, totalUsed);
-      const boundedUsed = capacity > 0 ? Math.min(safeUsed, capacity) : 0;
-      const ratio = capacity > 0 ? boundedUsed / capacity : 0;
-      const percentage = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
-      
-      setContextUsage({
-        usedTokens: capacity > 0 ? boundedUsed : safeUsed,
-        contextWindow: capacity,
-        percentage,
-        totalMessages: messages.length,
-      });
+      const computed = computeComposerContextUsage(messages, contextWindow);
+      setContextUsage(
+        computed
+          ? {
+              ...computed,
+              totalMessages: messages.length,
+            }
+          : null,
+      );
     }
   }, []);
 

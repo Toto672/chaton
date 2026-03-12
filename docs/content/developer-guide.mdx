@@ -227,6 +227,7 @@ Pi runtime events are forwarded to the renderer via `pi:event` IPC channel. Even
 | `auth.json` | Canonical credential storage (API keys and OAuth tokens) |
 
 Chatons synchronizes credentials between both files to maintain compatibility.
+The provider `models` arrays remain authoritative in `models.json` even after API keys are migrated to `auth.json`; normalization must not remove models simply because credentials now live only in `auth.json`.
 
 ### OAuth Providers
 
@@ -385,6 +386,16 @@ Uses a local hashed trigram vector strategy:
 
 This is entirely offline -- no external embedding service or model download needed. It is practical for factual memory lookup but is not equivalent to a neural embedding model.
 
+## Automation Suggestions
+
+After completed conversations, Chatons now runs a lightweight background analyzer that looks for repeated request patterns with a strong automation upside.
+
+- It runs alongside memory summarization, after normal conversation completion
+- It stores small local counters in app settings rather than full extra transcripts
+- It only suggests from a small allowlist of patterns that Chatons is explicitly prepared to automate
+- It suppresses suggestions when a matching automation already exists and rate-limits repeated prompts
+- Suggestion notifications deep link into the automation main view with a prefilled draft target
+
 ### Scopes
 
 - `global`: Personal facts, preferences, user context
@@ -419,6 +430,8 @@ Implemented in `electron/lib/update/update-service.ts`.
 - Compares against `app.getVersion()`
 - Downloads DMGs/installers to `<userData>/updates/`
 - On macOS, opens the DMG in Finder
+- Cleans update artifacts from `<userData>/updates/` after a successful install is detected on a later launch
+- Purges stale update artifacts that are older than 7 days
 - Changelogs are prefetched from GitHub on startup and stored locally
 
 ---
