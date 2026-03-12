@@ -105,6 +105,7 @@ Structure (simplified):
 - Chatons UI reads this to display model lists
 - Provider base URLs are normalized here during setup
 - Provider model lists must remain in `models.json` even when API keys are migrated to `auth.json`; model visibility must not depend on credentials being duplicated in both files
+- For custom HTTP providers, probing and model discovery use a main-process Node HTTP client rather than relying on Electron's ambient `fetch`, because packaged-app runtime behavior may differ from terminal/dev mode on local-network endpoints
 
 **Loading logic:** `electron/ipc/workspace.ts` lines 1320+ handle model discovery and deduplication
 

@@ -183,6 +183,8 @@ When Chatons resolves provider base URLs, it probes URL variants and prefers end
 
 This prevents selecting a URL that passes onboarding checks but fails at conversation runtime with errors like `404 Cannot POST /chat/completions`.
 
+For custom local-network HTTP providers, Chatons performs these probes and model-list fetches through a dedicated Node `http/https` client in the main process. This avoids packaged-app inconsistencies where Electron runtime `fetch` can behave differently from development or terminal runs.
+
 ---
 
 ## 7. Per-Conversation Sessions

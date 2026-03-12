@@ -252,6 +252,8 @@ When saving a provider, Chatons probes multiple URL variants (`http://host:port`
 
 This avoids selecting a base URL that answers `/models` but fails chat generation endpoints (for example missing `/v1` leading to `Cannot POST /chat/completions`).
 
+For custom HTTP providers, this probing and model discovery runs through a Node `http/https` transport in the main process instead of ambient `fetch`. This was required because packaged Electron runs could fail against local-network endpoints even when the same binary worked in terminal/dev mode.
+
 ### Auth Diagnostics
 
 On 401 errors, Chatons logs a sanitized debug trail (provider ID, credential source, masked key fingerprint). Raw keys are never logged.

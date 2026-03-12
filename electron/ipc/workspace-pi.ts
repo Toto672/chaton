@@ -1,5 +1,7 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import path from "node:path";
 import { promisify } from "node:util";
 import { app } from "electron";
@@ -17,6 +19,62 @@ import {
 
 const execFileAsync = promisify(execFile);
 const requireFromHere = createRequire(import.meta.url);
+
+function nodeRequest(
+  url: string,
+  options?: {
+    method?: "GET" | "HEAD" | "POST";
+    headers?: Record<string, string>;
+    body?: string;
+    timeoutMs?: number;
+  },
+): Promise<{
+  status: number;
+  body: string;
+  headers: http.IncomingHttpHeaders;
+}> {
+  return new Promise((resolve, reject) => {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    const client = parsed.protocol === "https:" ? https : http;
+    const req = client.request(
+      parsed,
+      {
+        method: options?.method ?? "GET",
+        headers: options?.headers,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+        res.on("end", () => {
+          resolve({
+            status: res.statusCode ?? 0,
+            body: Buffer.concat(chunks).toString("utf8"),
+            headers: res.headers,
+          });
+        });
+      },
+    );
+
+    req.on("error", reject);
+    req.setTimeout(options?.timeoutMs ?? 5_000, () => {
+      req.destroy(new Error("Request timeout"));
+    });
+
+    if (options?.body) {
+      req.write(options.body);
+    }
+    req.end();
+  });
+}
 
 export type PiCommandResult = {
   ok: boolean;
@@ -753,23 +811,19 @@ export async function probeProviderBaseUrl(baseUrl: string): Promise<{
     url: string,
     options?: { method?: "GET" | "HEAD" | "POST"; body?: string },
   ): Promise<boolean> => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1500);
     try {
-      const response = await fetch(url, {
+      const response = await nodeRequest(url, {
         method: options?.method ?? "HEAD",
-        signal: controller.signal,
         headers: {
           accept: "application/json",
           ...(options?.body ? { "content-type": "application/json" } : {}),
         },
-        ...(options?.body ? { body: options.body } : {}),
+        body: options?.body,
+        timeoutMs: 1_500,
       });
       return isReachableStatus(response.status);
     } catch {
       return false;
-    } finally {
-      clearTimeout(timeout);
     }
   };
 
@@ -1073,19 +1127,16 @@ async function fetchProviderModelsFromEndpoint(
     console.log(
       `[pi] fetchProviderModelsFromEndpoint provider="${providerId ?? "unknown"}" trying candidate="${candidate}" hasApiKey=${apiKey.length > 0}`,
     );
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5_000);
     try {
-      const response = await fetch(`${candidate}/models`, {
+      const response = await nodeRequest(`${candidate}/models`, {
         method: "GET",
         headers,
-        signal: controller.signal,
+        timeoutMs: 5_000,
       });
       console.log(
         `[pi] fetchProviderModelsFromEndpoint provider="${providerId ?? "unknown"}" candidate="${candidate}" status=${response.status}`,
       );
-      if (!response.ok) {
-        clearTimeout(timeout);
+      if (response.status < 200 || response.status >= 300) {
         continue; // Try next candidate
       }
 
@@ -1097,7 +1148,7 @@ async function fetchProviderModelsFromEndpoint(
         }>;
       };
       try {
-        payload = (await response.json()) as {
+        payload = JSON.parse(response.body) as {
           data?: Array<{
             id?: unknown;
             context_window?: unknown;
@@ -1105,7 +1156,6 @@ async function fetchProviderModelsFromEndpoint(
           }>;
         };
       } catch {
-        clearTimeout(timeout);
         continue; // Try next candidate if JSON parsing fails
       }
 
@@ -1113,11 +1163,9 @@ async function fetchProviderModelsFromEndpoint(
         console.log(
           `[pi] fetchProviderModelsFromEndpoint provider="${providerId ?? "unknown"}" candidate="${candidate}" returned payload without data array`,
         );
-        clearTimeout(timeout);
         continue; // Try next candidate if no data array
       }
 
-      clearTimeout(timeout);
       console.log(
         `[pi] fetchProviderModelsFromEndpoint provider="${providerId ?? "unknown"}" candidate="${candidate}" returned ${payload.data.length} raw model(s)`,
       );
@@ -1178,7 +1226,6 @@ async function fetchProviderModelsFromEndpoint(
         })
         .filter((item): item is PiListedModel => item !== null);
     } catch {
-      clearTimeout(timeout);
       console.log(
         `[pi] fetchProviderModelsFromEndpoint provider="${providerId ?? "unknown"}" candidate="${candidate}" failed`,
       );
@@ -1267,35 +1314,32 @@ export async function testProviderConnection(
       headers.authorization = `Bearer ${apiKey}`;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10_000);
+    const response = await nodeRequest(`${normalizedBaseUrl}/models`, {
+      method: "HEAD",
+      headers,
+      timeoutMs: 10_000,
+    });
+    const latency = Date.now() - startTime;
 
-    try {
-      const response = await fetch(`${normalizedBaseUrl}/models`, {
-        method: "HEAD",
-        headers,
-        signal: controller.signal,
-      });
-      const latency = Date.now() - startTime;
-
-      if (response.ok || response.status === 401 || response.status === 403) {
-        return {
-          ok: true,
-          latency,
-          statusCode: response.status,
-          message: `Connection successful (${response.status}) - ${latency}ms`,
-        };
-      }
-
+    if (
+      (response.status >= 200 && response.status < 300) ||
+      response.status === 401 ||
+      response.status === 403
+    ) {
       return {
-        ok: false,
+        ok: true,
         latency,
         statusCode: response.status,
-        message: `Connection failed with status ${response.status}`,
+        message: `Connection successful (${response.status}) - ${latency}ms`,
       };
-    } finally {
-      clearTimeout(timeout);
     }
+
+    return {
+      ok: false,
+      latency,
+      statusCode: response.status,
+      message: `Connection failed with status ${response.status}`,
+    };
   } catch (error) {
     const latency = Date.now() - startTime;
     const message = error instanceof Error ? error.message : "Unknown error";

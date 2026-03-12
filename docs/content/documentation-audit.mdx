@@ -82,6 +82,23 @@ Related:
 - `src/components/sidebar/settings/sections/ProvidersModelsSection.tsx` -- Deferred custom-provider saves to coherent snapshots and normalized `baseUrl` before persistence
 - `electron/lib/logging/log-manager.ts` -- Added `console.info` capture to packaged-app logs
 
+### Switched packaged custom-provider probing to Node HTTP transport
+
+**Issue:** Even after fixing persistence and logging, packaged Chatons still failed to discover models for custom local-network providers like `multicodex` and `litellm`. Logs showed the main process trying the correct candidates (`http://host`, `http://host/v1`) but every `fetch` attempt failed, while the same installed binary could reach those endpoints in terminal mode.
+
+**Root cause:** Main-process `fetch` inside the normal packaged Electron runtime was not reliable for those HTTP local-network endpoints. This was runtime-specific: the same endpoint worked in development, in terminal-mode checks, and with manual shell requests.
+
+**Change:** Replaced main-process provider probing, model discovery, and connection tests with a dedicated Node `http/https` client instead of `fetch`.
+
+**Why:** Provider discovery must be deterministic across dev and packaged runs. Using Node's HTTP stack removes the Electron-runtime-specific divergence for custom HTTP providers.
+
+**Files updated:**
+
+- `electron/ipc/workspace-pi.ts` -- Replaced provider probe/discovery transport with Node `http/https`
+- `docs/content/developer-guide.mdx` -- Documented the transport choice for custom providers
+- `docs/content/pi-integration.mdx` -- Added integration note for packaged local-network providers
+- `AGENTS.md` -- Added maintainer note about custom-provider transport behavior
+
 ---
 
 ## March 11, 2026 (Session 6)
