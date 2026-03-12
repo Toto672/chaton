@@ -1006,8 +1006,14 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
           return;
         }
         const providerConfig = providerValue as Record<string, unknown>;
+        console.log(
+          `[pi] updateModelsJson inspecting provider "${providerName}" with api="${String(providerConfig.api ?? "")}" baseUrl="${String(providerConfig.baseUrl ?? "")}" hasApiKey=${typeof providerConfig.apiKey === "string" && providerConfig.apiKey.trim().length > 0}`,
+        );
         const existingModels = providerConfig.models;
         if (Array.isArray(existingModels) && existingModels.length > 0) {
+          console.log(
+            `[pi] updateModelsJson skipping discovery for "${providerName}" because ${existingModels.length} model(s) are already present`,
+          );
           return;
         }
         const discovered = await deps.discoverProviderModels(
@@ -1029,12 +1035,12 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
           }>;
         };
         if (!typedDiscovered.ok || !Array.isArray(typedDiscovered.models) || typedDiscovered.models.length === 0) {
-          console.info(
-            `[pi] updateModelsJson discovery produced no models for "${providerName}"`,
+          console.log(
+            `[pi] updateModelsJson discovery produced no models for "${providerName}" message="${String(("message" in typedDiscovered && typedDiscovered.message) || "")}"`,
           );
           return;
         }
-        console.info(
+        console.log(
           `[pi] updateModelsJson discovered ${typedDiscovered.models.length} model(s) for "${providerName}"`,
         );
         enrichedProviders[providerName] = {

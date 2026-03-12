@@ -1070,6 +1070,9 @@ async function fetchProviderModelsFromEndpoint(
 
   // Try each base URL candidate (e.g., http://host:port, http://host:port/v1, etc.)
   for (const candidate of candidates) {
+    console.log(
+      `[pi] fetchProviderModelsFromEndpoint provider="${providerId ?? "unknown"}" trying candidate="${candidate}" hasApiKey=${apiKey.length > 0}`,
+    );
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5_000);
     try {
@@ -1078,6 +1081,9 @@ async function fetchProviderModelsFromEndpoint(
         headers,
         signal: controller.signal,
       });
+      console.log(
+        `[pi] fetchProviderModelsFromEndpoint provider="${providerId ?? "unknown"}" candidate="${candidate}" status=${response.status}`,
+      );
       if (!response.ok) {
         clearTimeout(timeout);
         continue; // Try next candidate
@@ -1104,11 +1110,17 @@ async function fetchProviderModelsFromEndpoint(
       }
 
       if (!Array.isArray(payload.data)) {
+        console.log(
+          `[pi] fetchProviderModelsFromEndpoint provider="${providerId ?? "unknown"}" candidate="${candidate}" returned payload without data array`,
+        );
         clearTimeout(timeout);
         continue; // Try next candidate if no data array
       }
 
       clearTimeout(timeout);
+      console.log(
+        `[pi] fetchProviderModelsFromEndpoint provider="${providerId ?? "unknown"}" candidate="${candidate}" returned ${payload.data.length} raw model(s)`,
+      );
       // Successfully got models, return them
       return payload.data
         .map((item) => {
@@ -1167,6 +1179,9 @@ async function fetchProviderModelsFromEndpoint(
         .filter((item): item is PiListedModel => item !== null);
     } catch {
       clearTimeout(timeout);
+      console.log(
+        `[pi] fetchProviderModelsFromEndpoint provider="${providerId ?? "unknown"}" candidate="${candidate}" failed`,
+      );
       // Continue to next candidate on network error
       continue;
     }
