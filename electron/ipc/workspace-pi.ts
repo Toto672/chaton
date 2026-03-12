@@ -10,7 +10,10 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import { createRequire } from "node:module";
 import { getDb } from "../db/index.js";
-import { listPiModelsCache, replacePiModelsCache } from "../db/repos/pi-models-cache.js";
+import {
+  listPiModelsCache,
+  replacePiModelsCache,
+} from "../db/repos/pi-models-cache.js";
 
 const execFileAsync = promisify(execFile);
 const requireFromHere = createRequire(import.meta.url);
@@ -39,7 +42,11 @@ export type PiModel = {
 
 export type PiModelsResult =
   | { ok: true; models: PiModel[] }
-  | { ok: false; reason: "unknown" | "invalid_model" | "lock_error"; message?: string };
+  | {
+      ok: false;
+      reason: "unknown" | "invalid_model" | "lock_error";
+      message?: string;
+    };
 
 export type SetPiModelScopedResult = PiModelsResult;
 
@@ -420,7 +427,9 @@ function migrateProviderApiKeysToAuthIfNeeded(agentDir: string): void {
   fs.writeFileSync(authPath, `${JSON.stringify(auth, null, 2)}\n`, "utf8");
 }
 
-export function syncProviderApiKeysBetweenModelsAndAuth(agentDir: string): void {
+export function syncProviderApiKeysBetweenModelsAndAuth(
+  agentDir: string,
+): void {
   migrateProviderApiKeysToAuthIfNeeded(agentDir);
 
   const modelsPath = path.join(agentDir, "models.json");
@@ -446,7 +455,7 @@ export function syncProviderApiKeysBetweenModelsAndAuth(agentDir: string): void 
   if (!auth || typeof auth !== "object" || Array.isArray(auth)) return;
   if (!models.providers || typeof models.providers !== "object") return;
 
-  let modelsChanged = false;
+  const modelsChanged = false;
   let authChanged = false;
   const nextProviders: Record<string, { apiKey?: unknown }> = {
     ...(models.providers as Record<string, { apiKey?: unknown }>),
@@ -459,7 +468,9 @@ export function syncProviderApiKeysBetweenModelsAndAuth(agentDir: string): void 
     if (!currentProviderNames.has(providerName)) {
       delete nextAuth[providerName];
       authChanged = true;
-      console.log(`[pi] Removed auth entry for deleted provider: ${providerName}`);
+      console.log(
+        `[pi] Removed auth entry for deleted provider: ${providerName}`,
+      );
     }
   }
 
@@ -560,7 +571,10 @@ export function backupFile(filePath: string) {
   fs.copyFileSync(filePath, backupPath);
 }
 
-export function atomicWriteJson(filePath: string, data: Record<string, unknown>) {
+export function atomicWriteJson(
+  filePath: string,
+  data: Record<string, unknown>,
+) {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
   const tmpPath = path.join(
@@ -571,7 +585,9 @@ export function atomicWriteJson(filePath: string, data: Record<string, unknown>)
   fs.renameSync(tmpPath, filePath);
 }
 
-export function validateModelsJson(next: Record<string, unknown>): string | null {
+export function validateModelsJson(
+  next: Record<string, unknown>,
+): string | null {
   const providers = next.providers;
   if (providers !== undefined) {
     if (
@@ -975,8 +991,8 @@ async function fetchProviderModelsFromEndpoint(
       : "";
   if (!baseUrl) return [];
 
-  const normalizedBaseUrl = normalizeHttpBaseUrlShape(baseUrl);
-  if (!normalizedBaseUrl) return [];
+  const candidates = buildBaseUrlCandidates(baseUrl);
+  if (candidates.length === 0) return [];
 
   let apiKey =
     typeof providerConfig.apiKey === "string"
@@ -990,10 +1006,7 @@ async function fetchProviderModelsFromEndpoint(
     if (entry) {
       if (entry.type === "oauth" && typeof entry.access === "string") {
         apiKey = entry.access;
-      } else if (
-        entry.type === "api_key" &&
-        typeof entry.key === "string"
-      ) {
+      } else if (entry.type === "api_key" && typeof entry.key === "string") {
         apiKey = entry.key;
       }
     }
@@ -1003,76 +1016,112 @@ async function fetchProviderModelsFromEndpoint(
     headers.authorization = `Bearer ${apiKey}`;
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5_000);
-  try {
-    const response = await fetch(`${normalizedBaseUrl}/models`, {
-      method: "GET",
-      headers,
-      signal: controller.signal,
-    });
-    if (!response.ok) return [];
-    const payload = (await response.json()) as {
-      data?: Array<{
-        id?: unknown;
-        context_window?: unknown;
-        max_completion_tokens?: unknown;
-      }>;
-    };
-    if (!Array.isArray(payload.data)) return [];
-    return payload.data
-      .map((item) => {
-        if (!item || typeof item.id !== "string" || item.id.trim().length === 0) {
-          return null;
-        }
+  // Try each base URL candidate (e.g., http://host:port, http://host:port/v1, etc.)
+  for (const candidate of candidates) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5_000);
+    try {
+      const response = await fetch(`${candidate}/models`, {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        clearTimeout(timeout);
+        continue; // Try next candidate
+      }
 
-        const modelId = item.id.trim();
-        const model: PiListedModel = {
-          provider: "",
-          id: modelId,
+      let payload: {
+        data?: Array<{
+          id?: unknown;
+          context_window?: unknown;
+          max_completion_tokens?: unknown;
+        }>;
+      };
+      try {
+        payload = (await response.json()) as {
+          data?: Array<{
+            id?: unknown;
+            context_window?: unknown;
+            max_completion_tokens?: unknown;
+          }>;
         };
+      } catch {
+        clearTimeout(timeout);
+        continue; // Try next candidate if JSON parsing fails
+      }
 
-        if (typeof item.context_window === "number" && item.context_window > 0) {
-          model.contextWindow = item.context_window;
-          model.contextWindowSource = "provider";
-        }
+      if (!Array.isArray(payload.data)) {
+        clearTimeout(timeout);
+        continue; // Try next candidate if no data array
+      }
 
-        if (
-          typeof item.max_completion_tokens === "number" &&
-          item.max_completion_tokens > 0
-        ) {
-          model.maxTokens = item.max_completion_tokens;
-        }
+      clearTimeout(timeout);
+      // Successfully got models, return them
+      return payload.data
+        .map((item) => {
+          if (
+            !item ||
+            typeof item.id !== "string" ||
+            item.id.trim().length === 0
+          ) {
+            return null;
+          }
 
-        const lowerModelId = modelId.toLowerCase();
-        if (
-          lowerModelId.includes("vision") ||
-          lowerModelId.includes("gpt-4-v") ||
-          lowerModelId.includes("claude-3") ||
-          lowerModelId.includes("gemini") ||
-          lowerModelId.includes("llava") ||
-          lowerModelId.includes("qwen-vl")
-        ) {
-          model.imageInput = true;
-        }
+          const modelId = item.id.trim();
+          const model: PiListedModel = {
+            provider: "",
+            id: modelId,
+          };
 
-        if (
-          lowerModelId.includes("reasoning") ||
-          lowerModelId.includes("thinking") ||
-          lowerModelId.includes("o1") ||
-          lowerModelId.includes("deep-think")
-        ) {
-          model.reasoning = true;
-        }
+          if (
+            typeof item.context_window === "number" &&
+            item.context_window > 0
+          ) {
+            model.contextWindow = item.context_window;
+            model.contextWindowSource = "provider";
+          }
 
-        return model;
-      })
-      .filter((item): item is PiListedModel => item !== null);
-  } catch {
-    return [];
-  } finally {
-    clearTimeout(timeout);
+          if (
+            typeof item.max_completion_tokens === "number" &&
+            item.max_completion_tokens > 0
+          ) {
+            model.maxTokens = item.max_completion_tokens;
+          }
+
+          const lowerModelId = modelId.toLowerCase();
+          if (
+            lowerModelId.includes("vision") ||
+            lowerModelId.includes("gpt-4-v") ||
+            lowerModelId.includes("claude-3") ||
+            lowerModelId.includes("gemini") ||
+            lowerModelId.includes("llava") ||
+            lowerModelId.includes("qwen-vl")
+          ) {
+            model.imageInput = true;
+          }
+
+          if (
+            lowerModelId.includes("reasoning") ||
+            lowerModelId.includes("thinking") ||
+            lowerModelId.includes("o1") ||
+            lowerModelId.includes("deep-think")
+          ) {
+            model.reasoning = true;
+          }
+
+          return model;
+        })
+        .filter((item): item is PiListedModel => item !== null);
+    } catch {
+      clearTimeout(timeout);
+      // Continue to next candidate on network error
+      continue;
+    }
   }
+
+  // No candidates worked
+  return [];
 }
 
 export async function discoverProviderModels(
@@ -1080,12 +1129,16 @@ export async function discoverProviderModels(
   providerId?: string,
 ): Promise<{ ok: boolean; models: PiListedModel[]; message?: string }> {
   try {
-    const discovered = await fetchProviderModelsFromEndpoint(providerConfig, providerId);
+    const discovered = await fetchProviderModelsFromEndpoint(
+      providerConfig,
+      providerId,
+    );
     if (!discovered || discovered.length === 0) {
       return {
         ok: false,
         models: [],
-        message: "No models found. Check that the API key is valid and the endpoint is accessible.",
+        message:
+          "No models found. Check that the API key is valid and the endpoint is accessible.",
       };
     }
     return {
@@ -1109,7 +1162,12 @@ export async function discoverProviderModels(
 
 export async function testProviderConnection(
   providerConfig: Record<string, unknown>,
-): Promise<{ ok: boolean; latency: number; statusCode?: number; message: string }> {
+): Promise<{
+  ok: boolean;
+  latency: number;
+  statusCode?: number;
+  message: string;
+}> {
   const startTime = Date.now();
   try {
     const baseUrl =
@@ -1178,7 +1236,8 @@ export async function testProviderConnection(
       return {
         ok: false,
         latency,
-        message: "Connection timeout (10s) - server may be unreachable or very slow",
+        message:
+          "Connection timeout (10s) - server may be unreachable or very slow",
       };
     }
     return {
