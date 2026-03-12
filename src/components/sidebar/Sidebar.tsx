@@ -16,8 +16,9 @@ import { selectGlobalConversations, selectVisibleConversations } from '@/feature
 import { useProjectFolder } from '@/components/sidebar/useProjectFolder'
 import { useTranslation } from 'react-i18next'
 import { useMemo, useEffect, useState } from 'react'
+import { ProjectDetailsSheet } from '@/components/sidebar/ProjectDetailsSheet'
 import { workspaceIpc } from '@/services/ipc/workspace'
-import type { ChatonsExtension } from '@/features/workspace/types'
+import type { Project, ChatonsExtension } from '@/features/workspace/types'
 import { perfMonitor } from '@/features/workspace/store/perf-monitor'
 
 export function Sidebar({ width }: { width: number }) {
@@ -26,6 +27,14 @@ export function Sidebar({ width }: { width: number }) {
   const { showChangelogForVersion } = useChangelogManager()
   const { state, selectConversation, setSearchQuery, deleteConversation, openSettings, openSkills, openExtensions, openChannels, createConversationGlobal, setAssistantView, setAppMode } = useWorkspace()
   const [extensions, setExtensions] = useState<ChatonsExtension[]>([])
+  const [detailsProject, setDetailsProject] = useState<Project | null>(null)
+
+  const handleProjectUpdated = (projectId: string, icon: string | null) => {
+    setDetailsProject((current) => {
+      if (!current || current.id !== projectId) return current
+      return { ...current, icon }
+    })
+  }
 
   const visibleConversations = selectVisibleConversations(state.conversations, state.settings)
   const globalConversations = selectGlobalConversations(state.conversations, state.settings)
@@ -75,7 +84,8 @@ export function Sidebar({ width }: { width: number }) {
   }
 
   return (
-    <aside className="sidebar-panel" style={{ width: `${width}px` }}>
+    <>
+      <aside className="sidebar-panel" style={{ width: `${width}px` }}>
       {state.appMode === 'workspace' ? (
         <>
           <nav className="sidebar-nav pt-4" aria-label={t('Navigation principale')}>
@@ -115,10 +125,7 @@ export function Sidebar({ width }: { width: number }) {
             <ExtensionSidebarItems />
           </nav>
 
-          <div className="sidebar-section-head">
-            <span className="sidebar-section-title">{t('Conversations')}</span>
-            <SidebarHeaderActions />
-          </div>
+          <SidebarHeaderActions />
 
           {state.settings.isSearchVisible ? (
             <div className="px-3 pb-2">
@@ -168,7 +175,14 @@ export function Sidebar({ width }: { width: number }) {
                     />
                   ))}
                 </section>
-                {visibleProjects.map((project) => <ProjectGroup key={project.id} project={project} extensions={extensionsData} />)}
+                {visibleProjects.map((project) => (
+                  <ProjectGroup
+                    key={project.id}
+                    project={project}
+                    extensions={extensionsData}
+                    onOpenDetails={setDetailsProject}
+                  />
+                ))}
                 {(autoFoldedProjects.length > 0 || subFolders.length > 0 || archivedProjects.length > 0) && (
                   <ProjectFolder
                     autoFoldedProjects={autoFoldedProjects}
@@ -263,5 +277,12 @@ export function Sidebar({ width }: { width: number }) {
         }}
       />
     </aside>
+      <ProjectDetailsSheet
+        project={detailsProject}
+        open={detailsProject !== null}
+        onClose={() => setDetailsProject(null)}
+        onProjectUpdated={handleProjectUpdated}
+      />
+    </>
   )
 }

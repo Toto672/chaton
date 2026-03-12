@@ -85,6 +85,10 @@
     @apply min-w-0 flex-1;
   }
 
+  .project-leading-icon {
+    @apply inline-flex h-4 w-4 shrink-0 items-center justify-center text-sm leading-none;
+  }
+
   .project-action-button {
     @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#696b74] opacity-0 transition-all duration-150 hover:bg-white/80 hover:text-[#44506a] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
   }
@@ -204,7 +208,7 @@
 
   .project-folder-container {
     -webkit-app-region: no-drag;
-    @apply relative rounded-lg;
+    @apply rounded-lg;
     z-index: 10;
   }
 
@@ -231,11 +235,9 @@
   }
 
   .project-folder-popover {
-    @apply absolute left-1 right-1 z-50 rounded-xl border border-[#d8dce4] bg-white shadow-lg;
+    @apply z-50 rounded-xl border border-[#d8dce4] bg-white shadow-lg;
     max-height: 420px;
     overflow: hidden;
-    bottom: 100%;
-    margin-bottom: 8px;
   }
 
   .project-folder-popover-header {

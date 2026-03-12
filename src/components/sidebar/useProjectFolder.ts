@@ -102,15 +102,19 @@ export function useProjectFolder(
     // Projects not in any subfolder are candidates for auto-folding
     const unassigned = visibleProjects.filter((p) => !inSubFolder.has(p.id))
 
-    // If not enough unassigned projects, don't auto-fold
-    if (unassigned.length <= MIN_PROJECTS_TO_FOLD) {
-      return { visible: unassigned, autoFolded: [], subFolders }
+    // Separate hidden projects from others
+    const hiddenProjects = unassigned.filter((p) => p.isHidden)
+    const regularProjects = unassigned.filter((p) => !p.isHidden)
+
+    // If not enough regular projects, don't auto-fold
+    if (regularProjects.length <= MIN_PROJECTS_TO_FOLD) {
+      return { visible: regularProjects, autoFolded: hiddenProjects, subFolders }
     }
 
     const now = Date.now()
 
     type Scored = { project: Project; score: number; pinned: boolean }
-    const scored: Scored[] = unassigned.map((project) => {
+    const scored: Scored[] = regularProjects.map((project) => {
       const isSelected = project.id === selectedProjectId
       const isActive = hasActiveConversation(project.id, conversations, piState)
       const hasUnread = hasUnreadCompletion(project.id, conversations, piState)
@@ -147,9 +151,9 @@ export function useProjectFolder(
     const pinnedCount = scored.filter((s) => s.pinned).length
     const foldableItems = scored.filter((s) => !s.pinned)
     const desiredVisible = Math.max(MIN_VISIBLE, pinnedCount + Math.ceil(foldableItems.length * 0.4))
-    const maxFolded = Math.max(0, unassigned.length - desiredVisible)
+    const maxFolded = Math.max(0, regularProjects.length - desiredVisible)
 
-    const autoFolded: Project[] = []
+    const autoFolded: Project[] = [...hiddenProjects]
     const visible: Project[] = []
 
     let foldedCount = 0
@@ -166,7 +170,7 @@ export function useProjectFolder(
 
     // Preserve original project order
     const visibleIds = new Set(visible.map((p) => p.id))
-    const orderedVisible = unassigned.filter((p) => visibleIds.has(p.id))
+    const orderedVisible = regularProjects.filter((p) => visibleIds.has(p.id))
     const orderedFolded = unassigned.filter((p) => !visibleIds.has(p.id))
 
     return { visible: orderedVisible, autoFolded: orderedFolded, subFolders }

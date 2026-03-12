@@ -546,6 +546,61 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     [state.projects],
   )
 
+  const setProjectHidden = useCallback(
+    (projectId: string, isHidden: boolean) => {
+      const project = state.projects.find((p) => p.id === projectId)
+      if (!project) {
+        return
+      }
+
+      // Optimistic UI: update project state immediately
+      dispatch({
+        type: 'updateProject',
+        payload: {
+          project: { ...project, isHidden },
+        },
+      })
+    },
+    [state.projects],
+  )
+
+  const updateProjectIcon = useCallback(
+    async (projectId: string, icon: string | null) => {
+      const project = stateRef.current.projects.find((p) => p.id === projectId)
+      if (!project) {
+        return { ok: false as const, reason: 'project_not_found' as const }
+      }
+
+      const normalizedIcon = icon && icon.trim().length > 0 ? icon.trim() : null
+
+      dispatch({
+        type: 'updateProject',
+        payload: {
+          project: { ...project, icon: normalizedIcon },
+        },
+      })
+
+      const result = await workspaceIpc.updateProjectIcon(projectId, normalizedIcon)
+      if (!result.ok) {
+        dispatch({
+          type: 'updateProject',
+          payload: {
+            project,
+          },
+        })
+        dispatch({
+          type: 'setNotice',
+          payload: { notice: 'Impossible de mettre a jour l\'icone du projet.' },
+        })
+        return result
+      }
+
+      dispatch({ type: 'setNotice', payload: { notice: null } })
+      return result
+    },
+    [],
+  )
+
   const createConversationForProject = useCallback(
     async (projectId: string, options?: { modelProvider?: string; modelId?: string; thinkingLevel?: string; accessMode?: 'secure' | 'open'; channelExtensionId?: string }) => {
       const result = await workspaceIpc.createConversationForProject(projectId, options)
@@ -561,6 +616,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       const project = state.projects.find((p) => p.id === projectId)
       if (project?.isArchived) {
         void archiveProject(projectId, false)
+      }
+      // If the project is hidden, show it
+      if (project?.isHidden) {
+        setProjectHidden(projectId, false)
       }
 
       dispatch({
@@ -1070,6 +1129,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       deleteConversation,
       deleteProject,
       archiveProject,
+      updateProjectIcon,
+      setProjectHidden,
       updateSettings: persistSettings,
       setSearchQuery: async (query: string) => {
         await persistSettings({ ...state.settings, searchQuery: query })

@@ -14,6 +14,8 @@ export type Project = {
   createdAt: string
   updatedAt: string
   isArchived: boolean
+  isHidden: boolean
+  icon: string | null
 }
 
 export type ConversationTitleSource = 'placeholder' | 'auto-deterministic' | 'auto-ai' | 'manual'

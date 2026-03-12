@@ -1,8 +1,10 @@
-import { Check, ChevronRight, FolderGit2, FolderOpen, FolderPlus, Pencil, Plus, Trash2, X, Eye } from 'lucide-react'
+import { Check, ChevronRight, FolderOpen, FolderPlus, Pencil, Plus, Trash2, X, Eye } from 'lucide-react'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
 
+import { ProjectIcon } from '@/components/sidebar/ProjectIcon'
 import { useWorkspace } from '@/features/workspace/store'
 import type { Project, ProjectSubFolder } from '@/features/workspace/types'
 import type { ResolvedSubFolder } from '@/components/sidebar/useProjectFolder'
@@ -175,7 +177,9 @@ function SubFolderRow({
                   whileHover={{ x: 2 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <FolderGit2 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="project-leading-icon" aria-hidden="true">
+                    <ProjectIcon icon={project.icon} size={14} loadAsDataUrl />
+                  </span>
                   <span className="pf-project-name truncate">{project.name}</span>
                 </motion.button>
               ))
@@ -261,7 +265,7 @@ function CreateSubFolderInline({
                   <span className={`pf-create-picker-check ${selected ? 'pf-create-picker-check-on' : ''}`}>
                     {selected && <Check className="h-2.5 w-2.5" />}
                   </span>
-                  <FolderGit2 className="h-3.5 w-3.5 shrink-0" />
+                  <ProjectIcon icon={project.icon} size={14} loadAsDataUrl />
                   <span className="truncate">{project.name}</span>
                 </button>
               )
@@ -296,18 +300,35 @@ export const ProjectFolder = memo(function ProjectFolder({
   extensions: _extensions,
 }: ProjectFolderProps) {
   const { t } = useTranslation()
-  const { state, createConversationForProject, updateSettings, archiveProject } = useWorkspace()
+  const { state, createConversationForProject, updateSettings, archiveProject, setProjectHidden } = useWorkspace()
   const [isOpen, setIsOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
+  const [popoverPosition, setPopoverPosition] = useState<{ top: number; left: number; width: number } | null>(null)
 
   // All projects in the folder section (auto-folded + subfolder contents + archived)
   const allFoldedCount = autoFoldedProjects.length + archivedProjects.length + subFolders.reduce((n, sf) => n + sf.projects.length, 0)
 
-  // Close on click outside
+  // Close on click outside and calculate popover position
   useEffect(() => {
     if (!isOpen) return
+    
+    // Calculate popover position
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect()
+      const spacing = 8
+      
+      // Always show below the button
+      const top = rect.bottom + spacing
+      
+      setPopoverPosition({
+        top,
+        left: rect.left,
+        width: rect.width,
+      })
+    }
+
     function handleClickOutside(event: MouseEvent) {
       if (
         containerRef.current &&
@@ -395,44 +416,52 @@ export const ProjectFolder = memo(function ProjectFolder({
   const extraCount = Math.max(0, allFoldedCount - previewProjects.length)
 
   return (
-    <div className="project-folder-container" ref={containerRef}>
-      <motion.button
-        type="button"
-        className="project-folder-row"
-        onClick={() => {
-          setIsOpen((prev) => !prev)
-          if (isOpen) setIsCreating(false)
-        }}
-        aria-expanded={isOpen}
-        aria-label={t('{{count}} projets groupes', { count: allFoldedCount })}
-        whileTap={{ scale: 0.98 }}
-      >
-        <span className="project-folder-icons">
-          {previewProjects.map((project, i) => (
-            <motion.span
-              key={project.id}
-              className="project-folder-icon-slot"
-              initial={{ opacity: 0, scale: 0.6 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.04, duration: 0.2, ease: 'easeOut' }}
-            >
-              <FolderGit2 className="h-3.5 w-3.5" />
-            </motion.span>
-          ))}
-          {extraCount > 0 && (
-            <span className="project-folder-extra-count">+{extraCount}</span>
-          )}
-        </span>
-        <span className="project-folder-label">
-          {t('{{count}} projets', { count: allFoldedCount })}
-        </span>
-      </motion.button>
+    <>
+      <div className="project-folder-container" ref={containerRef}>
+        <motion.button
+          type="button"
+          className="project-folder-row"
+          onClick={() => {
+            setIsOpen((prev) => !prev)
+            if (isOpen) setIsCreating(false)
+          }}
+          aria-expanded={isOpen}
+          aria-label={t('{{count}} projets groupes', { count: allFoldedCount })}
+          whileTap={{ scale: 0.98 }}
+        >
+          <span className="project-folder-icons">
+            {previewProjects.map((project, i) => (
+              <motion.span
+                key={project.id}
+                className="project-folder-icon-slot"
+                initial={{ opacity: 0, scale: 0.6 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: i * 0.04, duration: 0.2, ease: 'easeOut' }}
+              >
+                <ProjectIcon icon={project.icon} size={14} loadAsDataUrl />
+              </motion.span>
+            ))}
+            {extraCount > 0 && (
+              <span className="project-folder-extra-count">+{extraCount}</span>
+            )}
+          </span>
+          <span className="project-folder-label">
+            {t('{{count}} projets', { count: allFoldedCount })}
+          </span>
+        </motion.button>
+      </div>
 
-      <AnimatePresence>
-        {isOpen && (
+      {isOpen && popoverPosition && createPortal(
+        <AnimatePresence>
           <motion.div
             ref={popoverRef}
             className="project-folder-popover"
+            style={{
+              position: 'fixed',
+              top: `${popoverPosition.top}px`,
+              left: `${popoverPosition.left}px`,
+              width: `${popoverPosition.width}px`,
+            }}
             initial={{ opacity: 0, y: -8, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.95 }}
@@ -516,7 +545,9 @@ export const ProjectFolder = memo(function ProjectFolder({
                         whileHover={{ x: 2 }}
                         whileTap={{ scale: 0.98 }}
                       >
-                        <FolderGit2 className="h-4 w-4 shrink-0 opacity-50" />
+                        <span className="project-leading-icon opacity-50" aria-hidden="true">
+                          <ProjectIcon icon={project.icon} loadAsDataUrl />
+                        </span>
                         <span className="project-folder-popover-name truncate opacity-50">
                           {project.name}
                         </span>
@@ -545,31 +576,49 @@ export const ProjectFolder = memo(function ProjectFolder({
 
               {/* Auto-folded projects (not in any subfolder) */}
               {autoFoldedProjects.map((project, i) => (
-                <motion.button
-                  key={project.id}
-                  type="button"
-                  className="pf-project-item"
-                  onClick={() => handleOpenProject(project.id)}
-                  initial={{ opacity: 0, x: -12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{
-                    delay: i * 0.03,
-                    duration: 0.18,
-                    ease: 'easeOut',
-                  }}
-                  whileHover={{ x: 2 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <FolderGit2 className="h-4 w-4 shrink-0" />
-                  <span className="project-folder-popover-name truncate">
-                    {project.name}
-                  </span>
-                </motion.button>
+                <div key={project.id} className="pf-project-item-wrapper">
+                  <motion.button
+                    type="button"
+                    className="pf-project-item"
+                    onClick={() => handleOpenProject(project.id)}
+                    initial={{ opacity: 0, x: -12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{
+                      delay: i * 0.03,
+                      duration: 0.18,
+                      ease: 'easeOut',
+                    }}
+                    whileHover={{ x: 2 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <span className="project-leading-icon" aria-hidden="true">
+                      <ProjectIcon icon={project.icon} loadAsDataUrl />
+                    </span>
+                    <span className="project-folder-popover-name truncate">
+                      {project.name}
+                    </span>
+                  </motion.button>
+                  {project.isHidden && (
+                    <button
+                      type="button"
+                      className="pf-project-action"
+                      title={t('Afficher le projet')}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setProjectHidden(project.id, false)
+                      }}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+        </AnimatePresence>,
+        document.body
+      )}
+    </>
   )
 })

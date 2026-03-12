@@ -87,7 +87,7 @@ import {
   replacePiModelsCache,
 } from "../db/repos/pi-models-cache.js";
 import { getLanguagePreference } from "../db/repos/settings.js";
-import { listProjects } from "../db/repos/projects.js";
+import { listProjects, updateProjectIcon } from "../db/repos/projects.js";
 import {
   getSidebarSettings,
   saveSidebarSettings,
@@ -251,6 +251,8 @@ type WorkspacePayload = {
     repoPath: string;
     repoName: string;
     isArchived: boolean;
+    isHidden: boolean;
+    icon: string | null;
     createdAt: string;
     updatedAt: string;
   }>;
@@ -635,6 +637,8 @@ function toWorkspacePayload(): WorkspacePayload {
     repoPath: p.repo_path,
     repoName: p.repo_name,
     isArchived: Boolean(p.is_archived),
+    isHidden: Boolean(p.is_hidden),
+    icon: p.icon ?? null,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
   }));

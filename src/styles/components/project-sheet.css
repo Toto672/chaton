@@ -1,0 +1,402 @@
+@layer components {
+  .project-sheet-backdrop {
+    @apply fixed inset-0 z-40;
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  .project-sheet {
+    @apply fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col;
+    background: #ffffff;
+    box-shadow: -6px 0 30px rgba(0, 0, 0, 0.14);
+  }
+
+  .project-sheet-header {
+    @apply flex items-center justify-between gap-3 border-b px-5 py-4;
+    border-color: #e5e7eb;
+  }
+
+  .project-sheet-heading {
+    @apply flex min-w-0 items-center gap-3;
+  }
+
+  .project-sheet-icon-preview {
+    @apply flex h-10 w-10 items-center justify-center rounded-xl text-lg;
+    background: #f3f4f6;
+    color: #374151;
+  }
+
+  .project-sheet-title {
+    @apply text-sm font-semibold;
+    color: #111827;
+  }
+
+  .project-sheet-subtitle {
+    @apply mt-0.5 text-xs;
+    color: #6b7280;
+  }
+
+  .project-sheet-close {
+    @apply flex h-8 w-8 items-center justify-center rounded-lg transition-colors;
+    color: #6b7280;
+  }
+
+  .project-sheet-close:hover {
+    background: #f3f4f6;
+    color: #374151;
+  }
+
+  .project-sheet-body {
+    @apply flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-5;
+  }
+
+  .project-sheet-section {
+    @apply space-y-3;
+  }
+
+  .project-sheet-section-title {
+    @apply text-sm font-semibold;
+    color: #1f2937;
+  }
+
+  .project-sheet-helper {
+    @apply text-xs leading-5;
+    color: #6b7280;
+  }
+
+  .project-sheet-meta {
+    @apply space-y-3;
+  }
+
+  .project-sheet-meta div {
+    @apply rounded-xl border p-3;
+    border-color: #e5e7eb;
+    background: #fafafa;
+  }
+
+  .project-sheet-meta dt {
+    @apply mb-1 text-xs font-medium uppercase tracking-wide;
+    color: #6b7280;
+  }
+
+  .project-sheet-meta dd {
+    @apply text-sm;
+    color: #111827;
+  }
+
+  .project-sheet-path {
+    @apply break-all font-mono text-xs;
+  }
+
+  .project-sheet-stats-grid {
+    @apply grid grid-cols-2 gap-3;
+  }
+
+  .project-sheet-stat-card {
+    @apply flex flex-col gap-1 rounded-xl border p-4;
+    border-color: #e5e7eb;
+    background: #fafafa;
+    color: #374151;
+  }
+
+  .project-sheet-stat-value {
+    @apply text-xl font-semibold;
+    color: #111827;
+  }
+
+  .project-sheet-stat-label {
+    @apply text-xs uppercase tracking-wide;
+    color: #6b7280;
+  }
+
+  .project-sheet-stat-badge {
+    @apply h-2.5 w-2.5 rounded-full;
+  }
+
+  .project-sheet-stat-badge-done {
+    background: #22c55e;
+  }
+
+  .project-sheet-stat-badge-archived {
+    background: #9ca3af;
+  }
+
+  /* Tabs */
+  .project-sheet-tabs {
+    @apply flex gap-1 rounded-xl border p-1;
+    border-color: #e5e7eb;
+    background: #f9fafb;
+  }
+
+  .project-sheet-tab {
+    @apply flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors;
+    color: #6b7280;
+    background: transparent;
+  }
+
+  .project-sheet-tab:hover {
+    color: #374151;
+    background: #f3f4f6;
+  }
+
+  .project-sheet-tab-active {
+    color: #111827;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  .project-sheet-tab-panel {
+    @apply space-y-4;
+  }
+
+  /* Emoji icon grid */
+  .project-sheet-icon-grid {
+    @apply grid grid-cols-6 gap-2;
+  }
+
+  .project-sheet-icon-option {
+    @apply flex h-11 w-full items-center justify-center rounded-xl border text-lg transition-colors;
+    border-color: #e5e7eb;
+    background: #ffffff;
+  }
+
+  .project-sheet-icon-option:hover {
+    background: #f9fafb;
+  }
+
+  .project-sheet-icon-option-active {
+    border-color: #94a3b8;
+    background: #eef2ff;
+  }
+
+  .project-sheet-custom-icon-label {
+    @apply flex flex-col gap-2 text-sm;
+    color: #374151;
+  }
+
+  .project-sheet-custom-icon-input {
+    @apply h-11 w-20 rounded-xl border px-3 text-center text-lg outline-none;
+    border-color: #d1d5db;
+    background: #ffffff;
+  }
+
+  .project-sheet-custom-icon-input:focus {
+    border-color: #94a3b8;
+    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.18);
+  }
+
+  /* Image grid (project images tab) */
+  .project-sheet-image-grid {
+    @apply grid grid-cols-4 gap-2;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .project-sheet-image-option {
+    @apply flex flex-col items-center gap-1 rounded-xl border p-2 transition-colors;
+    border-color: #e5e7eb;
+    background: #ffffff;
+    cursor: pointer;
+  }
+
+  .project-sheet-image-option:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+  }
+
+  .project-sheet-image-option-active {
+    border-color: #94a3b8;
+    background: #eef2ff;
+  }
+
+  .project-sheet-image-option img {
+    @apply rounded-lg;
+    width: 100%;
+    height: 56px;
+    object-fit: contain;
+    background: #f9fafb;
+  }
+
+  .project-sheet-image-loading {
+    @apply rounded-lg;
+    width: 100%;
+    height: 56px;
+    background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+    background-size: 200% 100%;
+    animation: pulse-load 1.5s ease-in-out infinite;
+  }
+
+  .project-sheet-image-error {
+    @apply rounded-lg;
+    width: 100%;
+    height: 56px;
+    background: #fee2e2;
+  }
+
+  @keyframes pulse-load {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .project-sheet-image-name {
+    @apply truncate text-center text-[10px];
+    color: #6b7280;
+    max-width: 100%;
+  }
+
+  /* File picker button */
+  .project-sheet-pick-file-button {
+    @apply flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-colors;
+    border-color: #e5e7eb;
+    background: #fafafa;
+    color: #374151;
+    width: 100%;
+  }
+
+  .project-sheet-pick-file-button:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+  }
+
+  .project-sheet-pick-file-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* Action buttons */
+  .project-sheet-actions {
+    @apply flex items-center justify-end gap-2;
+  }
+
+  .project-sheet-secondary-button,
+  .project-sheet-primary-button {
+    @apply inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-medium transition-colors;
+  }
+
+  .project-sheet-secondary-button {
+    background: #f3f4f6;
+    color: #374151;
+  }
+
+  .project-sheet-secondary-button:hover {
+    background: #e5e7eb;
+  }
+
+  .project-sheet-primary-button {
+    background: #111827;
+    color: #ffffff;
+  }
+
+  .project-sheet-primary-button:hover {
+    background: #1f2937;
+  }
+
+  .project-sheet-primary-button:disabled,
+  .project-sheet-secondary-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* ─── Dark theme ─── */
+  .dark .project-sheet-backdrop {
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  .dark .project-sheet {
+    background: #12151e;
+    box-shadow: -6px 0 30px rgba(0, 0, 0, 0.35);
+  }
+
+  .dark .project-sheet-header,
+  .dark .project-sheet-meta div,
+  .dark .project-sheet-stat-card,
+  .dark .project-sheet-icon-option,
+  .dark .project-sheet-custom-icon-input,
+  .dark .project-sheet-image-option,
+  .dark .project-sheet-tabs {
+    border-color: #2a3040;
+  }
+
+  .dark .project-sheet-icon-preview,
+  .dark .project-sheet-meta div,
+  .dark .project-sheet-stat-card,
+  .dark .project-sheet-icon-option,
+  .dark .project-sheet-custom-icon-input,
+  .dark .project-sheet-secondary-button,
+  .dark .project-sheet-image-option,
+  .dark .project-sheet-pick-file-button {
+    background: #171c27;
+  }
+
+  .dark .project-sheet-tabs {
+    background: #171c27;
+  }
+
+  .dark .project-sheet-tab {
+    color: #94a3b8;
+  }
+
+  .dark .project-sheet-tab:hover {
+    color: #e5e7eb;
+    background: #1e2634;
+  }
+
+  .dark .project-sheet-tab-active {
+    color: #e5e7eb;
+    background: #12151e;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  .dark .project-sheet-title,
+  .dark .project-sheet-section-title,
+  .dark .project-sheet-meta dd,
+  .dark .project-sheet-stat-value,
+  .dark .project-sheet-custom-icon-label {
+    color: #e5e7eb;
+  }
+
+  .dark .project-sheet-subtitle,
+  .dark .project-sheet-helper,
+  .dark .project-sheet-meta dt,
+  .dark .project-sheet-stat-label,
+  .dark .project-sheet-close,
+  .dark .project-sheet-secondary-button,
+  .dark .project-sheet-image-name {
+    color: #94a3b8;
+  }
+
+  .dark .project-sheet-close:hover,
+  .dark .project-sheet-icon-option:hover,
+  .dark .project-sheet-secondary-button:hover,
+  .dark .project-sheet-image-option:hover,
+  .dark .project-sheet-pick-file-button:hover {
+    background: #1e2634;
+    color: #e5e7eb;
+  }
+
+  .dark .project-sheet-icon-option-active,
+  .dark .project-sheet-image-option-active {
+    border-color: #64748b;
+    background: #1e293b;
+  }
+
+  .dark .project-sheet-image-option img {
+    background: #1e2634;
+  }
+
+  .dark .project-sheet-image-loading {
+    background: linear-gradient(90deg, #1e2634 25%, #2a3040 50%, #1e2634 75%);
+  }
+
+  .dark .project-sheet-image-error {
+    background: #7f1d1d;
+  }
+
+  .dark .project-sheet-primary-button {
+    background: #e5e7eb;
+    color: #111827;
+  }
+
+  .dark .project-sheet-primary-button:hover {
+    background: #cbd5e1;
+  }
+}

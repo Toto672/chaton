@@ -24,6 +24,14 @@ contextBridge.exposeInMainWorld("chaton", {
     ipcRenderer.invoke("projects:delete", projectId),
   archiveProject: (projectId: string, isArchived: boolean) =>
     ipcRenderer.invoke("projects:setArchived", projectId, isArchived),
+  updateProjectIcon: (projectId: string, icon: string | null) =>
+    ipcRenderer.invoke("projects:setIcon", projectId, icon),
+  scanProjectImages: (projectId: string) =>
+    ipcRenderer.invoke("projects:scanImages", projectId),
+  pickIconImage: () =>
+    ipcRenderer.invoke("projects:pickIconImage"),
+  imageToDataUrl: (imagePath: string) =>
+    ipcRenderer.invoke("projects:imageToDataUrl", imagePath),
   getInitialState: () => ipcRenderer.invoke("workspace:getInitialState"),
   getGitDiffSummary: (conversationId: string) =>
     ipcRenderer.invoke("workspace:getGitDiffSummary", conversationId),

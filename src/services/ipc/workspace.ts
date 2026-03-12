@@ -246,6 +246,14 @@ export const workspaceIpc = {
     getApi().deleteProject(projectId),
   archiveProject: (projectId: string, isArchived: boolean): Promise<{ ok: boolean; reason?: string }> =>
     getApi().archiveProject(projectId, isArchived),
+  updateProjectIcon: (projectId: string, icon: string | null): Promise<{ ok: boolean; reason?: string }> =>
+    getApi().updateProjectIcon(projectId, icon),
+  scanProjectImages: (projectId: string): Promise<{ ok: boolean; reason?: string; images: string[] }> =>
+    getApi().scanProjectImages(projectId),
+  pickIconImage: (): Promise<string | null> =>
+    getApi().pickIconImage(),
+  imageToDataUrl: (imagePath: string): Promise<string | null> =>
+    getApi().imageToDataUrl(imagePath),
   updateSettings: (settings: SidebarSettings) =>
     getApi().updateSettings(settings),
   createConversationForProject: (

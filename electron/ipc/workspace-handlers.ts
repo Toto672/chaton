@@ -48,6 +48,7 @@ import {
   findProjectByRepoPath,
   insertProject,
   listProjects,
+  updateProjectIcon,
   updateProjectIsArchived,
 } from "../db/repos/projects.js";
 import {
@@ -1831,6 +1832,124 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
 
       emitHostEvent("project.archived", { projectId, isArchived });
       return { ok: true as const };
+    }
+  );
+
+  ipcMain.handle(
+    "projects:setIcon",
+    async (_event, projectId: string, icon: string | null) => {
+      const db = getDb();
+      const project = findProjectById(db, projectId);
+      if (!project) {
+        return { ok: false as const, reason: "project_not_found" as const };
+      }
+
+      const updated = updateProjectIcon(db, projectId, icon);
+      if (!updated) {
+        return { ok: false as const, reason: "unknown" as const };
+      }
+
+      emitHostEvent("project.icon_updated", { projectId, icon: icon ?? null });
+      return { ok: true as const };
+    }
+  );
+
+  // Scan project folder for image files (png, jpg, jpeg, gif, webp, svg, ico)
+  ipcMain.handle(
+    "projects:scanImages",
+    async (_event, projectId: string) => {
+      const db = getDb();
+      const project = findProjectById(db, projectId);
+      if (!project) {
+        return { ok: false as const, reason: "project_not_found" as const, images: [] as string[] };
+      }
+
+      const repoPath = project.repo_path;
+      const imageExtensions = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico"]);
+      const images: string[] = [];
+      const maxDepth = 3;
+      const maxResults = 60;
+
+      function scanDir(dirPath: string, depth: number) {
+        if (depth > maxDepth || images.length >= maxResults) return;
+        try {
+          const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+          for (const entry of entries) {
+            if (images.length >= maxResults) break;
+            // Skip hidden dirs / node_modules / .git
+            if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+            const fullPath = path.join(dirPath, entry.name);
+            if (entry.isDirectory()) {
+              scanDir(fullPath, depth + 1);
+            } else if (entry.isFile()) {
+              const ext = path.extname(entry.name).toLowerCase();
+              if (imageExtensions.has(ext)) {
+                images.push(fullPath);
+              }
+            }
+          }
+        } catch {
+          // Permission errors, etc.
+        }
+      }
+
+      scanDir(repoPath, 0);
+      return { ok: true as const, images };
+    }
+  );
+
+  // Open a native file dialog to pick an image
+  ipcMain.handle(
+    "projects:pickIconImage",
+    async () => {
+      const result = await dialog.showOpenDialog({
+        title: "Choose an icon image",
+        filters: [
+          { name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "ico"] },
+        ],
+        properties: ["openFile"],
+      });
+
+      // @ts-ignore - Electron dialog type issue
+      if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+        return null;
+      }
+
+      // @ts-ignore - Electron dialog type issue
+      return result.filePaths[0] as string;
+    }
+  );
+
+  // Convert image file to base64 data URL for display in <img> tags
+  ipcMain.handle(
+    "projects:imageToDataUrl",
+    async (_event, imagePath: string) => {
+      try {
+        if (!imagePath || typeof imagePath !== 'string') {
+          return null;
+        }
+        // Security: only allow reading from common project/user directories
+        const normalizedPath = path.normalize(imagePath);
+        if (normalizedPath.includes('..') || normalizedPath.startsWith('/etc') || normalizedPath.startsWith('/sys')) {
+          return null;
+        }
+        const fileBuffer = fs.readFileSync(normalizedPath);
+        const base64 = fileBuffer.toString('base64');
+        const ext = path.extname(normalizedPath).toLowerCase();
+        const mimeTypes: Record<string, string> = {
+          '.png': 'image/png',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.gif': 'image/gif',
+          '.webp': 'image/webp',
+          '.svg': 'image/svg+xml',
+          '.ico': 'image/x-icon',
+        };
+        const mimeType = mimeTypes[ext] || 'image/png';
+        return `data:${mimeType};base64,${base64}`;
+      } catch {
+        return null;
+      }
     }
   );
 

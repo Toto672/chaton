@@ -1,9 +1,10 @@
-import { FolderGit2, PencilLine, Trash2, EyeOff } from 'lucide-react'
+import { Info, PencilLine, Trash2, EyeOff } from 'lucide-react'
 import { memo, type MouseEvent, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
 
 import { ConversationRow } from '@/components/sidebar/ConversationRow'
+import { ProjectIcon } from '@/components/sidebar/ProjectIcon'
 import { useWorkspace } from '@/features/workspace/store'
 import { selectConversationsForProject } from '@/features/workspace/selectors'
 import type { Project, Conversation } from '@/features/workspace/types'
@@ -13,12 +14,13 @@ import { usePiStore } from '@/features/workspace/store/pi-store'
 type ProjectGroupProps = {
   project: Project
   extensions?: Array<{ id: string; icon?: string; iconUrl?: string }>
+  onOpenDetails?: (project: Project) => void
 }
 
-export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [] }: ProjectGroupProps) {
+export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [], onOpenDetails }: ProjectGroupProps) {
   perfMonitor.recordComponentRender('ProjectGroup')
   const { t } = useTranslation()
-  const { state, selectConversation, selectProject, createConversationForProject, toggleProjectCollapsed, deleteConversation, deleteProject, archiveProject } =
+  const { state, selectConversation, selectProject, createConversationForProject, toggleProjectCollapsed, deleteConversation, deleteProject, setProjectHidden } =
     useWorkspace()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [afficherTousLesFils, setAfficherTousLesFils] = useState(false)
@@ -114,8 +116,23 @@ export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [
           aria-expanded={!collapsed}
           aria-controls={sectionId}
         >
-          <FolderGit2 className="h-4 w-4" />
+          <span className="project-leading-icon" aria-hidden="true">
+            <ProjectIcon icon={project.icon} loadAsDataUrl />
+          </span>
           <span className="project-title truncate">{project.name}</span>
+        </button>
+        <button
+          type="button"
+          className="project-action-button"
+          aria-label={`Afficher les details de ${project.name}`}
+          title="Details du projet"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            onOpenDetails?.(project)
+          }}
+        >
+          <Info className="h-4 w-4" />
         </button>
         <button
           type="button"
@@ -138,7 +155,7 @@ export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
-            void archiveProject(project.id, true)
+            setProjectHidden(project.id, true)
           }}
         >
           <EyeOff className="h-4 w-4" />
@@ -223,6 +240,7 @@ export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [
   // Memoization: only re-render if project data changed
   if (prevProps.project.id !== nextProps.project.id) return false
   if (prevProps.project.name !== nextProps.project.name) return false
+  if (prevProps.project.icon !== nextProps.project.icon) return false
   if (prevProps.extensions?.length !== nextProps.extensions?.length) return false
   return true
 })
