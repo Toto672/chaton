@@ -228,6 +228,7 @@ Pi runtime events are forwarded to the renderer via `pi:event` IPC channel. Even
 
 Chatons synchronizes credentials between both files to maintain compatibility.
 The provider `models` arrays remain authoritative in `models.json` even after API keys are migrated to `auth.json`; normalization must not remove models simply because credentials now live only in `auth.json`.
+For custom providers with explicit `models`, Chatons must also keep `models.json` valid for Pi's `ModelRegistry` even when the true secret is stored only in `auth.json`. If `models.json` omits `apiKey` entirely for such a provider, Pi can reject the whole custom provider registry and surface only built-in models.
 
 ### OAuth Providers
 

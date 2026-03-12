@@ -113,6 +113,23 @@ Related:
 
 - `package.json` -- Added macOS `extendInfo.NSLocalNetworkUsageDescription`
 
+### Restored Pi compatibility for custom providers after API-key migration
+
+**Issue:** Public-domain custom providers such as LiteLLM could successfully discover and persist hundreds of models into `models.json`, yet the packaged app still displayed `0 models` afterward.
+
+**Root cause:** Pi's `ModelRegistry` rejects custom providers that define a `models` array but do not also expose an `apiKey` field inside `models.json`. Chatons had migrated the real API key into `auth.json`, so `ModelRegistry` treated the whole custom-model section as invalid and fell back to built-in providers only.
+
+**Change:** Kept `models.json` Pi-compatible for custom providers with model definitions while continuing to read the real credential from `auth.json` during discovery, runtime startup, and connection tests. Also promoted `ModelRegistry.getError()` into a hard fallback trigger so Chatons reconstructs the model list from `models.json` instead of silently trusting an invalid Pi registry state.
+
+**Why:** Without this compatibility layer, any packaged refresh that moved custom-provider credentials out of `models.json` could make every custom provider disappear from the UI even though model discovery and persistence had already succeeded.
+
+**Files updated:**
+
+- `electron/ipc/workspace-pi.ts` -- Added Pi-compat credential placeholder handling, auth-aware provider API key resolution, and fallback when `ModelRegistry` reports config errors
+- `docs/content/developer-guide.mdx` -- Documented the `ModelRegistry` compatibility constraint
+- `docs/content/pi-integration.mdx` -- Clarified why custom providers stay Pi-compatible when credentials live in `auth.json`
+- `AGENTS.md` -- Added maintainer guidance about Pi schema compatibility for custom providers
+
 ---
 
 ## March 11, 2026 (Session 6)

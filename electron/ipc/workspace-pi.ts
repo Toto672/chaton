@@ -19,6 +19,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 const requireFromHere = createRequire(import.meta.url);
+const PI_COMPAT_API_KEY_PLACEHOLDER = "!";
 
 function nodeRequest(
   url: string,
@@ -74,6 +75,54 @@ function nodeRequest(
     }
     req.end();
   });
+}
+
+function isPiCompatApiKeyPlaceholder(value: unknown): boolean {
+  return typeof value === "string" && value.trim() === PI_COMPAT_API_KEY_PLACEHOLDER;
+}
+
+function hasProviderModelDefinitions(
+  providerConfig: Record<string, unknown>,
+): boolean {
+  return Array.isArray(providerConfig.models) && providerConfig.models.length > 0;
+}
+
+function readProviderApiKey(
+  providerConfig: Record<string, unknown>,
+): string {
+  if (typeof providerConfig.apiKey !== "string") {
+    return "";
+  }
+  const trimmed = providerConfig.apiKey.trim();
+  if (!trimmed || isPiCompatApiKeyPlaceholder(trimmed)) {
+    return "";
+  }
+  return trimmed;
+}
+
+function getProviderApiKeyFromAuth(providerId?: string): string {
+  if (!providerId) return "";
+  const auth = getAuthJson();
+  const entry = auth[providerId] as
+    | { type?: string; access?: string; key?: string }
+    | undefined;
+  if (!entry || typeof entry !== "object") {
+    return "";
+  }
+  if (entry.type === "oauth" && typeof entry.access === "string") {
+    return entry.access.trim();
+  }
+  if (entry.type === "api_key" && typeof entry.key === "string") {
+    return entry.key.trim();
+  }
+  return "";
+}
+
+function resolveProviderApiKey(
+  providerConfig: Record<string, unknown>,
+  providerId?: string,
+): string {
+  return readProviderApiKey(providerConfig) || getProviderApiKeyFromAuth(providerId);
 }
 
 export type PiCommandResult = {
@@ -437,7 +486,11 @@ function migrateProviderApiKeysToAuthIfNeeded(agentDir: string): void {
       return {
         provider,
         key:
-          typeof key === "string" && key.trim().length > 0 ? key.trim() : null,
+          typeof key === "string" &&
+          key.trim().length > 0 &&
+          !isPiCompatApiKeyPlaceholder(key)
+            ? key.trim()
+            : null,
       };
     })
     .filter(
@@ -535,7 +588,9 @@ export function syncProviderApiKeysBetweenModelsAndAuth(
   for (const [providerName, providerConfig] of Object.entries(nextProviders)) {
     const modelKey =
       typeof providerConfig?.apiKey === "string"
-        ? providerConfig.apiKey.trim()
+        ? isPiCompatApiKeyPlaceholder(providerConfig.apiKey)
+          ? ""
+          : providerConfig.apiKey.trim()
         : "";
 
     const authEntry = nextAuth[providerName];
@@ -715,15 +770,32 @@ function normalizeModelsJsonForPiSchema(next: Record<string, unknown>): {
     };
     let providerChanged = false;
 
+    const hasModels = hasProviderModelDefinitions(providerConfig);
     if (typeof providerConfig.apiKey === "string") {
       const trimmed = providerConfig.apiKey.trim();
       if (trimmed.length === 0) {
-        delete providerConfig.apiKey;
+        if (hasModels) {
+          providerConfig.apiKey = PI_COMPAT_API_KEY_PLACEHOLDER;
+        } else {
+          delete providerConfig.apiKey;
+        }
         providerChanged = true;
       } else if (trimmed !== providerConfig.apiKey) {
         providerConfig.apiKey = trimmed;
         providerChanged = true;
       }
+    } else if (hasModels) {
+      providerConfig.apiKey = PI_COMPAT_API_KEY_PLACEHOLDER;
+      providerChanged = true;
+    }
+
+    if (
+      hasModels &&
+      isPiCompatApiKeyPlaceholder(providerConfig.apiKey) &&
+      providerConfig.apiKey !== PI_COMPAT_API_KEY_PLACEHOLDER
+    ) {
+      providerConfig.apiKey = PI_COMPAT_API_KEY_PLACEHOLDER;
+      providerChanged = true;
     }
 
     if (providerChanged) {
@@ -1100,23 +1172,7 @@ async function fetchProviderModelsFromEndpoint(
   const candidates = buildBaseUrlCandidates(baseUrl);
   if (candidates.length === 0) return [];
 
-  let apiKey =
-    typeof providerConfig.apiKey === "string"
-      ? providerConfig.apiKey.trim()
-      : "";
-  if (!apiKey && providerId) {
-    const auth = getAuthJson();
-    const entry = auth[providerId] as
-      | { type?: string; access?: string; key?: string }
-      | undefined;
-    if (entry) {
-      if (entry.type === "oauth" && typeof entry.access === "string") {
-        apiKey = entry.access;
-      } else if (entry.type === "api_key" && typeof entry.key === "string") {
-        apiKey = entry.key;
-      }
-    }
-  }
+  const apiKey = resolveProviderApiKey(providerConfig, providerId);
   const headers: Record<string, string> = { accept: "application/json" };
   if (apiKey.length > 0) {
     headers.authorization = `Bearer ${apiKey}`;
@@ -1305,10 +1361,7 @@ export async function testProviderConnection(
       };
     }
 
-    const apiKey =
-      typeof providerConfig.apiKey === "string"
-        ? providerConfig.apiKey.trim()
-        : "";
+    const apiKey = resolveProviderApiKey(providerConfig);
     const headers: Record<string, string> = { accept: "application/json" };
     if (apiKey.length > 0) {
       headers.authorization = `Bearer ${apiKey}`;
@@ -1766,6 +1819,10 @@ export async function listPiModels(): Promise<PiModelsResult> {
         authStorage,
         path.join(agentDir, "models.json"),
       );
+      const registryError = modelRegistry.getError();
+      if (registryError) {
+        throw new Error(registryError);
+      }
       const available = modelRegistry.getAvailable();
       const allModels = modelRegistry.getAll();
       const source = [...allModels, ...available];

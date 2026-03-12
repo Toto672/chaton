@@ -111,6 +111,7 @@ Where `<userData>` is `<appData>/Chatons` (overridden from Electron's default in
 This is the registry Pi uses to discover available models. Chatons reads it to populate model lists.
 
 Provider model entries remain in `models.json` even when API keys are moved into `auth.json`. Credential migration must not strip `models`, otherwise custom providers can appear as `0 models` despite a valid `auth.json` entry.
+Separately, Pi's own `ModelRegistry` still validates custom providers with explicit `models` as if they require an `apiKey` field in `models.json`. Chatons therefore preserves Pi-compatible provider entries even when the canonical credential is stored in `auth.json`, so packaged runs do not drop every custom provider after reload.
 
 ### `auth.json`
 
