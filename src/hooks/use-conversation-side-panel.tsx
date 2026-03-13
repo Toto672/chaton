@@ -217,7 +217,10 @@ export function ConversationSidePanelProvider(props: {
         return {
           ...agent,
           status,
-          ...(status === 'completed' || status === 'error'
+          ...(status === 'running' && !agent.startedAt
+            ? { startedAt: new Date().toISOString() }
+            : {}),
+          ...(status === 'completed' || status === 'error' || status === 'cancelled'
             ? { completedAt: new Date().toISOString() }
             : {}),
           ...(status === 'error' && errorMessage ? { errorMessage } : {}),
@@ -311,6 +314,32 @@ export function ConversationSidePanelProvider(props: {
     })
   }, [])
 
+  const handleSetSubAgentResult = useCallback((event: Event) => {
+    const detail = (event as CustomEvent).detail
+    const conversationId = typeof detail?.conversationId === 'string' ? detail.conversationId : currentConversationIdRef.current
+    if (!detail?.subAgentId || !detail?.result || !conversationId) return
+    const { subAgentId, result } = detail as {
+      conversationId?: string
+      subAgentId: string
+      result: SubAgent['result']
+    }
+
+    setStateByConversation((prev) => {
+      const newMap = new Map(prev)
+      const convState = { ...readConvState(prev, conversationId) }
+      convState.subAgents = convState.subAgents.map((agent) => {
+        if (agent.id !== subAgentId) return agent
+        return {
+          ...agent,
+          result,
+          ...(result?.errorMessage ? { errorMessage: result.errorMessage } : {}),
+        }
+      })
+      newMap.set(conversationId, convState)
+      return newMap
+    })
+  }, [])
+
   const handleCompleteAllPendingTasks = useCallback((event: Event) => {
     const detail = (event as CustomEvent).detail
     if (!detail?.conversationId) return
@@ -380,6 +409,7 @@ export function ConversationSidePanelProvider(props: {
     window.addEventListener('chaton:update-subagent-status', handleUpdateSubAgentStatus)
     window.addEventListener('chaton:set-subagent-task-list', handleSetSubAgentTaskList)
     window.addEventListener('chaton:update-subagent-task-status', handleUpdateSubAgentTaskStatus)
+    window.addEventListener('chaton:set-subagent-result', handleSetSubAgentResult)
     window.addEventListener('chaton:complete-all-pending-tasks', handleCompleteAllPendingTasks)
     return () => {
       window.removeEventListener('chaton:set-task-list', handleSetTaskList)
@@ -388,6 +418,7 @@ export function ConversationSidePanelProvider(props: {
       window.removeEventListener('chaton:update-subagent-status', handleUpdateSubAgentStatus)
       window.removeEventListener('chaton:set-subagent-task-list', handleSetSubAgentTaskList)
       window.removeEventListener('chaton:update-subagent-task-status', handleUpdateSubAgentTaskStatus)
+      window.removeEventListener('chaton:set-subagent-result', handleSetSubAgentResult)
       window.removeEventListener('chaton:complete-all-pending-tasks', handleCompleteAllPendingTasks)
     }
   }, [
@@ -397,6 +428,7 @@ export function ConversationSidePanelProvider(props: {
     handleUpdateSubAgentStatus,
     handleSetSubAgentTaskList,
     handleUpdateSubAgentTaskStatus,
+    handleSetSubAgentResult,
     handleCompleteAllPendingTasks,
   ])
 

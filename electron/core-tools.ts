@@ -10,6 +10,7 @@ import { Type } from "@sinclair/typebox";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
 import { getDb } from "./db/index.js";
 import { findConversationById } from "./db/repos/conversations.js";
+import { piSessionRuntimeManager } from "./pi-runtime-singleton.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -19,6 +20,8 @@ type EmitUiRequest = (
   method: string,
   payload: Record<string, unknown>,
 ) => string;
+
+type SubagentExecutionMode = "sequential" | "parallel";
 
 function textResult(data: unknown) {
   return {
@@ -323,9 +326,11 @@ export function createCoreTools(
       status: Type.Union(
         [
           Type.Literal("pending"),
+          Type.Literal("queued"),
           Type.Literal("running"),
           Type.Literal("completed"),
           Type.Literal("error"),
+          Type.Literal("cancelled"),
         ],
         { description: "New subagent status" },
       ),
@@ -352,10 +357,10 @@ export function createCoreTools(
 
       if (!subAgentId) return errorResult("subAgentId is required");
       if (
-        !["pending", "running", "completed", "error"].includes(status)
+        !["pending", "queued", "running", "completed", "error", "cancelled"].includes(status)
       )
         return errorResult(
-          "status must be one of: pending, running, completed, error",
+          "status must be one of: pending, queued, running, completed, error, cancelled",
         );
 
       emitUiRequest("update_subagent_status", {
@@ -522,6 +527,439 @@ export function createCoreTools(
     },
   };
 
+  // ---- spawn_subagent ----
+  const spawnSubagent: ToolDefinition = {
+    name: "spawn_subagent",
+    label: "Spawn subagent",
+    description:
+      "Create and start a real runtime-backed subagent session. Returns the subagent ID and runtime conversation ID for later orchestration.",
+    parameters: Type.Object({
+      label: Type.String({ description: "Short subagent label" }),
+      description: Type.Optional(Type.String({ description: "Optional description" })),
+      objective: Type.String({ description: "Main objective for the subagent" }),
+      instructions: Type.Optional(
+        Type.String({ description: "Optional task-specific instructions" }),
+      ),
+      executionMode: Type.Optional(
+        Type.Union([Type.Literal("sequential"), Type.Literal("parallel")]),
+      ),
+      fileScope: Type.Optional(
+        Type.Object({
+          mode: Type.Union([Type.Literal("all"), Type.Literal("allowlist")]),
+          paths: Type.Optional(Type.Array(Type.String())),
+        }),
+      ),
+      toolPolicy: Type.Optional(
+        Type.Object({
+          readOnly: Type.Optional(Type.Boolean()),
+          allowedTools: Type.Optional(Type.Array(Type.String())),
+          deniedTools: Type.Optional(Type.Array(Type.String())),
+        }),
+      ),
+    }),
+    execute: async (
+      _toolCallId: string,
+      params: {
+        label: string;
+        description?: string;
+        objective: string;
+        instructions?: string;
+        executionMode?: SubagentExecutionMode;
+        fileScope?: { mode: 'all' | 'allowlist'; paths?: string[] };
+        toolPolicy?: { readOnly?: boolean; allowedTools?: string[]; deniedTools?: string[] };
+      },
+    ) => {
+      const label = (params.label ?? "").trim();
+      const objective = (params.objective ?? "").trim();
+      const description =
+        typeof params.description === "string" ? params.description.trim() : undefined;
+      const instructions =
+        typeof params.instructions === "string" ? params.instructions.trim() : undefined;
+      const executionMode = params.executionMode ?? "sequential";
+      const fileScope = params.fileScope;
+      const toolPolicy = params.toolPolicy;
+
+      if (!label) return errorResult("label is required");
+      if (!objective) return errorResult("objective is required");
+
+      const spawned = await piSessionRuntimeManager.spawnRuntimeSubagent({
+        conversationId,
+        label,
+        description,
+        objective,
+        instructions,
+        executionMode,
+        fileScope,
+        toolPolicy,
+      });
+
+      if (!spawned.ok) return errorResult(spawned.message);
+
+      return textResult({
+        subAgentId: spawned.subAgentId,
+        runtimeConversationId: spawned.runtimeConversationId,
+        executionMode,
+      });
+    },
+  };
+
+  // ---- run_subagent ----
+  const runSubagent: ToolDefinition = {
+    name: "run_subagent",
+    label: "Run subagent",
+    description:
+      "Execute a previously spawned runtime subagent and wait for its completion.",
+    parameters: Type.Object({
+      subAgentId: Type.String({ description: "Subagent identifier returned by spawn_subagent" }),
+      prompt: Type.Optional(Type.String({ description: "Optional override prompt for the subagent run" })),
+    }),
+    execute: async (
+      _toolCallId: string,
+      params: { subAgentId: string; prompt?: string },
+    ) => {
+      const subAgentId = (params.subAgentId ?? "").trim();
+      const prompt = typeof params.prompt === "string" ? params.prompt.trim() : undefined;
+      if (!subAgentId) return errorResult("subAgentId is required");
+
+      const result = await piSessionRuntimeManager.runRuntimeSubagent({
+        subAgentId,
+        prompt,
+      });
+      if (!result.ok) return errorResult(result.message);
+      return textResult({ subAgentId, result: result.result });
+    },
+  };
+
+  // ---- await_subagent ----
+  const awaitSubagent: ToolDefinition = {
+    name: "await_subagent",
+    label: "Await subagent",
+    description:
+      "Wait for a runtime subagent to finish, optionally with a timeout.",
+    parameters: Type.Object({
+      subAgentId: Type.String({ description: "Subagent identifier returned by spawn_subagent" }),
+      timeoutMs: Type.Optional(Type.Number({ minimum: 1 })),
+    }),
+    execute: async (
+      _toolCallId: string,
+      params: { subAgentId: string; timeoutMs?: number },
+    ) => {
+      const subAgentId = (params.subAgentId ?? "").trim();
+      if (!subAgentId) return errorResult("subAgentId is required");
+      const awaited = await piSessionRuntimeManager.awaitRuntimeSubagent(
+        subAgentId,
+        typeof params.timeoutMs === "number" ? params.timeoutMs : undefined,
+      );
+      if (!awaited.ok) return errorResult(awaited.message);
+      return textResult({ subAgentId, ...awaited });
+    },
+  };
+
+  // ---- await_subagents ----
+  const awaitSubagents: ToolDefinition = {
+    name: "await_subagents",
+    label: "Await subagents",
+    description:
+      "Wait for multiple runtime subagents to finish, either until all are done or until any one completes.",
+    parameters: Type.Object({
+      subAgentIds: Type.Array(Type.String(), { minItems: 1 }),
+      mode: Type.Optional(
+        Type.Union([Type.Literal("all"), Type.Literal("any")]),
+      ),
+      timeoutMs: Type.Optional(Type.Number({ minimum: 1 })),
+    }),
+    execute: async (
+      _toolCallId: string,
+      params: { subAgentIds: string[]; mode?: 'all' | 'any'; timeoutMs?: number },
+    ) => {
+      const subAgentIds = Array.isArray(params.subAgentIds)
+        ? params.subAgentIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+        : [];
+      if (subAgentIds.length === 0) return errorResult('at least one subAgentId is required');
+      const mode = params.mode === 'any' ? 'any' : 'all';
+      const timeoutMs = typeof params.timeoutMs === 'number' ? params.timeoutMs : undefined;
+      const awaited = await piSessionRuntimeManager.awaitRuntimeSubagents({ subAgentIds, mode, timeoutMs });
+      if (!awaited.ok) return errorResult(awaited.message);
+      return textResult(awaited);
+    },
+  };
+
+  // ---- cancel_subagent ----
+  const cancelSubagent: ToolDefinition = {
+    name: "cancel_subagent",
+    label: "Cancel subagent",
+    description:
+      "Cancel a runtime subagent if it is pending, queued, or running.",
+    parameters: Type.Object({
+      subAgentId: Type.String({ description: "Subagent identifier returned by spawn_subagent" }),
+    }),
+    execute: async (_toolCallId: string, params: { subAgentId: string }) => {
+      const subAgentId = (params.subAgentId ?? "").trim();
+      if (!subAgentId) return errorResult("subAgentId is required");
+      const cancelled = await piSessionRuntimeManager.cancelRuntimeSubagent(subAgentId);
+      if (!cancelled.ok) return errorResult(cancelled.message);
+      return textResult({ subAgentId, status: cancelled.status });
+    },
+  };
+
+  // ---- set_subagent_result ----
+  const setSubagentResult: ToolDefinition = {
+    name: "set_subagent_result",
+    label: "Set subagent result",
+    description:
+      "Attach a final result payload to a registered subagent so the orchestrator and UI can inspect it.",
+    parameters: Type.Object({
+      subAgentId: Type.String({
+        description: "The registered subagent identifier",
+      }),
+      summary: Type.Optional(
+        Type.String({
+          description: "Short final summary for the subagent",
+        }),
+      ),
+      outputText: Type.Optional(
+        Type.String({
+          description: "Optional detailed text output produced by the subagent",
+        }),
+      ),
+      outputJson: Type.Optional(
+        Type.Any({
+          description: "Optional structured output produced by the subagent",
+        }),
+      ),
+      producedFiles: Type.Optional(
+        Type.Array(Type.String(), {
+          description: "Optional list of files produced or modified by the subagent",
+        }),
+      ),
+      errorMessage: Type.Optional(
+        Type.String({
+          description: "Optional error message to associate with the result",
+        }),
+      ),
+    }),
+    execute: async (
+      _toolCallId: string,
+      params: {
+        subAgentId: string;
+        summary?: string;
+        outputText?: string;
+        outputJson?: unknown;
+        producedFiles?: string[];
+        errorMessage?: string;
+      },
+    ) => {
+      const subAgentId = (params.subAgentId ?? "").trim();
+      if (!subAgentId) return errorResult("subAgentId is required");
+
+      const result = {
+        ...(typeof params.summary === "string" && params.summary.trim()
+          ? { summary: params.summary.trim() }
+          : {}),
+        ...(typeof params.outputText === "string" && params.outputText.trim()
+          ? { outputText: params.outputText.trim() }
+          : {}),
+        ...(params.outputJson !== undefined
+          ? { outputJson: params.outputJson }
+          : {}),
+        ...(Array.isArray(params.producedFiles)
+          ? {
+              producedFiles: params.producedFiles.filter(
+                (value): value is string =>
+                  typeof value === "string" && value.trim().length > 0,
+              ),
+            }
+          : {}),
+        ...(typeof params.errorMessage === "string" && params.errorMessage.trim()
+          ? { errorMessage: params.errorMessage.trim() }
+          : {}),
+      };
+
+      emitUiRequest("set_subagent_result", {
+        subAgentId,
+        result,
+        conversationId,
+      });
+
+      return textResult({ subAgentId, result });
+    },
+  };
+
+  // ---- run_subagents ----
+  const runSubagents: ToolDefinition = {
+    name: "run_subagents",
+    label: "Run subagents",
+    description:
+      "Spawn and execute real runtime subagents in sequential or parallel mode, then return their aggregated results to the orchestrator.",
+    parameters: Type.Object({
+      execution: Type.Object({
+        mode: Type.Union([Type.Literal("sequential"), Type.Literal("parallel")]),
+        maxConcurrency: Type.Optional(
+          Type.Number({
+            minimum: 1,
+            description: "Optional parallelism cap when mode is parallel",
+          }),
+        ),
+        failFast: Type.Optional(
+          Type.Boolean({
+            description: "If true, cancel remaining subagents after the first error",
+          }),
+        ),
+      }),
+      tasks: Type.Array(
+        Type.Object({
+          label: Type.String({ description: "Short subagent label" }),
+          description: Type.Optional(Type.String({ description: "Optional description" })),
+          objective: Type.String({ description: "Main task objective for the subagent" }),
+          instructions: Type.Optional(
+            Type.String({ description: "Optional task-specific instructions" }),
+          ),
+          fileScope: Type.Optional(
+            Type.Object({
+              mode: Type.Union([Type.Literal("all"), Type.Literal("allowlist")]),
+              paths: Type.Optional(Type.Array(Type.String())),
+            }),
+          ),
+          toolPolicy: Type.Optional(
+            Type.Object({
+              readOnly: Type.Optional(Type.Boolean()),
+              allowedTools: Type.Optional(Type.Array(Type.String())),
+              deniedTools: Type.Optional(Type.Array(Type.String())),
+            }),
+          ),
+        }),
+        { minItems: 1, description: "Subagent tasks to run" },
+      ),
+    }),
+    execute: async (
+      _toolCallId: string,
+      params: {
+        execution: { mode: SubagentExecutionMode; maxConcurrency?: number; failFast?: boolean };
+        tasks: Array<{
+          label: string;
+          description?: string;
+          objective: string;
+          instructions?: string;
+          fileScope?: { mode: 'all' | 'allowlist'; paths?: string[] };
+          toolPolicy?: { readOnly?: boolean; allowedTools?: string[]; deniedTools?: string[] };
+        }>;
+      },
+    ) => {
+      const mode = params.execution?.mode;
+      const maxConcurrency =
+        typeof params.execution?.maxConcurrency === "number" &&
+        Number.isFinite(params.execution.maxConcurrency)
+          ? Math.max(1, Math.floor(params.execution.maxConcurrency))
+          : undefined;
+      const failFast = params.execution?.failFast === true;
+      const tasks = Array.isArray(params.tasks) ? params.tasks : [];
+
+      if (mode !== "sequential" && mode !== "parallel") {
+        return errorResult("execution.mode must be sequential or parallel");
+      }
+      if (tasks.length === 0) {
+        return errorResult("at least one subagent task is required");
+      }
+
+      const spawned = [] as Array<{
+        subAgentId: string;
+        runtimeConversationId: string;
+        label: string;
+      }>;
+
+      for (const task of tasks) {
+        const label = typeof task.label === "string" ? task.label.trim() : "";
+        const objective = typeof task.objective === "string" ? task.objective.trim() : "";
+        const description =
+          typeof task.description === "string" && task.description.trim().length > 0
+            ? task.description.trim()
+            : undefined;
+        const instructions =
+          typeof task.instructions === "string" && task.instructions.trim().length > 0
+            ? task.instructions.trim()
+            : undefined;
+        if (!label || !objective) continue;
+        const result = await piSessionRuntimeManager.spawnRuntimeSubagent({
+          conversationId,
+          label,
+          description,
+          objective,
+          instructions,
+          executionMode: mode,
+          fileScope: task.fileScope,
+          toolPolicy: task.toolPolicy,
+        });
+        if (!result.ok) return errorResult(result.message);
+        spawned.push({
+          subAgentId: result.subAgentId,
+          runtimeConversationId: result.runtimeConversationId,
+          label,
+        });
+      }
+
+      if (spawned.length === 0) {
+        return errorResult("at least one valid subagent task is required");
+      }
+
+      const runOne = async (subAgentId: string) => {
+        const result = await piSessionRuntimeManager.runRuntimeSubagent({ subAgentId });
+        return { subAgentId, ...(result.ok ? { result: result.result, status: 'completed' } : { errorMessage: result.message, status: 'error' }) };
+      };
+
+      const results: Array<{ subAgentId: string; status: string; result?: unknown; errorMessage?: string }> = [];
+      if (mode === 'sequential') {
+        for (const item of spawned) {
+          const result = await runOne(item.subAgentId);
+          results.push(result);
+          if (failFast && result.status === 'error') {
+            break;
+          }
+        }
+        if (failFast) {
+          const completedIds = new Set(results.map((item) => item.subAgentId));
+          for (const item of spawned) {
+            if (!completedIds.has(item.subAgentId)) {
+              await piSessionRuntimeManager.cancelRuntimeSubagent(item.subAgentId);
+            }
+          }
+        }
+      } else {
+        const limit = maxConcurrency ?? spawned.length;
+        let index = 0;
+        let shouldStop = false;
+        const workers = Array.from({ length: Math.min(limit, spawned.length) }, async () => {
+          while (!shouldStop && index < spawned.length) {
+            const current = spawned[index++];
+            const result = await runOne(current.subAgentId);
+            results.push(result);
+            if (failFast && result.status === 'error') {
+              shouldStop = true;
+            }
+          }
+        });
+        await Promise.all(workers);
+        if (failFast && results.some((item) => item.status === 'error')) {
+          const completedIds = new Set(results.map((item) => item.subAgentId));
+          await Promise.all(
+            spawned
+              .filter((item) => !completedIds.has(item.subAgentId))
+              .map((item) => piSessionRuntimeManager.cancelRuntimeSubagent(item.subAgentId)),
+          );
+        }
+      }
+
+      return textResult({
+        execution: {
+          mode,
+          maxConcurrency: mode === 'parallel' ? maxConcurrency ?? spawned.length : 1,
+          failFast,
+        },
+        subagents: spawned,
+        results,
+      });
+    },
+  };
+
   // ---- get_access_mode ----
   const getAccessMode: ToolDefinition = {
     name: "get_access_mode",
@@ -577,6 +1015,13 @@ export function createCoreTools(
     updateSubagentStatus,
     setSubagentTaskList,
     updateSubagentTaskStatus,
+    spawnSubagent,
+    runSubagent,
+    awaitSubagent,
+    awaitSubagents,
+    cancelSubagent,
+    setSubagentResult,
+    runSubagents,
     getAccessMode,
     getCommands,
   ];
@@ -591,6 +1036,13 @@ export const CORE_TOOL_NAMES = new Set([
   "update_subagent_status",
   "set_subagent_task_list",
   "update_subagent_task_status",
+  "spawn_subagent",
+  "run_subagent",
+  "await_subagent",
+  "await_subagents",
+  "cancel_subagent",
+  "set_subagent_result",
+  "run_subagents",
   "get_access_mode",
   "get_commands",
 ]);

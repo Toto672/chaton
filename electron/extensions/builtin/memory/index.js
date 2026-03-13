@@ -63,7 +63,7 @@
     style.id = STYLE_ID;
     style.textContent = [
       // Layout: split pane like automation
-      ".ce-mem { min-height: 100vh; background: var(--ce-bg); color: var(--ce-fg); width: 100%; height: 100%; }",
+      ".ce-mem { min-height: 100vh; background: var(--ce-bg); color: var(--ce-fg); width: 100%; height: 100%; font-family: var(--ce-font); }",
       ".ce-mem-layout { display: grid; grid-template-columns: 420px 1fr; min-height: 100vh; }",
 
       // Sidebar / inbox
@@ -137,7 +137,9 @@
       ".ce-mem-tags { display: flex; gap: 4px; flex-wrap: wrap; }",
 
       // Create modal
-      ".ce-mem-modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }",
+      ".ce-mem-modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }",
+      ".ce-mem-modal-primary { display: grid; gap: 14px; }",
+      ".ce-mem-modal-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 4px; border-top: 1px solid var(--ce-border); }",
 
       // Dark mode overrides
       ".dark .ce-mem-title { color: var(--ce-fg); }",
@@ -414,7 +416,7 @@
     modalBg.setAttribute("aria-modal", "true");
     modalBg.setAttribute("aria-labelledby", "modalTitle");
 
-    var modal = ui.el("div", "ce-modal");
+    var modal = ui.el("div", "ce-modal ce-modal--compact");
     var modalHeader = ui.el("div", "ce-modal__header");
     var modalTitle = ui.el("h3", "ce-modal__title", "Ajouter une memoire");
     modalTitle.id = "modalTitle";
@@ -428,6 +430,7 @@
     );
     modal.appendChild(modalHeader);
 
+    var primaryFields = ui.el("div", "ce-mem-modal-primary");
     var modalGrid = ui.el("div", "ce-mem-modal-grid");
 
     var createScope = ui.el("select", "ce-select");
@@ -478,12 +481,12 @@
       ui.createField({ label: "Titre", input: createTitle }),
     );
 
-    modal.appendChild(modalGrid);
+    primaryFields.appendChild(modalGrid);
 
     var createTags = ui.el("input", "ce-input");
     createTags.id = "createTags";
     createTags.placeholder = "style, utilisateur, workflow";
-    modal.appendChild(
+    primaryFields.appendChild(
       ui.createField({
         label: "Tags",
         input: createTags,
@@ -491,20 +494,17 @@
       }),
     );
 
-    var spacer = ui.el("div", "");
-    spacer.style.height = "4px";
-    modal.appendChild(spacer);
-
-    var createContent = ui.el("textarea", "ce-textarea");
+    var createContent = ui.el("textarea", "ce-textarea ce-textarea--short");
     createContent.id = "createContent";
     createContent.placeholder =
       "L'utilisateur prefere des reponses concises en francais avec des exemples de code.";
-    modal.appendChild(
+    primaryFields.appendChild(
       ui.createField({ label: "Contenu", input: createContent }),
     );
 
-    var modalFooter = ui.el("div", "ce-toolbar");
-    modalFooter.style.marginTop = "12px";
+    modal.appendChild(primaryFields);
+
+    var modalFooter = ui.el("div", "ce-mem-modal-footer");
     var cancelBtn = ui.createButton({ text: "Annuler", variant: "ghost" });
     cancelBtn.id = "cancelBtn";
     var createBtn = ui.createButton({ text: "Enregistrer", variant: "default" });
@@ -514,9 +514,9 @@
     modal.appendChild(modalFooter);
 
     modalBg.appendChild(modal);
-    page.appendChild(modalBg);
 
     app.appendChild(page);
+    app.appendChild(modalBg);
 
     return {
       searchInput: searchInput,

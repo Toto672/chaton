@@ -173,6 +173,7 @@ export type RpcExtensionUiRequest = {
     | "update_subagent_status"
     | "set_subagent_task_list"
     | "update_subagent_task_status"
+    | "set_subagent_result"
     | "requirement_sheet";
   [key: string]: JsonValue | undefined;
 };
@@ -350,6 +351,60 @@ type RuntimeState = {
   snapshotMessages: JsonValue[];
 };
 
+type RuntimeSubagentStatus =
+  | "pending"
+  | "queued"
+  | "running"
+  | "completed"
+  | "error"
+  | "cancelled";
+
+type RuntimeSubagentExecutionMode = "sequential" | "parallel";
+
+type RuntimeSubagentResult = {
+  summary?: string;
+  outputText?: string;
+  outputJson?: JsonValue;
+  errorMessage?: string;
+  producedFiles?: string[];
+};
+
+type RuntimeSubagentFileScope = {
+  mode: "all" | "allowlist";
+  paths?: string[];
+};
+
+type RuntimeSubagentToolPolicy = {
+  readOnly?: boolean;
+  allowedTools?: string[];
+  deniedTools?: string[];
+};
+
+type RuntimePolicyContext = {
+  fileScope?: RuntimeSubagentFileScope;
+  toolPolicy?: RuntimeSubagentToolPolicy;
+};
+
+type RuntimeSubagentRecord = {
+  id: string;
+  parentConversationId: string;
+  runtimeConversationId: string;
+  label: string;
+  description?: string;
+  objective: string;
+  instructions?: string;
+  executionMode: RuntimeSubagentExecutionMode;
+  fileScope?: RuntimeSubagentFileScope;
+  toolPolicy?: RuntimeSubagentToolPolicy;
+  status: RuntimeSubagentStatus;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  result?: RuntimeSubagentResult;
+  errorMessage?: string;
+  cleanupTimer?: NodeJS.Timeout;
+};
+
 function getAgentDir() {
   return path.join(app.getPath("userData"), ".pi", "agent");
 }
@@ -418,6 +473,53 @@ function listScopedOrAllModels(
       : all;
   const source = scoped.length > 0 ? scoped : all;
   return source.map((model) => ({ provider: model.provider, id: model.id }));
+}
+
+function normalizeJsonValue(value: unknown): JsonValue | undefined {
+  const normalized = safeJson(value);
+  return normalized === null && value !== null ? undefined : normalized;
+}
+
+function buildSubagentResultFromSnapshot(
+  snapshot: { messages?: unknown[] } | null | undefined,
+): RuntimeSubagentResult {
+  const outputText = extractTextFromSnapshot(snapshot) ?? undefined;
+  return {
+    ...(outputText ? { outputText, summary: outputText.slice(0, 400) } : {}),
+  };
+}
+
+function isPathWithinAllowedScope(
+  absolutePath: string,
+  workingDirectory: string,
+  fileScope?: RuntimeSubagentFileScope,
+): boolean {
+  if (!fileScope || fileScope.mode === "all") return true;
+  const allowlist = Array.isArray(fileScope.paths) ? fileScope.paths : [];
+  if (allowlist.length === 0) return false;
+  const normalizedTarget = path.resolve(absolutePath);
+  return allowlist.some((allowed) => {
+    const allowedAbsolute = path.resolve(workingDirectory, allowed);
+    const relative = path.relative(allowedAbsolute, normalizedTarget);
+    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  });
+}
+
+function isWriteLikeBashCommand(command: string): boolean {
+  const lowered = command.toLowerCase();
+  return [
+    "rm ",
+    "mv ",
+    "cp ",
+    "touch ",
+    "mkdir ",
+    "rmdir ",
+    ">",
+    "chmod ",
+    "chown ",
+    "sed -i",
+    "perl -pi",
+  ].some((token) => lowered.includes(token));
 }
 
 function convertEvent(event: AgentSessionEvent): RpcEvent | null {
@@ -914,8 +1016,13 @@ export class PiSdkRuntime {
             "## Subagent tracking in the side panel",
             "When you delegate work to subagents (via the subagent tool), the side panel can track each subagent and its tasks independently.",
             "Use register_subagent to register a subagent before or when it starts work. Each subagent appears as a collapsible section in the side panel.",
-            "Use update_subagent_status to update a subagent's status (pending, running, completed, error).",
+            "Use spawn_subagent to create a real runtime-backed child session and run_subagent or run_subagents to execute it.",
+            "Use await_subagent to wait for a child run, await_subagents to wait for a batch, and cancel_subagent to stop it when needed.",
+            "Use run_subagents when you want the orchestrator to create a batch of runtime-backed subagents with sequential or parallel execution semantics.",
+            "When running subagents in parallel, prefer readOnly tool policies and restrict fileScope with allowlists whenever possible.",
+            "Use update_subagent_status to update a subagent's status (pending, queued, running, completed, error, cancelled).",
             "Subagents can have their own task lists via set_subagent_task_list and update_subagent_task_status.",
+            "Use set_subagent_result to attach a final result payload to a subagent once its work is done.",
             "The orchestrator (you) tasks appear at the top of the panel. Subagent sections appear below with a 'Sub-agents' divider.",
             "This gives the user clear visibility into what each agent is doing at a glance.",
           ].join("\n"),
@@ -987,8 +1094,22 @@ export class PiSdkRuntime {
     });
     await resourceLoader.reload();
 
+    const runtimePolicy = ((globalThis as Record<string, unknown>)
+      .__chatonsRuntimePolicyByConversation as Map<string, RuntimePolicyContext> | undefined)
+      ?.get(this.conversationId);
+
+    const assertAllowedPath = (absolutePath: string) => {
+      if (!isPathWithinAllowedScope(absolutePath, runtimeCwd, runtimePolicy?.fileScope)) {
+        throw new Error(`Path is outside the subagent file scope: ${absolutePath}`);
+      }
+    };
+
     const trackedWriteOperations: WriteOperations = {
       writeFile: async (absolutePath: string, content: string) => {
+        if (runtimePolicy?.toolPolicy?.readOnly) {
+          throw new Error("This subagent is read-only and cannot write files.");
+        }
+        assertAllowedPath(absolutePath);
         await fs.promises.writeFile(absolutePath, content, "utf8");
         const trackTouchedPath = (globalThis as Record<string, unknown>)
           .__chatonsToolExecutionTrackPath as
@@ -1004,21 +1125,36 @@ export class PiSdkRuntime {
         }
       },
       mkdir: async (dir: string) => {
+        if (runtimePolicy?.toolPolicy?.readOnly) {
+          throw new Error("This subagent is read-only and cannot create directories.");
+        }
+        assertAllowedPath(dir);
         await fs.promises.mkdir(dir, { recursive: true });
       },
     };
 
     const trackedEditOperations: EditOperations = {
-      readFile: (absolutePath: string) => fs.promises.readFile(absolutePath),
+      readFile: async (absolutePath: string) => {
+        assertAllowedPath(absolutePath);
+        return fs.promises.readFile(absolutePath);
+      },
       writeFile: trackedWriteOperations.writeFile,
       access: async (absolutePath: string) => {
+        assertAllowedPath(absolutePath);
         await fs.promises.access(absolutePath, fs.constants.R_OK | fs.constants.W_OK);
       },
     };
 
     const builtinTools = [
       createReadTool(toolsCwd),
-      createBashTool(toolsCwd),
+      createBashTool(toolsCwd, {
+        execute: async (command: string) => {
+          if (runtimePolicy?.toolPolicy?.readOnly && isWriteLikeBashCommand(command)) {
+            throw new Error("This subagent is read-only and cannot run write-like bash commands.");
+          }
+          return undefined as never;
+        },
+      } as any),
       createEditTool(toolsCwd, { operations: trackedEditOperations }),
       createWriteTool(toolsCwd, { operations: trackedWriteOperations }),
     ];
@@ -1723,6 +1859,7 @@ export class PiSessionRuntimeManager {
   private readonly runtimes = new Map<string, PiSdkRuntime>();
   /** Ephemeral subagents running for channel ingestion, keyed by real conversation ID. */
   private readonly activeChannelSubagents = new Map<string, PiSdkRuntime>();
+  private readonly runtimeSubagents = new Map<string, RuntimeSubagentRecord>();
   private readonly listeners = new Set<(event: PiRendererEvent) => void>();
 
   private broadcast(event: PiRendererEvent) {
@@ -1970,6 +2107,349 @@ export class PiSessionRuntimeManager {
       | ((requestId: string) => string | undefined)
       | undefined;
     return lookup?.(toolCallId);
+  }
+
+  private emitSubagentUiRegistration(record: RuntimeSubagentRecord) {
+    this.broadcast({
+      conversationId: record.parentConversationId,
+      event: {
+        type: "extension_ui_request",
+        id: crypto.randomUUID(),
+        method: "register_subagent",
+        conversationId: record.parentConversationId,
+        subAgent: {
+          id: record.id,
+          name: record.label,
+          description: record.description,
+          status: record.status,
+          executionMode: record.executionMode,
+          result: record.result,
+          taskList: null,
+          previousTaskLists: [],
+          createdAt: record.createdAt,
+          ...(record.startedAt ? { startedAt: record.startedAt } : {}),
+          ...(record.completedAt ? { completedAt: record.completedAt } : {}),
+          ...(record.errorMessage ? { errorMessage: record.errorMessage } : {}),
+        } as Record<string, JsonValue>,
+      },
+    });
+  }
+
+  private scheduleRuntimeSubagentCleanup(record: RuntimeSubagentRecord) {
+    if (record.cleanupTimer) {
+      clearTimeout(record.cleanupTimer);
+    }
+    if (!["completed", "error", "cancelled"].includes(record.status)) {
+      return;
+    }
+    record.cleanupTimer = setTimeout(() => {
+      const policyMap = (globalThis as Record<string, unknown>)
+        .__chatonsRuntimePolicyByConversation as Map<string, RuntimePolicyContext> | undefined;
+      policyMap?.delete(record.runtimeConversationId);
+      void this.stop(record.runtimeConversationId);
+      this.runtimeSubagents.delete(record.id);
+    }, 30_000);
+  }
+
+  private emitSubagentStatus(record: RuntimeSubagentRecord) {
+    this.broadcast({
+      conversationId: record.parentConversationId,
+      event: {
+        type: "extension_ui_request",
+        id: crypto.randomUUID(),
+        method: "update_subagent_status",
+        conversationId: record.parentConversationId,
+        subAgentId: record.id,
+        status: record.status,
+        ...(record.errorMessage ? { errorMessage: record.errorMessage } : {}),
+      },
+    });
+    if (record.result) {
+      this.broadcast({
+        conversationId: record.parentConversationId,
+        event: {
+          type: "extension_ui_request",
+          id: crypto.randomUUID(),
+          method: "set_subagent_result",
+          conversationId: record.parentConversationId,
+          subAgentId: record.id,
+          result: record.result as Record<string, JsonValue>,
+        },
+      });
+    }
+    this.scheduleRuntimeSubagentCleanup(record);
+  }
+
+  private buildRuntimeSubagentConversation(
+    parentConversation: DbConversation,
+    subagentId: string,
+  ): DbConversation {
+    const agentDir = getAgentDir();
+    const runtimeConversationId = `__runtime_subagent__:${parentConversation.id}:${subagentId}`;
+    return {
+      ...parentConversation,
+      id: runtimeConversationId,
+      pi_session_file: path.join(agentDir, "sessions", "chaton", `${runtimeConversationId}.jsonl`),
+      last_runtime_error: null,
+    };
+  }
+
+  async spawnRuntimeSubagent(params: {
+    conversationId: string;
+    label: string;
+    description?: string;
+    objective: string;
+    instructions?: string;
+    executionMode?: RuntimeSubagentExecutionMode;
+    fileScope?: RuntimeSubagentFileScope;
+    toolPolicy?: RuntimeSubagentToolPolicy;
+  }): Promise<
+    | { ok: true; subAgentId: string; runtimeConversationId: string }
+    | { ok: false; message: string }
+  > {
+    const db = getDb();
+    const parentConversation = findConversationById(db, params.conversationId);
+    if (!parentConversation) {
+      return { ok: false, message: "Conversation not found" };
+    }
+
+    const subAgentId = `runtime-subagent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const runtimeConversation = this.buildRuntimeSubagentConversation(parentConversation, subAgentId);
+    const record: RuntimeSubagentRecord = {
+      id: subAgentId,
+      parentConversationId: params.conversationId,
+      runtimeConversationId: runtimeConversation.id,
+      label: params.label,
+      ...(params.description ? { description: params.description } : {}),
+      objective: params.objective,
+      ...(params.instructions ? { instructions: params.instructions } : {}),
+      executionMode: params.executionMode ?? "sequential",
+      ...(params.fileScope ? { fileScope: params.fileScope } : {}),
+      ...(params.toolPolicy ? { toolPolicy: params.toolPolicy } : {}),
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    };
+
+    this.runtimeSubagents.set(subAgentId, record);
+    this.emitSubagentUiRegistration(record);
+
+    const policyMap = (((globalThis as Record<string, unknown>).__chatonsRuntimePolicyByConversation as Map<string, RuntimePolicyContext> | undefined)
+      ?? new Map<string, RuntimePolicyContext>());
+    (globalThis as Record<string, unknown>).__chatonsRuntimePolicyByConversation = policyMap;
+    policyMap.set(runtimeConversation.id, {
+      fileScope: record.fileScope,
+      toolPolicy: record.toolPolicy,
+    });
+
+    const runtime = this.getOrCreateRuntime(runtimeConversation.id);
+    try {
+      await runtime.start(runtimeConversation);
+      return {
+        ok: true,
+        subAgentId,
+        runtimeConversationId: runtimeConversation.id,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      record.status = "error";
+      record.errorMessage = message;
+      record.completedAt = new Date().toISOString();
+      this.emitSubagentStatus(record);
+      return { ok: false, message };
+    }
+  }
+
+  async runRuntimeSubagent(params: {
+    subAgentId: string;
+    prompt?: string;
+  }): Promise<{ ok: true; result: RuntimeSubagentResult } | { ok: false; message: string }> {
+    const record = this.runtimeSubagents.get(params.subAgentId);
+    if (!record) {
+      return { ok: false, message: "Subagent not found" };
+    }
+    const runtime = this.getRuntimeForConversation(record.runtimeConversationId);
+    if (!runtime) {
+      return { ok: false, message: "Subagent runtime not started" };
+    }
+
+    record.status = "running";
+    if (!record.startedAt) record.startedAt = new Date().toISOString();
+    this.emitSubagentStatus(record);
+
+    const policyLines: string[] = [];
+    if (record.toolPolicy?.readOnly) {
+      policyLines.push("You are running in read-only mode. Do not modify files or invoke write, edit, or destructive shell commands.");
+    }
+    if (record.toolPolicy?.allowedTools && record.toolPolicy.allowedTools.length > 0) {
+      policyLines.push(`Only use these tools if needed: ${record.toolPolicy.allowedTools.join(", ")}.`);
+    }
+    if (record.toolPolicy?.deniedTools && record.toolPolicy.deniedTools.length > 0) {
+      policyLines.push(`Do not use these tools: ${record.toolPolicy.deniedTools.join(", ")}.`);
+    }
+    if (record.fileScope?.mode === "allowlist" && record.fileScope.paths && record.fileScope.paths.length > 0) {
+      policyLines.push(`Restrict file access to these paths: ${record.fileScope.paths.join(", ")}.`);
+    }
+
+    const basePrompt = params.prompt?.trim()
+      ? params.prompt.trim()
+      : record.instructions?.trim()
+        ? `${record.objective}\n\nAdditional instructions:\n${record.instructions}`
+        : record.objective;
+    const prompt = policyLines.length > 0
+      ? `${basePrompt}\n\nRuntime policy:\n- ${policyLines.join("\n- ")}`
+      : basePrompt;
+
+    const response = await runtime.send({ type: "prompt", message: prompt });
+    if (record.toolPolicy?.readOnly && runtime.getSnapshot().messages.length > 0) {
+      // Read-only is currently enforced by instruction-level policy. A future hard guard can inspect tool calls.
+    }
+    if (!response.success) {
+      const message = typeof response.error === "string" ? response.error : "Subagent run failed";
+      record.status = "error";
+      record.errorMessage = message;
+      record.result = { errorMessage: message };
+      record.completedAt = new Date().toISOString();
+      this.emitSubagentStatus(record);
+      return { ok: false, message };
+    }
+
+    const snapshot = runtime.getSnapshot();
+    const result = buildSubagentResultFromSnapshot(snapshot);
+    record.result = result;
+    record.status = "completed";
+    record.completedAt = new Date().toISOString();
+    this.emitSubagentStatus(record);
+    return { ok: true, result };
+  }
+
+  getRuntimeSubagent(subAgentId: string): RuntimeSubagentRecord | undefined {
+    return this.runtimeSubagents.get(subAgentId);
+  }
+
+  async awaitRuntimeSubagent(
+    subAgentId: string,
+    timeoutMs?: number,
+  ): Promise<
+    | { ok: true; done: boolean; status: RuntimeSubagentStatus; result?: RuntimeSubagentResult; errorMessage?: string }
+    | { ok: false; message: string }
+  > {
+    const record = this.runtimeSubagents.get(subAgentId);
+    if (!record) {
+      return { ok: false, message: "Subagent not found" };
+    }
+
+    const deadline = typeof timeoutMs === "number" && timeoutMs > 0 ? Date.now() + timeoutMs : null;
+    while (["pending", "queued", "running"].includes(record.status)) {
+      if (deadline !== null && Date.now() > deadline) {
+        return { ok: true, done: false, status: record.status, result: record.result, errorMessage: record.errorMessage };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    return {
+      ok: true,
+      done: true,
+      status: record.status,
+      result: record.result,
+      errorMessage: record.errorMessage,
+    };
+  }
+
+  async cancelRuntimeSubagent(
+    subAgentId: string,
+  ): Promise<{ ok: true; status: RuntimeSubagentStatus } | { ok: false; message: string }> {
+    const record = this.runtimeSubagents.get(subAgentId);
+    if (!record) {
+      return { ok: false, message: "Subagent not found" };
+    }
+    const runtime = this.getRuntimeForConversation(record.runtimeConversationId);
+    if (runtime && (record.status === "running" || record.status === "queued" || record.status === "pending")) {
+      try {
+        await runtime.send({ type: "abort" });
+      } catch {
+        // Best effort.
+      }
+    }
+    record.status = "cancelled";
+    record.completedAt = new Date().toISOString();
+    this.emitSubagentStatus(record);
+    return { ok: true, status: record.status };
+  }
+
+  async awaitRuntimeSubagents(params: {
+    subAgentIds: string[];
+    mode: "all" | "any";
+    timeoutMs?: number;
+  }): Promise<
+    | {
+        ok: true;
+        done: boolean;
+        completed: string[];
+        pending: string[];
+        errored: string[];
+        cancelled: string[];
+        results: Array<{
+          subAgentId: string;
+          status: RuntimeSubagentStatus;
+          result?: RuntimeSubagentResult;
+          errorMessage?: string;
+        }>;
+      }
+    | { ok: false; message: string }
+  > {
+    const uniqueIds = Array.from(new Set(params.subAgentIds));
+    const records = uniqueIds.map((id) => this.runtimeSubagents.get(id));
+    if (records.some((record) => !record)) {
+      return { ok: false, message: "One or more subagents were not found" };
+    }
+    const resolvedRecords = records as RuntimeSubagentRecord[];
+    const deadline = typeof params.timeoutMs === "number" && params.timeoutMs > 0
+      ? Date.now() + params.timeoutMs
+      : null;
+
+    while (true) {
+      const terminal = resolvedRecords.filter((record) =>
+        ["completed", "error", "cancelled"].includes(record.status),
+      );
+      const done = params.mode === "all"
+        ? terminal.length === resolvedRecords.length
+        : terminal.length > 0;
+      if (done) {
+        break;
+      }
+      if (deadline !== null && Date.now() > deadline) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    const completed = resolvedRecords
+      .filter((record) => record.status === "completed")
+      .map((record) => record.id);
+    const pending = resolvedRecords
+      .filter((record) => ["pending", "queued", "running"].includes(record.status))
+      .map((record) => record.id);
+    const errored = resolvedRecords
+      .filter((record) => record.status === "error")
+      .map((record) => record.id);
+    const cancelled = resolvedRecords
+      .filter((record) => record.status === "cancelled")
+      .map((record) => record.id);
+
+    return {
+      ok: true,
+      done: pending.length === 0 && (params.mode === "all" || completed.length + errored.length + cancelled.length > 0),
+      completed,
+      pending,
+      errored,
+      cancelled,
+      results: resolvedRecords.map((record) => ({
+        subAgentId: record.id,
+        status: record.status,
+        result: record.result,
+        errorMessage: record.errorMessage,
+      })),
+    };
   }
 }
 

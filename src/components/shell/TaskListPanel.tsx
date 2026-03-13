@@ -26,6 +26,8 @@ function StatusIcon({ status }: { status: string }) {
     case 'in-progress':
     case 'running':
       return <Loader className="task-icon task-icon-in-progress" />
+    case 'cancelled':
+    case 'queued':
     default:
       return <Clock className="task-icon task-icon-pending" />
   }
@@ -189,6 +191,8 @@ function SubAgentSection({ agent }: { agent: SubAgent }) {
   const isRunning = agent.status === 'running'
   const isDone = agent.status === 'completed'
   const isError = agent.status === 'error'
+  const isQueued = agent.status === 'queued'
+  const isCancelled = agent.status === 'cancelled'
 
   const statusColor = isRunning
     ? 'subagent-status-running'
@@ -196,7 +200,9 @@ function SubAgentSection({ agent }: { agent: SubAgent }) {
       ? 'subagent-status-completed'
       : isError
         ? 'subagent-status-error'
-        : 'subagent-status-pending'
+        : isQueued || isCancelled
+          ? 'subagent-status-pending'
+          : 'subagent-status-pending'
 
   // Compute task summary for the header
   const taskCount = agent.taskList?.tasks.length ?? 0
@@ -244,6 +250,18 @@ function SubAgentSection({ agent }: { agent: SubAgent }) {
       {/* Agent description */}
       {agent.description && expanded && (
         <div className="subagent-description">{agent.description}</div>
+      )}
+
+      {expanded && agent.executionMode && (
+        <div className="subagent-description">Execution: {agent.executionMode}</div>
+      )}
+
+      {expanded && agent.startedAt && (
+        <div className="subagent-description">Started: {new Date(agent.startedAt).toLocaleTimeString()}</div>
+      )}
+
+      {expanded && agent.result?.summary && (
+        <div className="subagent-description">Result: {agent.result.summary}</div>
       )}
 
       {/* Error message */}

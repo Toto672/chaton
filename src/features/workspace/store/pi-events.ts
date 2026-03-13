@@ -774,6 +774,15 @@ export function applyPiEvent(
       }
       return { shouldAutoRetry: false }
     }
+    if (method === 'set_subagent_result') {
+      const eventConversationId = typeof payload.conversationId === 'string' ? payload.conversationId : conversationId
+      const subAgentId = typeof payload.subAgentId === 'string' ? payload.subAgentId : ''
+      const result = payload.result
+      if (eventConversationId && subAgentId && result && typeof result === 'object') {
+        window.dispatchEvent(new CustomEvent('chaton:set-subagent-result', { detail: { conversationId: eventConversationId, subAgentId, result } }))
+      }
+      return { shouldAutoRetry: false }
+    }
     if (method !== 'select' && method !== 'confirm' && method !== 'input' && method !== 'editor') {
       return { shouldAutoRetry: false }
     }

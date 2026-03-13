@@ -21,17 +21,28 @@ export interface TaskList {
 
 // -- Subagent tracking --
 
-export type SubAgentStatus = 'pending' | 'running' | 'completed' | 'error'
+export type SubAgentStatus = 'pending' | 'queued' | 'running' | 'completed' | 'error' | 'cancelled'
+
+export interface SubAgentResult {
+  summary?: string
+  outputText?: string
+  outputJson?: unknown
+  errorMessage?: string
+  producedFiles?: string[]
+}
 
 export interface SubAgent {
   id: string
   name: string
   description?: string
   status: SubAgentStatus
+  executionMode?: 'sequential' | 'parallel'
+  result?: SubAgentResult
   // Each subagent can have its own task list
   taskList: TaskList | null
   previousTaskLists: TaskList[]
   createdAt: string
+  startedAt?: string
   completedAt?: string
   errorMessage?: string
 }

@@ -1,7 +1,7 @@
 {
   "id": "@chaton/ide-launcher",
   "name": "IDE Launcher",
-  "version": "1.3.0",
+  "version": "1.3.4",
   "capabilities": [
     "storage.kv",
     "ui.mainView"

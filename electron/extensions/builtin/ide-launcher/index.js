@@ -1,9 +1,18 @@
+const widget = document.querySelector('.widget')
 const launchButton = document.getElementById('launchButton')
 const toggleButton = document.getElementById('toggleButton')
 const dropdown = document.getElementById('dropdown')
 
+const VS_CODE_ICON = `
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path fill="#0065A9" d="M17.6 2.2 7.4 12l10.2 9.8c.6.5 1.4.1 1.4-.7V2.9c0-.8-.8-1.2-1.4-.7Z"/>
+    <path fill="#007ACC" d="M19 4.4 11.2 10.5 6.4 6.8 3.5 8.3l4.6 3.7-4.6 3.7 2.9 1.5 4.8-3.7L19 19.6c.6.5 1.4.1 1.4-.7V5.1c0-.8-.8-1.2-1.4-.7Z"/>
+    <path fill="#1F9CF0" d="m14.1 12 4.9-3.8v7.6L14.1 12Z"/>
+  </svg>
+`
+
 const IDES = [
-  { id: 'vs-code', label: 'VS Code', command: 'code', icon: 'image', image: '/src/assets/vscode.webp' },
+  { id: 'vs-code', label: 'VS Code', command: 'code', icon: 'svg', svg: VS_CODE_ICON },
   { id: 'cursor', label: 'Cursor', command: 'cursor', icon: 'text', text: 'C' },
   { id: 'windsurf', label: 'Windsurf', command: 'windsurf', icon: 'text', text: 'W' },
   { id: 'jetbrains', label: 'JetBrains IDE', commands: ['idea', 'webstorm', 'pycharm', 'goland', 'phpstorm', 'rubymine', 'clion'], icon: 'text', text: 'J' },
@@ -22,15 +31,21 @@ function storageKey() {
 
 function getIconHtml(ide) {
   if (!ide) return '...'
+  if (ide.icon === 'svg') return `<span class="icon icon-svg">${ide.svg}</span>`
   if (ide.icon === 'image') return `<img class="icon-image" src="${ide.image}" alt="${ide.label}" />`
   return `<span class="icon">${ide.text || '?'}</span>`
 }
 
 function render() {
+  const showWidget = available.length >= 1
+  const showToggle = available.length >= 2
+  if (!showToggle) menuOpen = false
+
+  if (widget) widget.style.display = showWidget ? 'flex' : 'none'
   launchButton.innerHTML = selected ? getIconHtml(selected) : '...'
   launchButton.disabled = !selected || !targetPath
-  toggleButton.disabled = available.length <= 1
-  dropdown.className = menuOpen ? 'dropdown open' : 'dropdown'
+  toggleButton.style.display = showToggle ? 'inline-flex' : 'none'
+  dropdown.className = showToggle && menuOpen ? 'dropdown open' : 'dropdown'
   dropdown.innerHTML = available
     .map(
       (ide) => `
@@ -85,6 +100,7 @@ launchButton.addEventListener('click', () => {
 })
 
 toggleButton.addEventListener('click', () => {
+  if (available.length < 2) return
   menuOpen = !menuOpen
   render()
 })
