@@ -20,6 +20,15 @@ import {
 const execFileAsync = promisify(execFile);
 const requireFromHere = createRequire(import.meta.url);
 const PI_COMPAT_API_KEY_PLACEHOLDER = "!";
+const KNOWN_NO_AUTH_PROVIDERS = ["lmstudio", "ollama", "local", "localhost"];
+
+export function isKnownNoAuthProvider(providerId?: string): boolean {
+  const normalizedProviderId = providerId?.toLowerCase();
+  if (!normalizedProviderId) return false;
+  return KNOWN_NO_AUTH_PROVIDERS.some((provider) =>
+    normalizedProviderId.includes(provider),
+  );
+}
 
 function nodeRequest(
   url: string,
@@ -107,14 +116,20 @@ function getProviderApiKeyFromAuth(providerId?: string): string {
     | { type?: string; access?: string; key?: string }
     | undefined;
   if (!entry || typeof entry !== "object") {
+    console.log(`[pi] No auth entry found for provider ${providerId}`);
     return "";
   }
   if (entry.type === "oauth" && typeof entry.access === "string") {
-    return entry.access.trim();
+    const key = entry.access.trim();
+    console.log(`[pi] Found OAuth access token for provider ${providerId}: ${key.substring(0, 10)}...`);
+    return key;
   }
   if (entry.type === "api_key" && typeof entry.key === "string") {
-    return entry.key.trim();
+    const key = entry.key.trim();
+    console.log(`[pi] Found API key for provider ${providerId}: ${key.substring(0, 10)}...`);
+    return key;
   }
+  console.log(`[pi] Auth entry for provider ${providerId} has no valid credential type`);
   return "";
 }
 
@@ -122,7 +137,43 @@ function resolveProviderApiKey(
   providerConfig: Record<string, unknown>,
   providerId?: string,
 ): string {
-  return readProviderApiKey(providerConfig) || getProviderApiKeyFromAuth(providerId);
+  // First check if the provider explicitly doesn't require authentication
+  const explicitApiKey = readProviderApiKey(providerConfig);
+  if (explicitApiKey === PI_COMPAT_API_KEY_PLACEHOLDER) {
+    // Provider explicitly marked as not requiring API key
+    console.log(`[pi] Provider ${providerId ?? "unknown"} explicitly configured to not require API key`);
+    return "";
+  }
+  
+  // Check if this is a known provider that doesn't require authentication
+  if (isKnownNoAuthProvider(providerId)) {
+    console.log(`[pi] Provider ${providerId} is a known no-auth provider, skipping authentication`);
+    return "";
+  }
+  
+  // If provider has an explicit API key, use it
+  if (explicitApiKey) {
+    console.log(`[pi] Using explicit API key for provider ${providerId ?? "unknown"}`);
+    return explicitApiKey;
+  }
+  
+  // For providers without explicit API key configuration, check auth.json
+  // but only if the provider has model definitions (indicating it's a real provider)
+  if (hasProviderModelDefinitions(providerConfig)) {
+    const authKey = getProviderApiKeyFromAuth(providerId);
+    // Only use auth.json key if it's not a placeholder
+    if (authKey && authKey !== PI_COMPAT_API_KEY_PLACEHOLDER) {
+      console.log(`[pi] Using API key from auth.json for provider ${providerId ?? "unknown"}`);
+      return authKey;
+    }
+    // If we have model definitions but no valid API key, this provider doesn't require authentication
+    console.log(`[pi] Provider ${providerId ?? "unknown"} has model definitions but no valid API key - treating as no-auth provider`);
+    return "";
+  }
+  
+  // No valid API key found
+  console.log(`[pi] No API key found for provider ${providerId ?? "unknown"}`);
+  return "";
 }
 
 export type PiCommandResult = {
@@ -277,6 +328,7 @@ export function ensurePiAgentBootstrapped() {
   }
 
   ensurePiAuthJsonExists(agentDir);
+  cleanupNoAuthProviderKeys(agentDir); // Clean up any existing no-auth provider keys
   syncProviderApiKeysBetweenModelsAndAuth(agentDir);
   migrateOpenAICodexBaseUrl(agentDir);
 }
@@ -515,6 +567,12 @@ function migrateProviderApiKeysToAuthIfNeeded(agentDir: string): void {
 
   let changed = false;
   for (const { provider, key } of apiKeys) {
+    // Skip migration for known no-auth providers
+    if (isKnownNoAuthProvider(provider)) {
+      console.log(`[pi] Skipping API key migration for known no-auth provider: ${provider}`);
+      continue;
+    }
+    
     const existing = auth[provider];
     if (
       existing &&
@@ -538,10 +596,41 @@ function migrateProviderApiKeysToAuthIfNeeded(agentDir: string): void {
   fs.writeFileSync(authPath, `${JSON.stringify(auth, null, 2)}\n`, "utf8");
 }
 
+function cleanupNoAuthProviderKeys(agentDir: string): void {
+  const authPath = path.join(agentDir, "auth.json");
+  if (!fs.existsSync(authPath)) {
+    return;
+  }
+
+  let auth: Record<string, unknown> = {};
+  try {
+    const raw = JSON.parse(fs.readFileSync(authPath, "utf8"));
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      auth = raw as Record<string, unknown>;
+    }
+  } catch {
+    return;
+  }
+
+  let changed = false;
+  for (const providerName of Object.keys(auth)) {
+    if (isKnownNoAuthProvider(providerName)) {
+      console.log(`[pi] Cleaning up API key for known no-auth provider: ${providerName}`);
+      delete auth[providerName];
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    fs.writeFileSync(authPath, `${JSON.stringify(auth, null, 2)}\n`, "utf8");
+  }
+}
+
 export function syncProviderApiKeysBetweenModelsAndAuth(
   agentDir: string,
 ): void {
   migrateProviderApiKeysToAuthIfNeeded(agentDir);
+  cleanupNoAuthProviderKeys(agentDir);
 
   const modelsPath = path.join(agentDir, "models.json");
   const authPath = path.join(agentDir, "auth.json");
@@ -593,6 +682,9 @@ export function syncProviderApiKeysBetweenModelsAndAuth(
           : providerConfig.apiKey.trim()
         : "";
 
+    // Check if this is a known no-auth provider
+    const isNoAuthProvider = isKnownNoAuthProvider(providerName);
+
     const authEntry = nextAuth[providerName];
     const authType =
       authEntry &&
@@ -603,13 +695,16 @@ export function syncProviderApiKeysBetweenModelsAndAuth(
         ? authEntry.type
         : null;
 
-    if (!modelKey) {
+    if (!modelKey || isNoAuthProvider) {
       if (authType === "api_key") {
         delete nextAuth[providerName];
         authChanged = true;
         console.log(
           `[pi] Removed stale API-key auth entry for provider without API key: ${providerName}`,
         );
+      }
+      if (isNoAuthProvider) {
+        console.log(`[pi] Ensuring no auth entry for known no-auth provider: ${providerName}`);
       }
       continue;
     }
@@ -1176,6 +1271,9 @@ async function fetchProviderModelsFromEndpoint(
   const headers: Record<string, string> = { accept: "application/json" };
   if (apiKey.length > 0) {
     headers.authorization = `Bearer ${apiKey}`;
+    console.log(`[pi] Adding Authorization header for provider ${providerId ?? "unknown"}`);
+  } else {
+    console.log(`[pi] No API key for provider ${providerId ?? "unknown"}, skipping Authorization header`);
   }
 
   // Try each base URL candidate (e.g., http://host:port, http://host:port/v1, etc.)
@@ -1365,6 +1463,9 @@ export async function testProviderConnection(
     const headers: Record<string, string> = { accept: "application/json" };
     if (apiKey.length > 0) {
       headers.authorization = `Bearer ${apiKey}`;
+      console.log(`[pi] Adding Authorization header for provider test connection`);
+    } else {
+      console.log(`[pi] No API key for provider test connection, skipping Authorization header`);
     }
 
     const response = await nodeRequest(`${normalizedBaseUrl}/models`, {

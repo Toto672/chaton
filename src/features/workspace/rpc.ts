@@ -103,6 +103,7 @@ export type PiConversationRuntime = {
   pendingCommands: number
   lastError: string | null
   extensionRequests: Array<{ id: string; method: string; payload: Record<string, JsonValue | undefined> }>
+  memoryInjected?: boolean
   extensionStatus: Record<string, string>
   extensionWidget: string[] | null
   editorPrefill: string | null

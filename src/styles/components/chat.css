@@ -800,4 +800,24 @@
   .memory-saving-badge--done {
     @apply bg-emerald-700/90 text-white;
   }
+
+  .memory-injected-badge {
+    @apply ml-2 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800;
+  }
+
+  .memory-injected-icon {
+    @apply text-blue-600;
+  }
+
+  .memory-injected-text {
+    @apply text-blue-800;
+  }
+
+  .dark .memory-injected-badge {
+    @apply bg-blue-900/20 text-blue-300;
+  }
+
+  .dark .memory-injected-text {
+    @apply text-blue-300;
+  }
 }

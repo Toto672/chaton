@@ -40,6 +40,7 @@ export type Conversation = {
   channelExtensionId: string | null
   hasCompletedAction?: boolean
   hiddenFromSidebar: boolean
+  memoryInjected?: boolean
 }
 
 export type CreateConversationResult =

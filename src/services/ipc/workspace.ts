@@ -1006,6 +1006,8 @@ export const workspaceIpc = {
       memoryId?: string | null;
     }) => void,
   ) => getApi().onMemorySaving(listener),
+  setConversationMemoryInjected: (conversationId: string, injected: boolean): Promise<{ ok: boolean }> =>
+    getApi().setConversationMemoryInjected(conversationId, injected),
 };
 
 export type { ImportProjectResult, WorkspacePayload };

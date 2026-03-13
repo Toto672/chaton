@@ -136,6 +136,8 @@ Structure:
 - API keys and OAuth tokens are stored here, not in `models.json`
 - Chatons may synchronize credentials between `models.json` and `auth.json` for compatibility
 - OAuth flows store credentials here after successful login
+- Known local no-auth providers such as `lmstudio`, `ollama`, `local`, and `localhost` must not be backfilled into `auth.json` during runtime startup; otherwise Pi sessions can resurrect stale `api_key` entries and incorrectly fail on keyless local endpoints
+- Those same local providers may still carry `apiKey: "!"` inside `models.json` as a Pi schema-compatibility sentinel when they define explicit custom models. Treat that bare `!` as a literal placeholder, not a shell-command config value, or Pi will resolve it to nothing and reject local model switches with false `No API key` errors.
 
 ---
 

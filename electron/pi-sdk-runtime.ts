@@ -52,6 +52,7 @@ import {
   getPiModelsPath,
   readJsonFile,
   sanitizeModelsJsonWithResolvedBaseUrls,
+  syncProviderApiKeysBetweenModelsAndAuth,
 } from "./ipc/workspace-pi.js";
 import {
   getBuiltinExtensionTools,
@@ -351,65 +352,6 @@ type RuntimeState = {
 
 function getAgentDir() {
   return path.join(app.getPath("userData"), ".pi", "agent");
-}
-
-function migrateProviderApiKeysToAuthIfNeeded(agentDir: string) {
-  const modelsPath = path.join(agentDir, "models.json");
-  const authPath = path.join(agentDir, "auth.json");
-  if (!fs.existsSync(modelsPath)) return;
-
-  type ModelsShape = { providers?: Record<string, { apiKey?: unknown }> };
-  let models: ModelsShape | null = null;
-  try {
-    models = JSON.parse(fs.readFileSync(modelsPath, "utf8")) as ModelsShape;
-  } catch {
-    return;
-  }
-  if (
-    !models ||
-    typeof models !== "object" ||
-    !models.providers ||
-    typeof models.providers !== "object"
-  ) {
-    return;
-  }
-
-  let auth: Record<string, unknown> = {};
-  if (fs.existsSync(authPath)) {
-    try {
-      const raw = JSON.parse(fs.readFileSync(authPath, "utf8"));
-      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-        auth = raw as Record<string, unknown>;
-      }
-    } catch {
-      auth = {};
-    }
-  }
-
-  let changed = false;
-  for (const [provider, cfg] of Object.entries(models.providers)) {
-    const key = typeof cfg?.apiKey === "string" ? cfg.apiKey.trim() : "";
-    if (!key) continue;
-
-    const existing = auth[provider] as
-      | { type?: unknown; key?: unknown }
-      | undefined;
-    if (
-      existing &&
-      typeof existing === "object" &&
-      existing.type === "api_key" &&
-      typeof existing.key === "string" &&
-      existing.key.trim().length > 0
-    ) {
-      continue;
-    }
-    auth[provider] = { type: "api_key", key };
-    changed = true;
-  }
-
-  if (!changed) return;
-  fs.mkdirSync(path.dirname(authPath), { recursive: true });
-  fs.writeFileSync(authPath, `${JSON.stringify(auth, null, 2)}\n`, "utf8");
 }
 
 function getGlobalWorkspaceDir() {
@@ -837,7 +779,7 @@ export class PiSdkRuntime {
     if (this.runtime) return;
 
     const db = getDb();
-    migrateProviderApiKeysToAuthIfNeeded(getAgentDir());
+    syncProviderApiKeysBetweenModelsAndAuth(getAgentDir());
     // Ensure provider base URLs are generation-compatible at runtime startup.
     // This catches existing custom providers saved with a root URL that
     // answers /models but fails /chat/completions without /v1.

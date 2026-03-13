@@ -1048,6 +1048,10 @@ declare global {
       setMemoryModelPreference: (
         modelKey: string | null,
       ) => Promise<{ ok: boolean }>;
+      setConversationMemoryInjected: (
+        conversationId: string,
+        injected: boolean,
+      ) => Promise<{ ok: boolean }>;
       onMemorySaving: (
         listener: (payload: {
           conversationId: string;

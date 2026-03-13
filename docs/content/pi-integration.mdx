@@ -131,6 +131,8 @@ Separately, Pi's own `ModelRegistry` still validates custom providers with expli
 ```
 
 Credentials are stored here. Chatons synchronizes credentials between `models.json` and `auth.json` for compatibility (both directions).
+Known local no-auth providers such as LM Studio, Ollama, `local`, and `localhost` are excluded from API-key backfill and have stale `api_key` entries removed during sync so runtime sessions can omit Authorization headers when the backend permits keyless local access.
+When those providers also define explicit `models` entries, Chatons can keep `apiKey: "!"` in `models.json` as a schema-compatibility sentinel for Pi. Runtime resolution must preserve that bare sentinel as a literal placeholder rather than treating it as a shell-command config value, otherwise Pi loses the fallback credential path and local model selection fails even though the provider is intentionally keyless.
 
 ---
 

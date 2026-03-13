@@ -301,6 +301,7 @@ function mapConversation(c: DbConversation) {
     accessMode: c.access_mode ?? "secure",
     channelExtensionId: c.channel_extension_id,
     hiddenFromSidebar: Boolean(c.hidden_from_sidebar),
+    memoryInjected: Boolean(c.memory_injected),
   };
 }
 

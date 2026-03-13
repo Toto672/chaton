@@ -395,6 +395,10 @@ contextBridge.exposeInMainWorld("chaton", {
     }>,
   setMemoryModelPreference: (modelKey: string | null) =>
     ipcRenderer.invoke("memory:setModelPreference", modelKey),
+  setConversationMemoryInjected: (conversationId: string, injected: boolean) =>
+    ipcRenderer.invoke("setConversationMemoryInjected", conversationId, injected) as Promise<{
+      ok: boolean;
+    }>,
   onMemorySaving: (
     listener: (payload: {
       conversationId: string;

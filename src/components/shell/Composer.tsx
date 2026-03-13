@@ -1045,6 +1045,30 @@ export function Composer() {
               return { ...previous, [composerKey]: next };
             });
           }}
+          onSteer={async (item, index) => {
+            if (selectedConversation?.id && selectedRuntime?.status === "streaming") {
+              try {
+                await sendPiPrompt({
+                  conversationId: selectedConversation.id,
+                  message: item,
+                  steer: true,
+                  images: [],
+                  files: [],
+                });
+                // Remove the steered message from queue after successful steering
+                setFileAttenteMessagesByKey((previous) => ({
+                  ...previous,
+                  [composerKey]: (previous[composerKey] ?? []).filter(
+                    (_, currentIndex) => currentIndex !== index,
+                  ),
+                }));
+              } catch (error) {
+                console.error("Failed to steer message:", error);
+                // Keep the message in queue if steering fails
+              }
+            }
+          }}
+          isStreaming={selectedRuntime?.status === "streaming"}
         />
 
         <div

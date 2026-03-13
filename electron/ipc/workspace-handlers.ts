@@ -2461,11 +2461,23 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
               command.message,
             );
             if (memoryContext) {
-              // Send memory context as a steer (hidden from user)
-              await deps.piRuntimeManager.sendCommand(conversationId, {
-                type: "steer",
-                message: memoryContext,
-              });
+              // Send memory context directly to Pi runtime without creating UI message
+              const runtime = (deps.piRuntimeManager as any).getOrCreateRuntime(conversationId);
+              if (runtime.runtime) {
+                await runtime.runtime.session.steer(memoryContext);
+                console.log("[Memory] Injected memory context for conversation:", conversationId);
+                // Mark conversation as having memory injected
+                const db = getDb();
+                db.prepare(
+                  `UPDATE conversations SET memory_injected = ? WHERE id = ?`
+                ).run(1, conversationId);
+                
+                // Also update the in-memory conversation cache
+                const conversation = findConversationById(db, conversationId);
+                if (conversation) {
+                  conversation.memory_injected = 1;
+                }
+              }
             }
           } catch (err) {
             console.warn("[Memory] Failed to inject memory context:", err);
@@ -3008,4 +3020,31 @@ export function registerSystemHandlers() {
       };
     }
   });
+
+  ipcMain.handle(
+    "setConversationMemoryInjected",
+    async (_event, conversationId: string, injected: boolean) => {
+      try {
+        // Update the conversation in the database to mark memory as injected
+        const db = getDb();
+        db.prepare(
+          `UPDATE conversations SET memory_injected = ? WHERE id = ?`
+        ).run(injected ? 1 : 0, conversationId);
+        
+        // Also update the in-memory conversation cache
+        const conversation = findConversationById(db, conversationId);
+        if (conversation) {
+          conversation.memory_injected = injected ? 1 : 0;
+        }
+        
+        return { ok: true };
+      } catch (error) {
+        console.error("Failed to set conversation memory injected:", error);
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    }
+  );
 }

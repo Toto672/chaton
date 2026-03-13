@@ -227,6 +227,14 @@
     @apply transform scale-110;
   }
 
+  .composer-file-attente-bouton-steer {
+    @apply hover:text-[#3b82f6] hover:bg-[#eff6ff];
+  }
+
+  .composer-file-attente-bouton-steer:hover svg {
+    @apply transform scale-110;
+  }
+
   .composer-shell {
     border-radius: var(--ui-radius-composer);
     @apply border border-[#d9dadd] px-4 py-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all duration-150;

@@ -21,6 +21,7 @@ export type DbConversation = {
   access_mode: 'secure' | 'open'
   channel_extension_id: string | null
   hidden_from_sidebar: number
+  memory_injected: number
 }
 
 export type DbConversationMessageCache = {
@@ -53,14 +54,15 @@ export function insertConversation(
     accessMode?: 'secure' | 'open'
     channelExtensionId?: string | null
     hiddenFromSidebar?: boolean
+    memoryInjected?: boolean
   },
 ) {
   const now = new Date().toISOString()
   db.prepare(
     `INSERT INTO conversations(
       id, project_id, title, title_source, status, is_relevant, created_at, updated_at, last_message_at,
-      pi_session_file, model_provider, model_id, thinking_level, last_runtime_error, worktree_path, access_mode, channel_extension_id, hidden_from_sidebar
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, ?, ?, ?, ?)`
+      pi_session_file, model_provider, model_id, thinking_level, last_runtime_error, worktree_path, access_mode, channel_extension_id, hidden_from_sidebar, memory_injected
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`
   ).run(
     params.id,
     params.projectId ?? null,
@@ -78,6 +80,7 @@ export function insertConversation(
     params.accessMode ?? 'secure',
     params.channelExtensionId ?? null,
     params.hiddenFromSidebar === true ? 1 : 0,
+    params.memoryInjected === true ? 1 : 0,
   )
 }
 

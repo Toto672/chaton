@@ -16,6 +16,43 @@ Related:
 
 ## March 12, 2026
 
+### Preserved the bare `!` compatibility placeholder for keyless local providers
+
+**Issue:** LM Studio conversations could still fail with `No API key` even after Chatons stopped backfilling local-provider credentials into `auth.json`.
+
+**Root cause:** Chatons intentionally keeps `apiKey: "!"` in `models.json` for custom no-auth providers so Pi accepts the schema, but Pi's `resolveConfigValue()` treated any leading `!` as a shell command. A bare `!` therefore resolved to nothing during runtime model selection, so Pi lost the provider fallback key and rejected the switch.
+
+**Change:** Extended the Chatons postinstall Pi patch to preserve a bare `!` as a literal placeholder in `resolve-config-value.js` while keeping the existing model-registry validator cache patch. Removed the temporary runtime/composer debug logs used to isolate the bug.
+
+**Why:** Keyless local providers need a stable sentinel that satisfies Pi's custom-provider schema without turning into a real Authorization header or disappearing during runtime resolution.
+
+**Files updated:**
+
+- `scripts/patch-model-registry.js` -- Added a patch for `resolve-config-value.js` so bare `!` remains a literal placeholder
+- `docs/content/developer-guide.mdx` -- Documented the local-provider `!` sentinel contract
+- `docs/content/pi-integration.mdx` -- Documented why the placeholder must survive runtime resolution
+- `AGENTS.md` -- Added maintainer guidance for the `!` compatibility sentinel
+- `electron/pi-sdk-runtime.ts` -- Removed temporary auth/model debug logging
+- `src/components/shell/Composer.tsx` -- Removed temporary model-apply debug logging
+
+### Prevented runtime auth backfill for keyless local providers
+
+**Issue:** Runtime startup could recreate `auth.json` API-key entries for local no-auth providers such as LM Studio even after the workspace bootstrap path had cleaned them up. That made some `litellm` or LM Studio backed sessions fail with `No API key` errors even though the local endpoint was configured to allow unauthenticated requests.
+
+**Root cause:** `electron/pi-sdk-runtime.ts` still had its own API-key migration helper that copied `models.json.apiKey` into `auth.json` without applying the no-auth-provider cleanup rules already present in `electron/ipc/workspace-pi.ts`.
+
+**Change:** Removed the duplicate runtime migration logic and reused the shared `syncProviderApiKeysBetweenModelsAndAuth()` path instead. Also centralized known no-auth provider detection in `workspace-pi.ts` so discovery, sync, and runtime startup classify providers consistently.
+
+**Why:** Local OpenAI-compatible providers need one credential policy across setup and runtime. Without that, startup could reintroduce stale credentials and diverge from the no-auth behavior already used for discovery and connection tests.
+
+**Files updated:**
+
+- `electron/pi-sdk-runtime.ts` -- Reused shared provider credential sync at runtime startup
+- `electron/ipc/workspace-pi.ts` -- Centralized known no-auth provider detection
+- `docs/content/developer-guide.mdx` -- Documented runtime cleanup for local no-auth providers
+- `docs/content/pi-integration.mdx` -- Documented that stale API-key entries are removed for local providers
+- `AGENTS.md` -- Added maintainer guidance about no-auth provider sync behavior
+
 ### Added conservative background automation suggestions
 
 **Change:** Added a lightweight background analyzer that reviews completed conversations for repeated request patterns and can raise a notification suggesting an automation.

@@ -1,13 +1,15 @@
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type ComposerQueueProps = {
   messages: string[];
   onEdit: (message: string, index: number) => void;
   onRemove: (index: number) => void;
+  onSteer: (message: string, index: number) => void;
+  isStreaming?: boolean;
 };
 
-export function ComposerQueue({ messages, onEdit, onRemove }: ComposerQueueProps) {
+export function ComposerQueue({ messages, onEdit, onRemove, onSteer = () => {}, isStreaming = false }: ComposerQueueProps) {
   if (messages.length === 0) {
     return null;
   }
@@ -30,6 +32,18 @@ export function ComposerQueue({ messages, onEdit, onRemove }: ComposerQueueProps
               >
                 <Pencil className="h-5 w-5" />
               </Button>
+              {isStreaming && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="composer-file-attente-bouton composer-file-attente-bouton-steer"
+                  onClick={() => onSteer(item, index)}
+                  title="Diriger"
+                >
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="ghost"

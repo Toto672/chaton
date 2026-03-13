@@ -1,11 +1,13 @@
 /**
- * Patch pi-coding-agent's model-registry to cache the AJV schema validator.
+ * Patch pi-coding-agent internals with Chatons-specific compatibility fixes.
  *
- * Without this patch, every ModelRegistry construction compiles the full
- * JSON schema from scratch (new Ajv() + ajv.compile()), which takes ~80ms
- * and happens on every conversation session start.
+ * Current patches:
+ * - Cache the model-registry AJV schema validator to avoid recompilation on every session start.
+ * - Preserve the bare "!" apiKey placeholder used for keyless local providers
+ *   (LM Studio, Ollama-style OpenAI-compatible endpoints) instead of treating it
+ *   as an empty shell command in resolveConfigValue().
  *
- * This script is idempotent — safe to run multiple times.
+ * This script is idempotent and safe to run multiple times.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -13,7 +15,7 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-const TARGET = path.join(
+const MODEL_REGISTRY_TARGET = path.join(
   __dirname,
   '..',
   'node_modules',
@@ -24,25 +26,35 @@ const TARGET = path.join(
   'model-registry.js',
 )
 
-if (!fs.existsSync(TARGET)) {
-  console.log('[patch-model-registry] Target file not found, skipping.')
-  process.exit(0)
-}
+const RESOLVE_CONFIG_VALUE_TARGET = path.join(
+  __dirname,
+  '..',
+  'node_modules',
+  '@mariozechner',
+  'pi-coding-agent',
+  'dist',
+  'core',
+  'resolve-config-value.js',
+)
 
-let content = fs.readFileSync(TARGET, 'utf8')
+function patchModelRegistry() {
+  if (!fs.existsSync(MODEL_REGISTRY_TARGET)) {
+    console.log('[patch-model-registry] model-registry.js not found, skipping.')
+    return
+  }
 
-// Already patched?
-if (content.includes('_cachedModelsConfigValidator')) {
-  console.log('[patch-model-registry] Already patched, skipping.')
-  process.exit(0)
-}
+  let content = fs.readFileSync(MODEL_REGISTRY_TARGET, 'utf8')
 
-// 1. Insert cached validator factory after schema definition
-const schemaEnd = `providers: Type.Record(Type.String(), ProviderConfigSchema),
+  if (content.includes('_cachedModelsConfigValidator')) {
+    console.log('[patch-model-registry] model-registry.js already patched.')
+    return
+  }
+
+  const schemaEnd = `providers: Type.Record(Type.String(), ProviderConfigSchema),
 });
 function emptyCustomModelsResult`
 
-const schemaEndPatched = `providers: Type.Record(Type.String(), ProviderConfigSchema),
+  const schemaEndPatched = `providers: Type.Record(Type.String(), ProviderConfigSchema),
 });
 // Cached AJV validator — avoids recompiling the schema on every loadCustomModels call
 let _cachedModelsConfigValidator = null;
@@ -55,23 +67,59 @@ function getModelsConfigValidator() {
 }
 function emptyCustomModelsResult`
 
-if (!content.includes(schemaEnd)) {
-  console.error('[patch-model-registry] Could not find schema insertion point.')
-  process.exit(1)
-}
-content = content.replace(schemaEnd, schemaEndPatched)
+  if (!content.includes(schemaEnd)) {
+    throw new Error('[patch-model-registry] Could not find schema insertion point.')
+  }
+  content = content.replace(schemaEnd, schemaEndPatched)
 
-// 2. Replace the inline Ajv creation with the cached getter
-const inlineAjv = `const ajv = new Ajv();
+  const inlineAjv = `const ajv = new Ajv();
             const validate = ajv.compile(ModelsConfigSchema);`
 
-const cachedAjv = `const validate = getModelsConfigValidator();`
+  const cachedAjv = `const validate = getModelsConfigValidator();`
 
-if (!content.includes(inlineAjv)) {
-  console.error('[patch-model-registry] Could not find inline AJV usage.')
-  process.exit(1)
+  if (!content.includes(inlineAjv)) {
+    throw new Error('[patch-model-registry] Could not find inline AJV usage.')
+  }
+  content = content.replace(inlineAjv, `// Validate schema (using cached validator)\n            ${cachedAjv}`)
+
+  fs.writeFileSync(MODEL_REGISTRY_TARGET, content, 'utf8')
+  console.log('[patch-model-registry] Patched model-registry.js')
 }
-content = content.replace(inlineAjv, `// Validate schema (using cached validator)\n            ${cachedAjv}`)
 
-fs.writeFileSync(TARGET, content, 'utf8')
-console.log('[patch-model-registry] Successfully patched model-registry.js')
+function patchResolveConfigValue() {
+  if (!fs.existsSync(RESOLVE_CONFIG_VALUE_TARGET)) {
+    console.log('[patch-model-registry] resolve-config-value.js not found, skipping.')
+    return
+  }
+
+  let content = fs.readFileSync(RESOLVE_CONFIG_VALUE_TARGET, 'utf8')
+
+  if (content.includes('if (config === "!")')) {
+    console.log('[patch-model-registry] resolve-config-value.js already patched.')
+    return
+  }
+
+  const lookup = `export function resolveConfigValue(config) {
+    if (config.startsWith("!")) {
+        return executeCommand(config);
+    }`
+
+  const replacement = `export function resolveConfigValue(config) {
+    if (config === "!") {
+        return "!";
+    }
+    if (config.startsWith("!")) {
+        return executeCommand(config);
+    }`
+
+  if (!content.includes(lookup)) {
+    throw new Error('[patch-model-registry] Could not find resolveConfigValue insertion point.')
+  }
+
+  content = content.replace(lookup, replacement)
+  fs.writeFileSync(RESOLVE_CONFIG_VALUE_TARGET, content, 'utf8')
+  console.log('[patch-model-registry] Patched resolve-config-value.js')
+}
+
+patchModelRegistry()
+patchResolveConfigValue()
