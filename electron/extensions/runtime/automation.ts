@@ -159,7 +159,7 @@ export function createAutomationRuntime(deps: {
 
       // Auto-disable run-once rules after execution
       if (rule.run_once) {
-        db.prepare('UPDATE automation_rules SET enabled = 0, updated_at = ? WHERE id = ?').run(now, rule.id)
+        db.prepare('UPDATE automation_rules SET enabled = 0, updated_at = ? WHERE id = ?').run(Date.now(), rule.id)
         console.log(`[Automation] Run-once rule "${rule.name}" (${rule.id}) auto-disabled after execution`)
       }
     }
@@ -394,12 +394,12 @@ export function createAutomationRuntime(deps: {
     }
     if (apiName === 'automation.publish_extension_event') {
       const params = asRecord(payload) ?? {}
-      const eventName = typeof params.eventName === 'string' && params.eventName.trim() ? params.eventName.trim() : null
+      const eventName = typeof params.eventName === 'string' && params.eventName.trim() ? params.eventName.trim() : undefined
       if (!eventName) {
         return { ok: false, error: { code: 'invalid_args', message: 'eventName is required' } }
       }
-      const result = await publishExtensionAutomationEvent(BUILTIN_AUTOMATION_ID, eventName, params.payload ?? {})
-      return result.ok ? { ok: true, data: { success: true } } : { ok: false, error: { code: 'event_publication_failed', message: result.error || 'Failed to publish extension event' } }
+      const result = publishExtensionAutomationEvent(BUILTIN_AUTOMATION_ID, eventName, params.payload ?? {})
+      return result.ok ? { ok: true, data: { success: true } } : { ok: false, error: { code: 'internal', message: result.error || 'Failed to publish extension event' } }
     }
     return null
   }
@@ -430,15 +430,6 @@ export function createAutomationRuntime(deps: {
         queueNack(BUILTIN_AUTOMATION_ID, m.id, undefined, error instanceof Error ? error.message : String(error))
       }
     }
-  }
-
-  return {
-    runAutomationOnEvent,
-    extensionsCallAutomation,
-    runExtensionsQueueWorkerCycle,
-    initializeCronTasks,
-    updateCronTask,
-    shutdownCronScheduler,
   }
 
   async function publishExtensionAutomationEvent(extensionId: string, eventName: string, payload: unknown): Promise<{ ok: boolean; error?: string }> {
