@@ -802,7 +802,7 @@
   }
 
   .memory-injected-badge {
-    @apply ml-2 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800;
+    @apply inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800;
   }
 
   .memory-injected-icon {

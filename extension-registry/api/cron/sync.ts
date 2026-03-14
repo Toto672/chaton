@@ -8,6 +8,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { syncExtensions } from "../../lib/sync.js";
 import { loadRegistrySource } from "../../lib/registry-source.js";
+import { withAutoDiscoveredRegistry } from "../../lib/discovery.js";
 import { saveCatalog, saveIcon } from "../../lib/storage.js";
 
 export default async function handler(
@@ -26,7 +27,7 @@ export default async function handler(
   }
 
   try {
-    const registry = loadRegistrySource();
+    const registry = await withAutoDiscoveredRegistry(loadRegistrySource());
 
     const catalog = await syncExtensions({
       registry,

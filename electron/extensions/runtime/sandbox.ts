@@ -1,4 +1,6 @@
 import { storageKvGet, storageKvSet } from "./storage.js";
+import { hostCallProxy } from "../runtime.js";
+import { publishExtensionAutomationEvent } from "./queue.js";
 
 import type { ExtensionHostCallResult } from "./types.js";
 import { Worker } from "node:worker_threads";
@@ -228,6 +230,14 @@ async function handleProxyCall(
     case "storageKvSet": {
       const [extId, key, value] = args as [string, string, unknown];
       return storageKvSet(extId, key, value);
+    }
+    case "hostCall": {
+      const [extId, hostMethod, params] = args as [string, string, Record<string, unknown> | undefined];
+      return hostCallProxy(extId, hostMethod, params);
+    }
+    case "publishAutomationEvent": {
+      const [extId, eventName, payload] = args as [string, string, unknown];
+      return publishExtensionAutomationEvent(extId, eventName, payload);
     }
     default:
       return {

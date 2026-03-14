@@ -8,6 +8,7 @@
 import http from "node:http";
 import { syncExtensions } from "./sync.js";
 import { loadRegistrySource } from "./registry-source.js";
+import { withAutoDiscoveredRegistry } from "./discovery.js";
 import { saveCatalogLocal, saveIconLocal, readIconLocal, loadCatalogLocal } from "./storage-local.js";
 import type { ExtensionEntry, ExtensionCatalog } from "./types.js";
 
@@ -25,7 +26,6 @@ const PORT = parseInt(
   10
 );
 
-const registry = loadRegistrySource();
 
 function matchesSearch(ext: ExtensionEntry, query: string): boolean {
   const q = query.toLowerCase();
@@ -103,6 +103,7 @@ async function handleIcon(res: http.ServerResponse, filename: string) {
 
 async function handleSync(res: http.ServerResponse) {
   try {
+    const registry = await withAutoDiscoveredRegistry(loadRegistrySource());
     const catalog = await syncExtensions({ registry, saveIcon: saveIconLocal });
     await saveCatalogLocal(catalog);
     sendJson(res, 200, { ok: true, totalCount: catalog.totalCount, generatedAt: catalog.generatedAt });

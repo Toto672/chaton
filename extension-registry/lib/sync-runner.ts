@@ -7,11 +7,12 @@
 
 import { syncExtensions } from "./sync.js";
 import { loadRegistrySource } from "./registry-source.js";
+import { withAutoDiscoveredRegistry } from "./discovery.js";
 import { saveCatalogLocal, saveIconLocal } from "./storage-local.js";
 
-const registry = loadRegistrySource();
-
 async function main() {
+  const registry = await withAutoDiscoveredRegistry(loadRegistrySource());
+
   const catalog = await syncExtensions({
     registry,
     saveIcon: saveIconLocal,

@@ -192,13 +192,15 @@ export function Topbar() {
   return (
     <>
       <header className="topbar">
-        <div className="topbar-title">{selectedConversation?.title ?? t("Nouvelle conversation")}</div>
-        {selectedConversation?.memoryInjected && (
-          <div className="memory-injected-badge">
-            <span className="memory-injected-icon">🧠</span>
-            <span className="memory-injected-text">{t("Memory injected")}</span>
-          </div>
-        )}
+        <div className="topbar-left">
+          <div className="topbar-title">{selectedConversation?.title ?? t("Nouvelle conversation")}</div>
+          {selectedConversation?.memoryInjected && (
+            <div className="memory-injected-badge">
+              <span className="memory-injected-icon">🧠</span>
+              <span className="memory-injected-text">{t("Memory injected")}</span>
+            </div>
+          )}
+        </div>
         <div className="topbar-actions">
         {selectedConversation?.projectId ? (
           <>

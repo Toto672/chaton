@@ -34,6 +34,7 @@ export interface RegistrySource {
   description?: string;
   builtin: BuiltinEntry[];
   npm: string[];
+  autoDiscoveredNpm?: string[];
 }
 
 export interface BuiltinEntry {

@@ -46,7 +46,7 @@ const pendingProxyCalls = new Map<
 
 let proxyCallCounter = 0;
 
-// Create a proxy context that forwards storage/db calls to the main thread
+// Create a proxy context that forwards storage/db and host integration calls to the main thread
 function createProxyStorageKvGet(extId: string, key: string): unknown {
   return sendProxyCall("storageKvGet", [extId, key]);
 }
@@ -57,6 +57,22 @@ function createProxyStorageKvSet(
   value: unknown,
 ): unknown {
   return sendProxyCall("storageKvSet", [extId, key, value]);
+}
+
+function createProxyHostCall(
+  extId: string,
+  method: string,
+  params?: unknown,
+): unknown {
+  return sendProxyCall("hostCall", [extId, method, params]);
+}
+
+function createProxyPublishAutomationEvent(
+  extId: string,
+  eventName: string,
+  payload: unknown,
+): unknown {
+  return sendProxyCall("publishAutomationEvent", [extId, eventName, payload]);
 }
 
 function sendProxyCall(method: string, args: unknown[]): Promise<unknown> {
@@ -152,9 +168,11 @@ async function loadHandler() {
 // Build the context object that mirrors what the main thread provides
 const workerCtx = {
   extensionId,
-  // These proxy back to the main thread for actual DB operations
+  // These proxy back to the main thread for actual DB operations and host integration.
   storageKvGet: createProxyStorageKvGet,
   storageKvSet: createProxyStorageKvSet,
+  hostCall: createProxyHostCall,
+  publishAutomationEvent: createProxyPublishAutomationEvent,
   // getDb is not available in the worker (intentional isolation)
   getDb: () => {
     throw new Error(

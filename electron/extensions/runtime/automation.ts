@@ -222,7 +222,7 @@ export function createAutomationRuntime(deps: {
     await scheduler.schedule(ruleId, cronExpression, onTick)
   }
 
-  function extensionsCallAutomation(apiName: string, payload: unknown, context?: { conversationId?: string }): ExtensionHostCallResult | null {
+  async function extensionsCallAutomation(apiName: string, payload: unknown, context?: { conversationId?: string }): Promise<ExtensionHostCallResult> {
     const db = getDb()
     if (apiName === 'automation.rules.list') {
       const rules = listAutomationRules(db).map((rule) => ({
@@ -244,8 +244,8 @@ export function createAutomationRuntime(deps: {
       }
       const p = payload as Record<string, unknown>
       const id = typeof p.id === 'string' && p.id ? p.id : crypto.randomUUID()
-      const name = typeof p.name === 'string' && p.name.trim() ? p.name.trim() : null
-      const trigger = typeof p.trigger === 'string' ? p.trigger : null
+      const name = typeof p.name === 'string' && p.name.trim() ? p.name.trim() : undefined
+      const trigger = typeof p.trigger === 'string' ? p.trigger : undefined
       if (!name || !trigger) {
         return { ok: false, error: { code: 'invalid_args', message: 'name and trigger are required' } }
       }
@@ -292,7 +292,7 @@ export function createAutomationRuntime(deps: {
           id: row.id,
           ruleId: row.rule_id,
           eventTopic: row.event_topic,
-          eventPayload: safeParseJson(row.event_payload_json, null),
+          eventPayload: safeParseJson(row.event_payload_json, undefined),
           status: row.status,
           errorMessage: row.error_message,
           createdAt: row.created_at,
@@ -382,7 +382,7 @@ export function createAutomationRuntime(deps: {
     }
     if (apiName === 'automation.delete_task') {
       const params = asRecord(payload) ?? {}
-      const id = typeof params.id === 'string' && params.id.trim() ? params.id.trim() : null
+      const id = typeof params.id === 'string' && params.id.trim() ? params.id.trim() : undefined
       if (!id) {
         return { ok: false, error: { code: 'invalid_args', message: 'id is required' } }
       }
@@ -398,10 +398,10 @@ export function createAutomationRuntime(deps: {
       if (!eventName) {
         return { ok: false, error: { code: 'invalid_args', message: 'eventName is required' } }
       }
-      const result = publishExtensionAutomationEvent(BUILTIN_AUTOMATION_ID, eventName, params.payload ?? {})
+      const result = await publishExtensionAutomationEvent(BUILTIN_AUTOMATION_ID, eventName, params.payload ?? {})
       return result.ok ? { ok: true, data: { success: true } } : { ok: false, error: { code: 'internal', message: result.error || 'Failed to publish extension event' } }
     }
-    return null
+    return { ok: false, error: { code: 'not_found', message: 'API not found' } }
   }
 
   async function runExtensionsQueueWorkerCycle(queueConsume: (extensionId: string, topic: string, consumerId: string, opts?: { limit?: number }) => ExtensionHostCallResult, queueAck: (extensionId: string, messageId: string) => ExtensionHostCallResult, queueNack: (extensionId: string, messageId: string, retryAt?: string, errorMessage?: string) => ExtensionHostCallResult) {
@@ -418,7 +418,7 @@ export function createAutomationRuntime(deps: {
         
         if (!topicName && m.payload && typeof m.payload === 'object' && !Array.isArray(m.payload)) {
           const payload = m.payload as Record<string, unknown>
-          topicName = typeof payload.topic === 'string' ? payload.topic : null
+          topicName = typeof payload.topic === 'string' ? payload.topic : undefined
           eventPayload = payload.payload ?? payload
         }
         

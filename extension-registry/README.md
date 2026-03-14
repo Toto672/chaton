@@ -27,10 +27,11 @@ extension-registry/
 
 ### How it works
 
-1. **`data/registry.json`** lists all extensions to track (builtin definitions + npm package names)
-2. **Vercel Cron** triggers `/api/cron/sync` every hour
-3. The sync job fetches metadata from the npm registry for each package, extracts icons from tarballs, and stores everything in **Vercel Blob**
-4. The API routes serve the cached catalog from Blob storage with CDN caching headers
+1. **`data/registry.json`** lists builtins plus explicitly curated npm packages
+2. **Sync auto-discovery** also searches npm for packages matching the Chatons naming convention and `chatons` keyword, then verifies they expose `chatonExtension` metadata
+3. **Vercel Cron** triggers `/api/cron/sync` every hour
+4. The sync job fetches metadata from the npm registry for both curated and auto-discovered packages, extracts icons from tarballs, and stores everything in **Vercel Blob**
+5. The API routes serve the cached catalog from Blob storage with CDN caching headers
 
 ### Storage
 
@@ -118,7 +119,7 @@ npm install
 
 ### Sync extensions locally
 
-Fetches all extension data from npm and stores it in `.data/`:
+Fetches all extension data from npm, including auto-discovered Chatons packages, and stores it in `.data/`:
 
 ```bash
 npm run sync
@@ -134,10 +135,18 @@ The server starts on `http://localhost:3456` with all API routes available.
 
 ### Adding a new extension
 
-Edit `data/registry.json`:
+Usually you do not need to edit `data/registry.json` for new npm packages anymore.
 
-- For **npm extensions**: add the package name to the `npm` array
-- For **builtin extensions**: add an entry to the `builtin` array with inline metadata
+During sync, the registry now auto-discovers npm packages that:
+
+- match the naming convention `@scope/chatons-extension-*` or `@scope/chatons-channel-*`
+- appear in npm search results for `chatons`
+- expose `chatonExtension` metadata in the published package metadata
+
+Use `data/registry.json` for:
+
+- **builtin extensions**: add an entry to the `builtin` array with inline metadata
+- **curated npm extensions**: add the package name to the `npm` array when you want to pin a package even if npm search indexing is delayed or incomplete
 
 Then run `npm run sync` to fetch the new data.
 

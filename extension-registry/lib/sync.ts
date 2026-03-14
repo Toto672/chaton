@@ -328,7 +328,10 @@ export async function syncExtensions(
 
   // Process npm packages (in parallel, batched to avoid rate limits)
   console.log("\nProcessing npm extensions...");
-  const npmPackages = registry.npm || [];
+  const npmPackages = [
+    ...(registry.npm || []),
+    ...(registry.autoDiscoveredNpm || []),
+  ];
   const BATCH_SIZE = 5;
 
   for (let i = 0; i < npmPackages.length; i += BATCH_SIZE) {

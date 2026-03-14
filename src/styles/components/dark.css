@@ -20,8 +20,20 @@
     @apply border-[#181c24];
   }
 
+  .dark .topbar-left {
+    @apply flex items-center gap-2;
+    flex: 1;
+    min-width: 0;
+  }
+
   .dark .topbar-title {
     @apply text-[#e7e9ef];
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .dark .topbar-vscode-button {
