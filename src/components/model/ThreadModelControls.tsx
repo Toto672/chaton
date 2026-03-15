@@ -16,7 +16,9 @@ type ThreadModelControlsProps = {
   selectedAccessMode?: "secure" | "open";
   accessModeTooltip?: string;
   isLoadingModels: boolean;
-  isUpdatingScope: boolean;
+  /** @deprecated Use updatingModelKeys instead */
+  isUpdatingScope?: boolean;
+  updatingModelKeys?: Set<string>;
   onApplyModel: (modelKey: string) => Promise<void>;
   onToggleModelScoped: (model: { id: string; provider: string; scoped: boolean }) => Promise<void>;
   onThinkingChange: (level: ThinkingLevel) => Promise<void>;
@@ -28,6 +30,8 @@ type ThreadModelControlsProps = {
   /** "up" opens above the trigger (default, for composer), "down" opens below */
   dropdownDirection?: "up" | "down";
   onOpenModelsMenu?: () => void;
+  /** Placeholder text shown when no model is selected */
+  placeholder?: string;
 };
 
 export function ThreadModelControls({
@@ -38,6 +42,7 @@ export function ThreadModelControls({
   accessModeTooltip,
   isLoadingModels,
   isUpdatingScope,
+  updatingModelKeys,
   onApplyModel,
   onToggleModelScoped,
   onThinkingChange,
@@ -48,6 +53,7 @@ export function ThreadModelControls({
   showAccessMode = true,
   dropdownDirection = "up",
   onOpenModelsMenu,
+  placeholder,
 }: ThreadModelControlsProps) {
   const [modelsMenuOpen, setModelsMenuOpen] = useState(false);
   const [showAllModels, setShowAllModels] = useState(false);
@@ -128,7 +134,7 @@ export function ThreadModelControls({
     [selectedModel],
   );
   const supportsThinkingLevel = availableThinkingLevels.length > 0;
-  const currentModelLabel = selectedModel?.id ?? selectedModelKey;
+  const currentModelLabel = selectedModel?.id ?? (selectedModelKey || placeholder || "");
 
   useLayoutEffect(() => {
     if (!modelsMenuOpen) {
@@ -268,7 +274,10 @@ export function ThreadModelControls({
                           onClick={() =>
                             void onToggleModelScoped(model)
                           }
-                          disabled={isUpdatingScope}
+                          disabled={
+                            isUpdatingScope ||
+                            (updatingModelKeys?.has(model.key) ?? false)
+                          }
                         >
                           <Star
                             className={`h-4 w-4 ${model.scoped ? "fill-current" : ""}`}

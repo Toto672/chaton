@@ -999,6 +999,11 @@ export const workspaceIpc = {
     getApi().getMemoryModelPreference(),
   setMemoryModelPreference: (modelKey: string | null): Promise<{ ok: boolean }> =>
     getApi().setMemoryModelPreference(modelKey),
+  // Title model preference
+  getTitleModelPreference: (): Promise<{ ok: boolean; modelKey: string | null }> =>
+    getApi().getTitleModelPreference(),
+  setTitleModelPreference: (modelKey: string | null): Promise<{ ok: boolean }> =>
+    getApi().setTitleModelPreference(modelKey),
   onMemorySaving: (
     listener: (payload: {
       conversationId: string;

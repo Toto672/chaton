@@ -395,6 +395,14 @@ contextBridge.exposeInMainWorld("chaton", {
     }>,
   setMemoryModelPreference: (modelKey: string | null) =>
     ipcRenderer.invoke("memory:setModelPreference", modelKey),
+  // Title model preference
+  getTitleModelPreference: () =>
+    ipcRenderer.invoke("title:getModelPreference") as Promise<{
+      ok: boolean;
+      modelKey: string | null;
+    }>,
+  setTitleModelPreference: (modelKey: string | null) =>
+    ipcRenderer.invoke("title:setModelPreference", modelKey),
   setConversationMemoryInjected: (conversationId: string, injected: boolean) =>
     ipcRenderer.invoke("setConversationMemoryInjected", conversationId, injected) as Promise<{
       ok: boolean;

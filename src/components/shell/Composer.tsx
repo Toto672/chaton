@@ -113,7 +113,7 @@ export function Composer() {
   const [selectedAccessMode, setSelectedAccessMode] = useState<
     "secure" | "open"
   >(() => readSavedGlobalAccessMode());
-  const [isUpdatingScope, setIsUpdatingScope] = useState(false);
+  const [updatingModelKeys, setUpdatingModelKeys] = useState<Set<string>>(new Set());
   const [isModificationsExpandedByKey, setIsModificationsExpandedByKey] =
     useState<Record<string, boolean>>({});
   const [gitModifiedFiles, setGitModifiedFiles] = useState<ModifiedFileStat[]>(
@@ -780,24 +780,36 @@ export function Composer() {
     provider: string;
     scoped: boolean;
   }) => {
-    if (isUpdatingScope) return;
-
     const targetKey = `${model.provider}/${model.id}`;
+
+    // Skip if this specific model is already being updated
+    if (updatingModelKeys.has(targetKey)) return;
+
+    // Mark this model as updating
+    setUpdatingModelKeys((prev) => new Set(prev).add(targetKey));
+
+    // Apply optimistic update immediately
     setOptimisticModels((previous) =>
       (previous ?? models).map((item) =>
         item.key === targetKey ? { ...item, scoped: !model.scoped } : item,
       ),
     );
 
-    setIsUpdatingScope(true);
     const result = await workspaceIpc.setPiModelScoped(
       model.provider,
       model.id,
       !model.scoped,
     );
-    setIsUpdatingScope(false);
+
+    // Remove this model from updating set
+    setUpdatingModelKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(targetKey);
+      return next;
+    });
 
     if (!result.ok) {
+      // Revert optimistic update on error
       setOptimisticModels((previous) =>
         (previous ?? models).map((item) =>
           item.key === targetKey ? { ...item, scoped: model.scoped } : item,
@@ -807,11 +819,16 @@ export function Composer() {
       return;
     }
 
+    // Refresh the cache to sync with server state
+    await refreshModelsForPicker();
+
+    // Clear optimistic state since cache now has the correct data
+    setOptimisticModels(null);
+
     // Filter models by configured providers
     const filteredModels = result.models.filter((item) =>
       configuredProviders.has(item.provider),
     );
-    setOptimisticModels(null);
     if (!filteredModels.some((item) => item.key === selectedModelKey)) {
       const fallback =
         filteredModels.find((item) => item.scoped) ?? filteredModels[0];
@@ -1174,7 +1191,7 @@ export function Composer() {
                 selectedAccessMode={selectedAccessMode}
                 accessModeTooltip={accessModeTooltip}
                 isLoadingModels={isLoadingModels}
-                isUpdatingScope={isUpdatingScope}
+                updatingModelKeys={updatingModelKeys}
                 onApplyModel={handleApplyModel}
                 onToggleModelScoped={handleToggleModelScoped}
                 onThinkingChange={handleThinkingChange}

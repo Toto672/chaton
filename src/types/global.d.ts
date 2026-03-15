@@ -1048,6 +1048,14 @@ declare global {
       setMemoryModelPreference: (
         modelKey: string | null,
       ) => Promise<{ ok: boolean }>;
+      // Title model preference
+      getTitleModelPreference: () => Promise<{
+        ok: boolean;
+        modelKey: string | null;
+      }>;
+      setTitleModelPreference: (
+        modelKey: string | null,
+      ) => Promise<{ ok: boolean }>;
       setConversationMemoryInjected: (
         conversationId: string,
         injected: boolean,

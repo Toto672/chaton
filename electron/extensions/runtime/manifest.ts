@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { BUILTIN_AUTOMATION_DIR, BUILTIN_AUTOMATION_ID, BUILTIN_BROWSER_DIR, BUILTIN_BROWSER_ID, BUILTIN_IDE_LAUNCHER_DIR, BUILTIN_IDE_LAUNCHER_ID, BUILTIN_MEMORY_DIR, BUILTIN_MEMORY_ID, EXTENSIONS_DIR, ICON_EXTENSIONS } from './constants.js'
+import { BUILTIN_AUTOMATION_DIR, BUILTIN_AUTOMATION_ID, BUILTIN_BROWSER_DIR, BUILTIN_BROWSER_ID, BUILTIN_IDE_LAUNCHER_DIR, BUILTIN_IDE_LAUNCHER_ID, BUILTIN_MEMORY_DIR, BUILTIN_MEMORY_ID, BUILTIN_TPS_MONITOR_DIR, BUILTIN_TPS_MONITOR_ID, EXTENSIONS_DIR, ICON_EXTENSIONS } from './constants.js'
 import { runtimeState } from './state.js'
 import type { Capability, ExtensionManifest } from './types.js'
 
@@ -91,18 +91,22 @@ export function readManifestFromExtensionDir(extensionId: string): { manifest: E
   return null
 }
 
+function getBuiltinDir(extensionId: string): string | null {
+  if (extensionId === BUILTIN_AUTOMATION_ID) return BUILTIN_AUTOMATION_DIR
+  if (extensionId === BUILTIN_MEMORY_ID) return BUILTIN_MEMORY_DIR
+  if (extensionId === BUILTIN_BROWSER_ID) return BUILTIN_BROWSER_DIR
+  if (extensionId === BUILTIN_IDE_LAUNCHER_ID) return BUILTIN_IDE_LAUNCHER_DIR
+  if (extensionId === BUILTIN_TPS_MONITOR_ID) return BUILTIN_TPS_MONITOR_DIR
+  return null
+}
+
 export function resolveIconFilePath(extensionId: string, iconPath: string): string | null {
   const relative = String(iconPath || '').trim()
   if (!relative) return null
-  const rootsToTry = (extensionId === BUILTIN_AUTOMATION_ID || extensionId === BUILTIN_MEMORY_ID || extensionId === BUILTIN_BROWSER_ID || extensionId === BUILTIN_IDE_LAUNCHER_ID)
+  const builtinDir = getBuiltinDir(extensionId)
+  const rootsToTry = builtinDir
     ? [
-        extensionId === BUILTIN_AUTOMATION_ID
-          ? BUILTIN_AUTOMATION_DIR
-          : extensionId === BUILTIN_MEMORY_ID
-            ? BUILTIN_MEMORY_DIR
-            : extensionId === BUILTIN_BROWSER_ID
-              ? BUILTIN_BROWSER_DIR
-              : BUILTIN_IDE_LAUNCHER_DIR,
+        builtinDir,
         ...getExtensionRootCandidates(extensionId),
       ].filter((value, index, array): value is string => typeof value === 'string' && value.length > 0 && array.indexOf(value) === index)
     : getExtensionRootCandidates(extensionId)

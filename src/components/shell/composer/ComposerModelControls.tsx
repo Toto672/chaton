@@ -8,7 +8,7 @@ type ComposerModelControlsProps = {
   selectedAccessMode: "secure" | "open";
   accessModeTooltip: string;
   isLoadingModels: boolean;
-  isUpdatingScope: boolean;
+  updatingModelKeys?: Set<string>;
   onApplyModel: (modelKey: string) => Promise<void>;
   onToggleModelScoped: (model: { id: string; provider: string; scoped: boolean }) => Promise<void>;
   onThinkingChange: (level: ThinkingLevel) => Promise<void>;

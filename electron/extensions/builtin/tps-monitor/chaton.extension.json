@@ -1,0 +1,34 @@
+{
+  "id": "@chaton/tps-monitor",
+  "name": "TPS Monitor",
+  "version": "1.0.0",
+  "capabilities": [
+    "ui.mainView",
+    "events.subscribe",
+    "host.conversations.read",
+    "storage.kv"
+  ],
+  "ui": {
+    "topbarItems": [
+      {
+        "id": "tps-monitor.widget",
+        "label": "Tokens per second",
+        "context": "always",
+        "order": 5,
+        "widget": {
+          "viewId": "tps-monitor.widget",
+          "width": 80,
+          "minWidth": 70
+        }
+      }
+    ],
+    "mainViews": [
+      {
+        "viewId": "tps-monitor.widget",
+        "title": "TPS Monitor",
+        "webviewUrl": "chaton-extension://@chaton/tps-monitor/widget.html",
+        "initialRoute": "/"
+      }
+    ]
+  }
+}

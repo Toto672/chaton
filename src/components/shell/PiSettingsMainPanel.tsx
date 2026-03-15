@@ -7,6 +7,7 @@ import { BehaviorSection } from "@/components/sidebar/settings/sections/Behavior
 import { GeneralSection } from "@/components/sidebar/settings/sections/GeneralSection";
 import { LanguageSection } from "@/components/sidebar/settings/sections/LanguageSection";
 import { MemorySection } from "@/components/sidebar/settings/sections/MemorySection";
+import { TitleSection } from "@/components/sidebar/settings/sections/TitleSection";
 import { ProvidersModelsSection } from "@/components/sidebar/settings/sections/ProvidersModelsSection";
 import { SessionsSection } from "@/components/sidebar/settings/sections/SessionsSection";
 import { ShortcutsSection } from "@/components/sidebar/settings/sections/ShortcutsSection";
@@ -125,6 +126,9 @@ export function PiSettingsMainPanel() {
         ) : null}
         {activeSection === "memory" ? (
           <MemorySection />
+        ) : null}
+        {activeSection === "title" ? (
+          <TitleSection />
         ) : null}
         {activeSection === "sessions" ? (
           <SessionsSection

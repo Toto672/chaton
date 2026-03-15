@@ -11,6 +11,10 @@ import {
   getMemoryModelPreference,
   setMemoryModelPreference,
 } from "../extensions/runtime/memory-lifecycle.js";
+import {
+  getTitleModelPreference,
+  setTitleModelPreference,
+} from "./workspace-title.js";
 import { maybeSuggestAutomationForConversation } from "../extensions/runtime/automation-suggestions.js";
 import {
   cancelChatonsExtensionInstall,
@@ -2518,6 +2522,21 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
     "memory:setModelPreference",
     (_event, modelKey: string | null) => {
       setMemoryModelPreference(
+        typeof modelKey === "string" && modelKey.trim() ? modelKey.trim() : null,
+      );
+      return { ok: true as const };
+    },
+  );
+
+  // Title model preference
+  ipcMain.handle("title:getModelPreference", () => ({
+    ok: true as const,
+    modelKey: getTitleModelPreference(),
+  }));
+  ipcMain.handle(
+    "title:setModelPreference",
+    (_event, modelKey: string | null) => {
+      setTitleModelPreference(
         typeof modelKey === "string" && modelKey.trim() ? modelKey.trim() : null,
       );
       return { ok: true as const };

@@ -163,6 +163,14 @@ const BUILTIN_BROWSER_EXTENSION: Omit<ChatonsExtensionRegistryEntry, 'enabled' |
   installSource: 'builtin',
 }
 
+const BUILTIN_TPS_MONITOR_EXTENSION: Omit<ChatonsExtensionRegistryEntry, 'enabled' | 'health' | 'lastRunAt' | 'lastRunStatus' | 'lastError'> = {
+  id: '@chaton/tps-monitor',
+  name: 'TPS Monitor',
+  version: '1.0.0',
+  description: 'Affiche le nombre de tokens par seconde en moyenne pour la conversation en cours.',
+  installSource: 'builtin',
+}
+
 const installProcesses = new Map<string, ChildProcess>()
 const installStates = new Map<string, ChatonsExtensionInstallState>()
 
@@ -210,6 +218,11 @@ function defaultRegistry(): RegistryFile {
         enabled: true,
         health: 'ok',
       },
+      {
+        ...BUILTIN_TPS_MONITOR_EXTENSION,
+        enabled: true,
+        health: 'ok',
+      },
     ],
   }
 }
@@ -250,6 +263,13 @@ function safeReadRegistry(): RegistryFile {
         if (!existing.has(BUILTIN_BROWSER_EXTENSION.id)) {
           parsed.extensions.push({
             ...BUILTIN_BROWSER_EXTENSION,
+            enabled: true,
+            health: 'ok',
+          })
+        }
+        if (!existing.has(BUILTIN_TPS_MONITOR_EXTENSION.id)) {
+          parsed.extensions.push({
+            ...BUILTIN_TPS_MONITOR_EXTENSION,
             enabled: true,
             health: 'ok',
           })
@@ -633,6 +653,7 @@ function getRegistryEntryFromBuiltin(id: string): Omit<ChatonsExtensionRegistryE
   if (id === BUILTIN_AUTOMATION_EXTENSION.id) return BUILTIN_AUTOMATION_EXTENSION
   if (id === BUILTIN_MEMORY_EXTENSION.id) return BUILTIN_MEMORY_EXTENSION
   if (id === BUILTIN_BROWSER_EXTENSION.id) return BUILTIN_BROWSER_EXTENSION
+  if (id === BUILTIN_TPS_MONITOR_EXTENSION.id) return BUILTIN_TPS_MONITOR_EXTENSION
   return null
 }
 

@@ -355,6 +355,12 @@ i18n.use(initReactI18next).init({
         "settings.memory.modelAuto": "Auto (last used model)",
         "settings.memory.saved": "Saved!",
 
+        "settings.title.title": "Titles",
+        "settings.title.desc": "Configure how Chatons generates conversation titles.",
+        "settings.title.modelLabel": "Title generation model",
+        "settings.title.modelHint": "Choose which model is used to generate conversation titles. If not set, the conversation's current model will be used.",
+        "settings.title.selectModel": "Select a model",
+
         "assistant.automations.title": "Automations",
         "assistant.automations.desc": "Tasks that your assistant runs automatically for you.",
         "assistant.automations.empty": "No automation yet",
@@ -774,6 +780,12 @@ i18n.use(initReactI18next).init({
         "settings.memory.modelHint": "Choisissez le modele utilise pour resumer les conversations et gerer la memoire. Auto utilise le dernier modele de la conversation.",
         "settings.memory.modelAuto": "Auto (dernier modele utilise)",
         "settings.memory.saved": "Enregistre !",
+
+        "settings.title.title": "Titres",
+        "settings.title.desc": "Configurez comment Chatons genere les titres des conversations.",
+        "settings.title.modelLabel": "Modele de generation des titres",
+        "settings.title.modelHint": "Choisissez le modele utilise pour generer les titres des conversations. Si non defini, le modele actuel de la conversation sera utilise.",
+        "settings.title.selectModel": "Selectionner un modele",
 
         "assistant.automations.title": "Automatisations",
         "assistant.automations.desc": "Les taches que votre assistant execute automatiquement pour vous.",

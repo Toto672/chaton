@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import { listChatonsExtensions, type ChatonsExtensionRegistryEntry } from '../manager.js'
-import { AUTOMATION_MANIFEST, AUTOMATION_TRIGGER_TOPICS, BUILTIN_AUTOMATION_DIR, BUILTIN_AUTOMATION_ID, BUILTIN_BROWSER_DIR, BUILTIN_BROWSER_ID, BUILTIN_IDE_LAUNCHER_DIR, BUILTIN_IDE_LAUNCHER_ID, BUILTIN_MEMORY_DIR, BUILTIN_MEMORY_ID } from './constants.js'
+import { AUTOMATION_MANIFEST, AUTOMATION_TRIGGER_TOPICS, BUILTIN_AUTOMATION_DIR, BUILTIN_AUTOMATION_ID, BUILTIN_BROWSER_DIR, BUILTIN_BROWSER_ID, BUILTIN_IDE_LAUNCHER_DIR, BUILTIN_IDE_LAUNCHER_ID, BUILTIN_MEMORY_DIR, BUILTIN_MEMORY_ID, BUILTIN_TPS_MONITOR_DIR, BUILTIN_TPS_MONITOR_ID } from './constants.js'
 import { ensureDirs } from './logging.js'
 import { normalizeManifest, readManifestFromExtensionDir, resolveIconWithMarketplaceFallback } from './manifest.js'
 import { runtimeState } from './state.js'
@@ -115,6 +115,20 @@ export function initializeExtensionsRuntimeSync() {
   }
   runtimeState.extensionRoots.set(BUILTIN_IDE_LAUNCHER_ID, BUILTIN_IDE_LAUNCHER_DIR)
 
+  const builtinTpsMonitorManifest = (() => {
+    const manifestPath = `${BUILTIN_TPS_MONITOR_DIR}/chaton.extension.json`
+    try {
+      const raw = fs.readFileSync(manifestPath, 'utf8')
+      return normalizeManifest(JSON.parse(raw) as unknown)
+    } catch {
+      return null
+    }
+  })()
+  if (builtinTpsMonitorManifest) {
+    runtimeState.manifests.set(BUILTIN_TPS_MONITOR_ID, builtinTpsMonitorManifest)
+  }
+  runtimeState.extensionRoots.set(BUILTIN_TPS_MONITOR_ID, BUILTIN_TPS_MONITOR_DIR)
+
   // Phase 3: Subscribe to automation topics (fast)
   if (subscribeExtensionRef) {
     for (const topic of AUTOMATION_TRIGGER_TOPICS) {
@@ -133,7 +147,7 @@ export async function initializeExtensionsRuntimeAsync() {
     
     for (const extension of installed) {
       // Skip built-ins (already loaded)
-      if (extension.id === BUILTIN_AUTOMATION_ID || extension.id === BUILTIN_MEMORY_ID || extension.id === BUILTIN_BROWSER_ID || extension.id === BUILTIN_IDE_LAUNCHER_ID) {
+      if (extension.id === BUILTIN_AUTOMATION_ID || extension.id === BUILTIN_MEMORY_ID || extension.id === BUILTIN_BROWSER_ID || extension.id === BUILTIN_IDE_LAUNCHER_ID || extension.id === BUILTIN_TPS_MONITOR_ID) {
         continue
       }
       

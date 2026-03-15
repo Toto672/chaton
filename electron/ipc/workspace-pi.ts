@@ -2094,18 +2094,11 @@ export async function setPiModelScoped(
   scoped: boolean,
 ): Promise<SetPiModelScopedResult> {
   console.log(`Setting model scope: ${provider}/${id}, scoped: ${scoped}`);
-  
-  const listResult = await syncPiModelsCache();
-  if (!listResult.ok) {
-    console.error("Failed to sync models cache:", listResult);
-    return {
-      ok: false,
-      reason: "sync_error",
-      message: listResult.message || "Failed to sync models cache",
-    };
-  }
 
-  const modelExists = listResult.models.some(
+  // Use cached models instead of syncing to avoid expensive CLI calls
+  const cachedModels = listPiModelsFromCache();
+
+  const modelExists = cachedModels.some(
     (model) => model.provider === provider && model.id === id,
   );
   if (!modelExists) {
@@ -2154,15 +2147,30 @@ export async function setPiModelScoped(
     };
   }
 
-  console.log("Syncing models cache after scope change...");
-  const syncResult = await syncPiModelsCache();
-  if (!syncResult.ok) {
-    console.error("Failed to sync models cache after scope change:", syncResult);
-    return syncResult;
-  }
-  
+  // Update the cached models directly instead of calling syncPiModelsCache()
+  // This avoids expensive Pi CLI calls and provides immediate feedback
+  console.log("Updating cache directly after scope change...");
+  const db = getDb();
+  const updatedModels = cachedModels.map((model) =>
+    model.provider === provider && model.id === id
+      ? { ...model, scoped }
+      : model,
+  );
+
+  replacePiModelsCache(
+    db,
+    updatedModels.map((model) => ({
+      key: model.key,
+      provider: model.provider,
+      id: model.id,
+      supportsThinking: model.supportsThinking,
+      thinkingLevels: model.thinkingLevels,
+      contextWindow: model.contextWindow ?? undefined,
+    })),
+  );
+
   console.log(`Successfully set model scope: ${provider}/${id}`);
-  return syncResult;
+  return { ok: true, models: updatedModels };
 }
 
 function isNpmEnotemptyRemoveError(result: PiCommandResult): boolean {

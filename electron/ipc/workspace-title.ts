@@ -31,6 +31,32 @@ const MODELES_TITRE_PREFERES = [
   "openai-codex/gpt-5.1-codex",
 ] as const;
 
+// Title model preference storage key
+const TITLE_MODEL_SETTINGS_KEY = "title_model";
+
+import { getDb } from "../db/index.js";
+
+export function getTitleModelPreference(): string | null {
+  const db = getDb();
+  const row = db
+    .prepare("SELECT value FROM app_settings WHERE key = ?")
+    .get(TITLE_MODEL_SETTINGS_KEY) as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+export function setTitleModelPreference(modelKey: string | null): void {
+  const db = getDb();
+  const now = new Date().toISOString();
+  if (modelKey) {
+    db.prepare(
+      `INSERT INTO app_settings(key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
+    ).run(TITLE_MODEL_SETTINGS_KEY, modelKey, now);
+  } else {
+    db.prepare("DELETE FROM app_settings WHERE key = ?").run(TITLE_MODEL_SETTINGS_KEY);
+  }
+}
+
 function normaliserTitre(raw: string): string {
   return raw
     .replace(/\r?\n/g, " ")
@@ -217,8 +243,12 @@ export async function generateConversationTitleFromPi(params: {
 }): Promise<string | null> {
   const prompt = generateConversationTitlePrompt(params.firstMessage);
   const modelKey = `${params.provider}/${params.modelId}`;
+  
+  // Get user's preferred title model from settings
+  const preferredTitleModel = getTitleModelPreference();
+  
   const modelesAChercher = choisirModelePourTitre({
-    preferredModelKey: modelKey,
+    preferredModelKey: preferredTitleModel ?? modelKey,
     availableModelKeys: params.availableModelKeys,
     fallbackModelKey: params.fallbackModelKey,
   });
