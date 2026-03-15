@@ -240,6 +240,7 @@ type RegisterWorkspaceHandlersDeps = {
     modelId: string;
     repoPath: string;
     firstMessage: string;
+    projectId?: string | null;
   }) => Promise<string | null>;
   diffuserTitreConversation: (conversationId: string, title: string) => unknown;
   detectedProjectCommandsCache: Map<string, { timestamp: number; result: any }>;
@@ -2139,6 +2140,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         modelId,
         repoPath: titleRepoPath,
         firstMessage: safeMessage,
+        projectId: conversation.project_id,
       });
 
       if (!titreAffine || titreAffine === titreDeterministe) {

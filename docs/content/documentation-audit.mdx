@@ -5,6 +5,22 @@ description: Verified documentation changes and rationale for Chatons features a
 
 # Documentation Audit
 
+## 2026-03-15
+
+### Moved AI conversation titles to runtime-backed Pi sessions
+
+**Change:** Reworked conversation auto-title refinement so it uses a hidden ephemeral Pi runtime session, matching the memory summarization pattern, instead of invoking the Pi CLI directly for a one-off prompt.
+
+**Why:** The CLI path could fail independently from the runtime path used by normal conversations, especially on auth-sensitive providers. Using the same runtime-backed flow keeps model selection, credential loading, and packaged-app behavior consistent with the rest of Chatons.
+
+**Verified files:**
+- `electron/ipc/workspace-title.ts` -- Replaced CLI-based title generation with hidden runtime-session title generation
+- `electron/ipc/workspace.ts` -- Wired title generation to `PiSessionRuntimeManager` and hidden conversation creation
+- `electron/ipc/workspace-handlers.ts` -- Passed project context through the title-generation flow
+- `AGENTS.md` -- Documented hidden ephemeral Pi sessions for internal LLM tasks
+- `docs/content/pi-integration.mdx` -- Documented runtime-backed hidden sessions for memory and title refinement
+- `docs/content/developer-guide.mdx` -- Clarified when internal LLM tasks should avoid the CLI path
+
 ## 2026-03-14
 
 ### Added extension registry npm auto-discovery

@@ -166,6 +166,8 @@ For Pi CLI commands (model sync, skill management):
 
 All CLI executions force `PI_CODING_AGENT_DIR` to the managed directory.
 
+Internal one-shot LLM tasks should not default to this CLI path when they need the same runtime semantics as a normal conversation. Memory summarization and AI title refinement use short-lived hidden Pi runtimes instead, so model selection, auth reloads, and provider behavior match the main conversation flow.
+
 ### Model Scoping
 
 Source of truth: `settings.json > enabledModels`

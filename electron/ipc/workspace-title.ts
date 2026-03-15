@@ -1,12 +1,25 @@
-import fs from "node:fs";
+import crypto from "node:crypto";
+import type { DbConversation } from "../db/repos/conversations.js";
 
-type RunPiExec = (
-  args: string[],
-  timeoutMs?: number,
-  cwd?: string,
-) => Promise<{ ok: boolean; stdout: string }>;
+type RpcCommand =
+  | { id?: string; type: "prompt"; message: string }
+  | { id?: string; type: "set_model"; provider: string; modelId: string };
 
-type GetPiBinaryPath = () => string | null;
+type RpcResponse = {
+  id?: string;
+  type: "response";
+  command: string;
+  success: boolean;
+  data?: unknown;
+  error?: string;
+};
+
+type PiRuntimeManagerForTitle = {
+  start: (conversationId: string) => Promise<{ ok?: boolean; error?: string } | unknown>;
+  stop: (conversationId: string) => Promise<unknown>;
+  sendCommand: (conversationId: string, command: RpcCommand) => Promise<RpcResponse>;
+  getSnapshot: (conversationId: string) => Promise<{ messages: unknown[] }>;
+};
 
 const LONGUEUR_MAX_TITRE = 60;
 const NOMBRE_MOTS_MIN_TITRE = 3;
@@ -96,29 +109,15 @@ function generateConversationTitlePrompt(firstMessage: string): string {
   ].join("\n");
 }
 
-function extraireErreurPi(stdout: string): string | null {
-  const texte = `${stdout ?? ""}`.trim();
-  if (!texte) {
-    return null;
-  }
-  const lignes = texte
-    .split(/\r?\n/)
-    .map((ligne) => ligne.trim())
-    .filter(Boolean);
-  if (lignes.length === 0) {
-    return null;
-  }
-  const premiere = lignes[0] ?? "";
-  return /^error[:\s]/i.test(premiere) ? premiere : null;
-}
-
 function choisirModelePourTitre(params: {
   preferredModelKey: string;
   availableModelKeys?: string[];
   fallbackModelKey?: string | null;
 }): string[] {
   const disponibles = new Set(
-    (params.availableModelKeys ?? []).filter((item) => typeof item === "string" && item.trim().length > 0),
+    (params.availableModelKeys ?? []).filter(
+      (item) => typeof item === "string" && item.trim().length > 0,
+    ),
   );
   const candidats: string[] = [];
   const ajouter = (value: string | null | undefined) => {
@@ -146,25 +145,76 @@ function choisirModelePourTitre(params: {
   return candidats;
 }
 
+function parseModelKey(modelKey: string): { provider: string; modelId: string } | null {
+  const slashIndex = modelKey.indexOf("/");
+  if (slashIndex <= 0 || slashIndex === modelKey.length - 1) {
+    return null;
+  }
+  return {
+    provider: modelKey.slice(0, slashIndex),
+    modelId: modelKey.slice(slashIndex + 1),
+  };
+}
+
+function extractAssistantTextFromSnapshot(
+  snapshot: { messages?: unknown[] } | null | undefined,
+): string | null {
+  const messages = Array.isArray(snapshot?.messages) ? snapshot.messages : [];
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i] as Record<string, unknown> | null;
+    if (!message) continue;
+    const role =
+      (typeof message.role === "string"
+        ? message.role
+        : ((message.message as Record<string, unknown> | undefined)?.role as
+            | string
+            | undefined)) ?? "";
+    if (role !== "assistant") continue;
+    const content = Array.isArray(message.content)
+      ? message.content
+      : Array.isArray(
+            (message.message as Record<string, unknown> | undefined)?.content,
+          )
+        ? ((message.message as Record<string, unknown> | undefined)
+            ?.content as unknown[])
+        : [];
+    const textParts = content
+      .map((part) => {
+        if (!part || typeof part !== "object") return "";
+        const record = part as Record<string, unknown>;
+        if (record.type === "text" && typeof record.text === "string") {
+          return record.text;
+        }
+        return "";
+      })
+      .filter((part) => part.trim().length > 0);
+    if (textParts.length > 0) {
+      return textParts.join("\n\n").trim();
+    }
+  }
+  return null;
+}
+
 export async function generateConversationTitleFromPi(params: {
   provider: string;
   modelId: string;
   repoPath: string;
   firstMessage: string;
-  runPiExec: RunPiExec;
-  getPiBinaryPath: GetPiBinaryPath;
+  projectId?: string | null;
   availableModelKeys?: string[];
   fallbackModelKey?: string | null;
+  piRuntimeManager: PiRuntimeManagerForTitle;
+  insertConversation: (
+    params: Pick<
+      DbConversation,
+      "id" | "project_id" | "model_provider" | "model_id" | "access_mode"
+    > & {
+      title: string;
+      hiddenFromSidebar?: boolean;
+    },
+  ) => void;
   log?: (message: string, details?: Record<string, unknown>) => void;
 }): Promise<string | null> {
-  const piPath = params.getPiBinaryPath();
-  if (!piPath || !fs.existsSync(piPath)) {
-    params.log?.("Pi CLI unavailable for auto-title generation", {
-      piPath,
-    });
-    return null;
-  }
-
   const prompt = generateConversationTitlePrompt(params.firstMessage);
   const modelKey = `${params.provider}/${params.modelId}`;
   const modelesAChercher = choisirModelePourTitre({
@@ -174,65 +224,94 @@ export async function generateConversationTitleFromPi(params: {
   });
 
   for (const modele of modelesAChercher) {
-    const primaryArgs = ["--model", modele, "-p", prompt];
-    const primary = await params.runPiExec(
-      primaryArgs,
-      20_000,
-      params.repoPath,
-    );
-    let result = primary;
-    let commandVariant = "--model";
-    let fallbackResult: Awaited<ReturnType<RunPiExec>> | null = null;
-
-    if (!primary.ok) {
-      const fallbackArgs = ["-m", modele, "-p", prompt];
-      fallbackResult = await params.runPiExec(
-        fallbackArgs,
-        20_000,
-        params.repoPath,
-      );
-      result = fallbackResult;
-      commandVariant = "-m";
-    }
-
-    if (!result.ok) {
-      params.log?.("Auto-title generation command failed", {
-        requestedModel: modele,
-        repoPath: params.repoPath,
-        attemptedVariants: primary.ok ? ["--model"] : ["--model", "-m"],
-        selectedVariant: commandVariant,
-        primaryOk: primary.ok,
-        primaryStdoutPreview: normaliserTitre(primary.stdout).slice(0, 300),
-        fallbackOk: fallbackResult?.ok ?? null,
-        fallbackStdoutPreview: normaliserTitre(fallbackResult?.stdout ?? "").slice(0, 300),
-        promptPreview: normaliserTitre(prompt).slice(0, 200),
-      });
+    const parsedModel = parseModelKey(modele);
+    if (!parsedModel) {
       continue;
     }
 
-    const erreurPi = extraireErreurPi(result.stdout);
-    if (erreurPi) {
-      params.log?.("Auto-title generation returned CLI error text", {
-        requestedModel: modele,
-        repoPath: params.repoPath,
-        commandVariant,
-        primaryOk: primary.ok,
-        fallbackOk: fallbackResult?.ok ?? null,
-        error: erreurPi,
-        rawOutputPreview: normaliserTitre(result.stdout).slice(0, 300),
-      });
-      continue;
-    }
-
-    const titre = sanitiserTitreStrict(result.stdout);
-    if (titre) {
-      return titre;
-    }
-
-    params.log?.("Auto-title generation returned unusable title", {
-      requestedModel: modele,
-      rawOutputPreview: normaliserTitre(result.stdout).slice(0, 160),
+    const ephemeralId = `title-${Date.now()}-${crypto.randomUUID()}`;
+    params.insertConversation({
+      id: ephemeralId,
+      project_id: params.projectId ?? null,
+      title: "Conversation Title Generation",
+      model_provider: parsedModel.provider,
+      model_id: parsedModel.modelId,
+      access_mode: "secure",
+      hiddenFromSidebar: true,
     });
+
+    try {
+      const startResult = await params.piRuntimeManager.start(ephemeralId);
+      if (
+        startResult &&
+        typeof startResult === "object" &&
+        "ok" in startResult &&
+        (startResult as { ok?: boolean }).ok === false
+      ) {
+        params.log?.("Auto-title generation session failed to start", {
+          requestedModel: modele,
+          repoPath: params.repoPath,
+          error:
+            "error" in (startResult as Record<string, unknown>)
+              ? (startResult as { error?: unknown }).error
+              : null,
+        });
+        continue;
+      }
+
+      const setModelResponse = await params.piRuntimeManager.sendCommand(
+        ephemeralId,
+        {
+          type: "set_model",
+          provider: parsedModel.provider,
+          modelId: parsedModel.modelId,
+        },
+      );
+
+      if (!setModelResponse.success) {
+        params.log?.("Auto-title generation model selection failed", {
+          requestedModel: modele,
+          repoPath: params.repoPath,
+          error: setModelResponse.error ?? null,
+        });
+        continue;
+      }
+
+      const response = await params.piRuntimeManager.sendCommand(ephemeralId, {
+        type: "prompt",
+        message: prompt,
+      });
+
+      if (!response.success) {
+        params.log?.("Auto-title generation prompt failed", {
+          requestedModel: modele,
+          repoPath: params.repoPath,
+          error: response.error ?? null,
+          promptPreview: normaliserTitre(prompt).slice(0, 200),
+        });
+        continue;
+      }
+
+      const snapshot = await params.piRuntimeManager.getSnapshot(ephemeralId);
+      const rawTitle = extractAssistantTextFromSnapshot(snapshot) ?? "";
+      const titre = sanitiserTitreStrict(rawTitle);
+      if (titre) {
+        return titre;
+      }
+
+      params.log?.("Auto-title generation returned unusable title", {
+        requestedModel: modele,
+        rawOutputPreview: normaliserTitre(rawTitle).slice(0, 160),
+      });
+    } catch (error) {
+      params.log?.("Auto-title generation session errored", {
+        requestedModel: modele,
+        repoPath: params.repoPath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      void params.piRuntimeManager.stop(ephemeralId).catch(() => {});
+    }
   }
 
   return null;

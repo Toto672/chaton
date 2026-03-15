@@ -223,80 +223,114 @@ export function createAutomationRuntime(deps: {
   }
 
   async function extensionsCallAutomation(apiName: string, payload: unknown, context?: { conversationId?: string }): Promise<ExtensionHostCallResult> {
-    const db = getDb()
+    let db: ReturnType<typeof getDb> | undefined
+    try {
+      db = getDb()
+    } catch (dbErr) {
+      console.error('[Automation] Failed to get database:', dbErr)
+      return { ok: false, error: { code: 'db_error', message: 'Database connection failed: ' + (dbErr instanceof Error ? dbErr.message : String(dbErr)) } }
+    }
+
     if (apiName === 'automation.rules.list') {
-      const rules = listAutomationRules(db).map((rule) => ({
-        id: rule.id,
-        name: rule.name,
-        enabled: Boolean(rule.enabled),
-        trigger: rule.trigger_topic,
-        conditions: safeParseJson(rule.conditions_json, []),
-        actions: safeParseJson(rule.actions_json, []),
-        cooldown: rule.cooldown_ms,
-        createdAt: rule.created_at,
-        updatedAt: rule.updated_at,
-      }))
-      return { ok: true, data: rules }
+      try {
+        const rules = listAutomationRules(db).map((rule) => ({
+          id: rule.id,
+          name: rule.name,
+          enabled: Boolean(rule.enabled),
+          trigger: rule.trigger_topic,
+          conditions: safeParseJson(rule.conditions_json, []),
+          actions: safeParseJson(rule.actions_json, []),
+          cooldown: rule.cooldown_ms,
+          runOnce: Boolean((rule as { run_once?: number }).run_once),
+          createdAt: rule.created_at,
+          updatedAt: rule.updated_at,
+        }))
+        console.log('[Automation] Listed', rules.length, 'rules')
+        return { ok: true, data: rules }
+      } catch (err) {
+        console.error('[Automation] Error listing rules:', err)
+        return { ok: false, error: { code: 'db_error', message: 'Failed to list rules: ' + (err instanceof Error ? err.message : String(err)) } }
+      }
     }
     if (apiName === 'automation.rules.save') {
-      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-        return { ok: false, error: { code: 'invalid_args', message: 'payload object expected' } }
-      }
-      const p = payload as Record<string, unknown>
-      const id = typeof p.id === 'string' && p.id ? p.id : crypto.randomUUID()
-      const name = typeof p.name === 'string' && p.name.trim() ? p.name.trim() : undefined
-      const trigger = typeof p.trigger === 'string' ? p.trigger : undefined
-      if (!name || !trigger) {
-        return { ok: false, error: { code: 'invalid_args', message: 'name and trigger are required' } }
-      }
-      if (!isAutomationTriggerTopic(trigger) && !isExtensionEventTopic(trigger)) {
-        return {
-          ok: false,
-          error: {
-            code: 'invalid_args',
-            message: `trigger must be one of: ${AUTOMATION_TRIGGER_TOPICS.join(', ')} or start with 'extension.'`,
-          },
+      try {
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+          return { ok: false, error: { code: 'invalid_args', message: 'payload object expected' } }
         }
+        const p = payload as Record<string, unknown>
+        const id = typeof p.id === 'string' && p.id ? p.id : crypto.randomUUID()
+        const name = typeof p.name === 'string' && p.name.trim() ? p.name.trim() : undefined
+        const trigger = typeof p.trigger === 'string' ? p.trigger : undefined
+        if (!name || !trigger) {
+          return { ok: false, error: { code: 'invalid_args', message: 'name and trigger are required' } }
+        }
+        if (!isAutomationTriggerTopic(trigger) && !isExtensionEventTopic(trigger)) {
+          return {
+            ok: false,
+            error: {
+              code: 'invalid_args',
+              message: `trigger must be one of: ${AUTOMATION_TRIGGER_TOPICS.join(', ')} or start with 'extension.'`,
+            },
+          }
+        }
+        const conditions = Array.isArray(p.conditions) ? p.conditions : []
+        const actions = Array.isArray(p.actions) ? p.actions : []
+        const cooldown = typeof p.cooldown === 'number' && Number.isFinite(p.cooldown) ? Math.max(0, Math.floor(p.cooldown)) : 0
+        const runOnce = typeof p.runOnce === 'boolean' ? p.runOnce : false
+        saveAutomationRule(db, {
+          id,
+          name,
+          enabled: p.enabled !== false,
+          triggerTopic: trigger,
+          conditionsJson: JSON.stringify(conditions),
+          actionsJson: JSON.stringify(actions),
+          cooldownMs: cooldown,
+          runOnce,
+        })
+        console.log('[Automation] Saved rule:', { id, name, trigger, runOnce })
+        return { ok: true, data: { id } }
+      } catch (err) {
+        console.error('[Automation] Error saving rule:', err)
+        return { ok: false, error: { code: 'db_error', message: 'Failed to save rule: ' + (err instanceof Error ? err.message : String(err)) } }
       }
-      const conditions = Array.isArray(p.conditions) ? p.conditions : []
-      const actions = Array.isArray(p.actions) ? p.actions : []
-      const cooldown = typeof p.cooldown === 'number' && Number.isFinite(p.cooldown) ? Math.max(0, Math.floor(p.cooldown)) : 0
-      saveAutomationRule(db, {
-        id,
-        name,
-        enabled: p.enabled !== false,
-        triggerTopic: trigger,
-        conditionsJson: JSON.stringify(conditions),
-        actionsJson: JSON.stringify(actions),
-        cooldownMs: cooldown,
-      })
-      return { ok: true, data: { id } }
     }
     if (apiName === 'automation.rules.delete') {
-      if (!payload || typeof payload !== 'object' || Array.isArray(payload) || typeof (payload as Record<string, unknown>).id !== 'string') {
-        return { ok: false, error: { code: 'invalid_args', message: 'id is required' } }
+      try {
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload) || typeof (payload as Record<string, unknown>).id !== 'string') {
+          return { ok: false, error: { code: 'invalid_args', message: 'id is required' } }
+        }
+        const ruleId = (payload as Record<string, string>).id
+        const ok = deleteAutomationRule(db, ruleId)
+        console.log('[Automation] Deleted rule:', { ruleId, ok })
+        return ok ? { ok: true } : { ok: false, error: { code: 'not_found', message: 'rule not found' } }
+      } catch (err) {
+        console.error('[Automation] Error deleting rule:', err)
+        return { ok: false, error: { code: 'db_error', message: 'Failed to delete rule: ' + (err instanceof Error ? err.message : String(err)) } }
       }
-      const ruleId = (payload as Record<string, string>).id
-      const ok = deleteAutomationRule(db, ruleId)
-      return ok ? { ok: true } : { ok: false, error: { code: 'not_found', message: 'rule not found' } }
     }
     if (apiName === 'automation.runs.list') {
-      const params = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload as Record<string, unknown> : {}
-      const rows = listAutomationRuns(db, {
-        ruleId: typeof params.ruleId === 'string' ? params.ruleId : undefined,
-        limit: typeof params.limit === 'number' ? params.limit : undefined,
-      })
-      return {
-        ok: true,
-        data: rows.map((row) => ({
-          id: row.id,
-          ruleId: row.rule_id,
-          eventTopic: row.event_topic,
-          eventPayload: safeParseJson(row.event_payload_json, undefined),
-          status: row.status,
-          errorMessage: row.error_message,
-          createdAt: row.created_at,
-        })),
+      try {
+        const params = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload as Record<string, unknown> : {}
+        const rows = listAutomationRuns(db, {
+          ruleId: typeof params.ruleId === 'string' ? params.ruleId : undefined,
+          limit: typeof params.limit === 'number' ? params.limit : undefined,
+        })
+        console.log('[Automation] Listed', rows.length, 'runs')
+        return {
+          ok: true,
+          data: rows.map((row) => ({
+            id: row.id,
+            ruleId: row.rule_id,
+            eventTopic: row.event_topic,
+            eventPayload: safeParseJson(row.event_payload_json, undefined),
+            status: row.status,
+            errorMessage: row.error_message,
+            createdAt: row.created_at,
+          })),
+        }
+      } catch (err) {
+        console.error('[Automation] Error listing runs:', err)
+        return { ok: false, error: { code: 'db_error', message: 'Failed to list runs: ' + (err instanceof Error ? err.message : String(err)) } }
       }
     }
     if (apiName === 'automation.schedule_task') {
@@ -361,24 +395,30 @@ export function createAutomationRuntime(deps: {
       }
     }
     if (apiName === 'automation.list_scheduled_tasks') {
-      const params = asRecord(payload) ?? {}
-      const limit = typeof params.limit === 'number' && Number.isFinite(params.limit)
-        ? Math.max(1, Math.min(200, Math.floor(params.limit)))
-        : 50
-      const rules = listAutomationRules(db)
-        .slice(0, limit)
-        .map((rule) => ({
-          id: rule.id,
-          name: rule.name,
-          enabled: Boolean(rule.enabled),
-          trigger: rule.trigger_topic,
-          cooldown: rule.cooldown_ms,
-          lastTriggeredAt: rule.last_triggered_at,
-          actions: safeParseJson(rule.actions_json, []),
-          updatedAt: rule.updated_at,
-          ...(rule.trigger_topic === 'cron' && rule.trigger_data && { cronExpression: rule.trigger_data }),
-        }))
-      return { ok: true, data: rules }
+      try {
+        const params = asRecord(payload) ?? {}
+        const limit = typeof params.limit === 'number' && Number.isFinite(params.limit)
+          ? Math.max(1, Math.min(200, Math.floor(params.limit)))
+          : 50
+        const rules = listAutomationRules(db)
+          .slice(0, limit)
+          .map((rule) => ({
+            id: rule.id,
+            name: rule.name,
+            enabled: Boolean(rule.enabled),
+            trigger: rule.trigger_topic,
+            cooldown: rule.cooldown_ms,
+            runOnce: Boolean((rule as { run_once?: number }).run_once),
+            lastTriggeredAt: rule.last_triggered_at,
+            actions: safeParseJson(rule.actions_json, []),
+            updatedAt: rule.updated_at,
+            ...(rule.trigger_topic === 'cron' && rule.trigger_data && { cronExpression: rule.trigger_data }),
+          }))
+        return { ok: true, data: rules }
+      } catch (err) {
+        console.error('[Automation] Error listing scheduled tasks:', err)
+        return { ok: false, error: { code: 'db_error', message: 'Failed to list scheduled tasks: ' + (err instanceof Error ? err.message : String(err)) } }
+      }
     }
     if (apiName === 'automation.delete_task') {
       const params = asRecord(payload) ?? {}

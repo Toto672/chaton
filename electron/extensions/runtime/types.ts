@@ -148,7 +148,7 @@ export type ExtensionHostCallResult =
   | {
       ok: false
       error: {
-        code: 'unauthorized' | 'invalid_args' | 'not_found' | 'rate_limited' | 'internal' | 'missing_api_key'
+        code: 'unauthorized' | 'invalid_args' | 'not_found' | 'rate_limited' | 'internal' | 'missing_api_key' | 'db_error'
         message: string
         requirementSheet?: {
           html: string

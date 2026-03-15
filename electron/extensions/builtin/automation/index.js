@@ -897,35 +897,55 @@
   }
 
   async function load() {
-    var rulesRes = await call("automation.rules.list", {});
-    var runsRes = await call("automation.runs.list", { limit: 80 });
-    var initialState = await window.chaton.getInitialState();
+    try {
+      console.log('[Automation UI] Loading automations...');
+      
+      var rulesRes = await call("automation.rules.list", {});
+      console.log('[Automation UI] Rules response:', { ok: rulesRes.ok, dataLength: rulesRes.data ? rulesRes.data.length : 0, error: rulesRes.error });
+      
+      var runsRes = await call("automation.runs.list", { limit: 80 });
+      console.log('[Automation UI] Runs response:', { ok: runsRes.ok, dataLength: runsRes.data ? runsRes.data.length : 0, error: runsRes.error });
+      
+      var initialState = await window.chaton.getInitialState();
 
-    state.projects = initialState.projects || [];
-    state.rules = rulesRes.ok ? rulesRes.data || [] : [];
-    state.runs = runsRes.ok ? runsRes.data || [] : [];
+      state.projects = initialState.projects || [];
+      state.rules = rulesRes.ok ? rulesRes.data || [] : [];
+      state.runs = runsRes.ok ? runsRes.data || [] : [];
 
-    clearChildren(refs.projectSelect);
-    var emptyProject = ui.el("option", "", "Tous les projets");
-    emptyProject.value = "";
-    refs.projectSelect.appendChild(emptyProject);
-    state.projects.forEach(function (project) {
-      var option = ui.el("option", "", project.name || project.repoName || "Projet");
-      option.value = project.id;
-      refs.projectSelect.appendChild(option);
-    });
+      if (!rulesRes.ok) {
+        console.error('[Automation UI] Failed to load rules:', rulesRes.error);
+        notify("Erreur de chargement des automatisations: " + (rulesRes.error && rulesRes.error.message ? rulesRes.error.message : 'Erreur inconnue'));
+      }
+      
+      if (!runsRes.ok) {
+        console.error('[Automation UI] Failed to load runs:', runsRes.error);
+      }
 
-    if (state.selected) {
-      var found = state.rules.some(function (r) {
-        return state.selected === "rule:" + r.id;
-      }) || state.runs.some(function (r) {
-        return state.selected === "run:" + r.id;
+      clearChildren(refs.projectSelect);
+      var emptyProject = ui.el("option", "", "Tous les projets");
+      emptyProject.value = "";
+      refs.projectSelect.appendChild(emptyProject);
+      state.projects.forEach(function (project) {
+        var option = ui.el("option", "", project.name || project.repoName || "Projet");
+        option.value = project.id;
+        refs.projectSelect.appendChild(option);
       });
-      if (!found) state.selected = null;
-    }
 
-    renderLists();
-    renderDetail();
+      if (state.selected) {
+        var found = state.rules.some(function (r) {
+          return state.selected === "rule:" + r.id;
+        }) || state.runs.some(function (r) {
+          return state.selected === "run:" + r.id;
+        });
+        if (!found) state.selected = null;
+      }
+
+      renderLists();
+      renderDetail();
+    } catch (err) {
+      console.error('[Automation UI] Load failed with exception:', err);
+      notify("Erreur critique lors du chargement: " + String(err && err.message ? err.message : err));
+    }
   }
 
   function resetForm() {

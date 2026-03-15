@@ -166,6 +166,17 @@ For each conversation, Chatons creates a Pi session with these steps:
 
 5. **Start Pi session** and expose commands like `get_access_mode` for the model to query live state
 
+### Ephemeral Pi Sessions
+
+Chatons also creates short-lived hidden Pi sessions for internal LLM tasks that should use the same runtime/auth/model path as normal conversations.
+
+Current examples:
+
+- **Memory summarization/consolidation** via `electron/extensions/runtime/memory-lifecycle.ts`
+- **Conversation auto-title refinement** via `electron/ipc/workspace-title.ts`
+
+These tasks should prefer the runtime-session pattern (`start` -> optional `set_model` -> `prompt` -> inspect snapshot -> `stop`) instead of shelling out to the Pi CLI for one-off prompts. This keeps model resolution, OAuth/API-key handling, registry reload behavior, and packaged-app runtime semantics aligned with regular conversations.
+
 ### Implementation Details
 
 **Key file:** `electron/pi-sdk-runtime.ts`

@@ -218,6 +218,26 @@ At session creation, Chatons appends system prompt guidance about:
 - How to explain secure-mode limitations to users
 - Available extension tools (prompt snippets and guidelines from extension manifests)
 
+### Hidden Ephemeral Sessions
+
+Some internal LLM features reuse the same Pi runtime path through short-lived hidden conversations instead of calling the Pi CLI directly.
+
+This is used for:
+
+- Memory summarization and consolidation
+- AI conversation-title refinement
+
+The flow is the same as a normal runtime-backed conversation:
+
+1. Create a hidden conversation row
+2. Start a Pi runtime for that conversation
+3. Optionally send `set_model`
+4. Send a `prompt`
+5. Read the assistant reply from the runtime snapshot
+6. Stop the runtime
+
+This avoids drift between packaged-app runtime behavior and CLI behavior, especially for auth-sensitive providers.
+
 ### Channel Subagents
 
 The runtime manager also supports ephemeral subagents for channel message ingestion, keyed by conversation ID. These are separate from user-facing conversation runtimes.
