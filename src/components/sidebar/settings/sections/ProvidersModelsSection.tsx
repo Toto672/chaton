@@ -157,11 +157,21 @@ export function ProvidersModelsSection({
 
     setIsAddingProvider(true);
     try {
+      // Resolve and normalize the base URL before saving
+      // This ensures /v1 is added if needed for proper API compatibility
+      let resolvedBaseUrl = draftBaseUrl.trim();
+      if (resolvedBaseUrl) {
+        const resolved = await workspaceIpc.resolveProviderBaseUrl(resolvedBaseUrl);
+        if (resolved.ok && resolved.baseUrl) {
+          resolvedBaseUrl = resolved.baseUrl;
+        }
+      }
+
       // Build provider config
       const providerConfig: Record<string, unknown> = {
         ...emptyProviderConfig(),
         api: draftApi,
-        baseUrl: draftBaseUrl.trim(),
+        baseUrl: resolvedBaseUrl,
         apiKey: draftApiKey.trim(),
       };
 

@@ -1067,6 +1067,12 @@ declare global {
           memoryId?: string | null;
         }) => void,
       ) => () => void;
+      onMemoryInjected: (
+        listener: (payload: {
+          conversationId: string;
+          status: "injected";
+        }) => void,
+      ) => () => void;
     };
     pi: {
       getModels: () => Promise<PiModel[]>;

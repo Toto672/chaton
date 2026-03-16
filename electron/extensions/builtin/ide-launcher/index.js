@@ -36,6 +36,11 @@ function getIconHtml(ide) {
   return `<span class="icon">${ide.text || '?'}</span>`
 }
 
+function postVisibilityState() {
+  const isVisible = available.length >= 1
+  window.parent.postMessage({ type: 'chaton.extension.widgetVisibility', payload: { isVisible } }, '*')
+}
+
 function render() {
   const showWidget = available.length >= 1
   const showToggle = available.length >= 2
@@ -56,6 +61,8 @@ function render() {
       `,
     )
     .join('')
+
+  postVisibilityState()
 }
 
 async function detectIde(ide) {

@@ -194,7 +194,27 @@
       "@media (max-width: 840px) { .ce-grid--2 { grid-template-columns: 1fr; } .ce-auto-highlight-grid { grid-template-columns: 1fr; } .ce-page { padding: 12px 16px; } .ce-page-header { flex-direction: column; align-items: stretch; } .ce-list-row { flex-direction: column; } .ce-list-row__aside { white-space: normal; } .ce-modal { padding: 16px; border-radius: 12px; } .ce-modal__inline-row { grid-template-columns: 1fr; } }",
       "@media (max-width: 1280px) { .ce-auto-layout { grid-template-columns: 380px 1fr; } .ce-auto-empty-title { font-size: 30px; } }",
       "@media (max-width: 980px) { .ce-auto-layout { grid-template-columns: 1fr; } .ce-auto-inbox { border-right: 0; border-bottom: 1px solid var(--ce-border); max-height: 52vh; } .ce-auto-detail { min-height: 48vh; } .ce-auto-empty-title { font-size: 24px; text-align: center; } }",
-    ].join("\n");
+      ".ce-cron-field { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--ce-border); border-radius: 12px; background: color-mix(in srgb, var(--ce-muted) 30%, var(--ce-card)); }",
+      ".ce-cron-days-row { display: flex; gap: 6px; flex-wrap: wrap; }",
+      ".ce-cron-day-btn { min-width: 44px; min-height: 36px; border: 1px solid var(--ce-border); border-radius: 8px; background: var(--ce-card); color: var(--ce-fg); font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s ease; padding: 0 8px; }",
+      ".ce-cron-day-btn:hover { background: var(--ce-accent); border-color: var(--ce-ring); }",
+      ".ce-cron-day-btn--selected { background: var(--ce-primary); color: var(--ce-primary-fg); border-color: var(--ce-primary); }",
+      ".ce-cron-time-row { display: flex; align-items: center; gap: 10px; }",
+      ".ce-cron-time-label { font-size: 13px; color: var(--ce-muted-fg); font-weight: 500; }",
+      ".ce-cron-time-separator { font-size: 14px; color: var(--ce-muted-fg); font-weight: 600; }",
+      ".ce-cron-time-select { width: auto; min-width: 80px; }",
+      ".ce-cron-presets { display: flex; gap: 8px; flex-wrap: wrap; }",
+      ".ce-cron-preset-btn { padding: 5px 12px; border: 1px solid var(--ce-border); border-radius: 6px; background: var(--ce-card); color: var(--ce-muted-fg); font-size: 11px; font-weight: 600; cursor: pointer; transition: all .15s ease; }",
+      ".ce-cron-preset-btn:hover { background: var(--ce-accent); color: var(--ce-fg); border-color: var(--ce-ring); }",
+      ".ce-cron-advanced-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; color: var(--ce-muted-fg); font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; font-family: inherit; margin-top: 4px; }",
+      ".ce-cron-advanced-toggle:hover { color: var(--ce-fg); }",
+      ".ce-cron-chevron { font-size: 10px; display: inline-block; width: 12px; }",
+      ".ce-cron-advanced-panel { display: none; margin-top: 8px; }",
+      ".ce-cron-preview { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--ce-border); border-radius: 8px; background: var(--ce-card); }",
+      ".ce-cron-preview-label { font-size: 12px; color: var(--ce-muted-fg); font-weight: 500; }",
+      ".ce-cron-preview-value { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size: 13px; color: var(--ce-fg); font-weight: 600; }",
+      ".ce-field-label { font-size: 12px; font-weight: 600; color: var(--ce-fg); }",
+      "@media (max-width: 520px) { .ce-cron-days-row { gap: 4px; } .ce-cron-day-btn { min-width: 38px; min-height: 32px; font-size: 11px; padding: 0 6px; } .ce-cron-presets { gap: 6px; } .ce-cron-preset-btn { padding: 4px 10px; font-size: 10px; } }",    ].join("\n");
     document.head.appendChild(style);
   }
 

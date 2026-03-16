@@ -238,6 +238,7 @@ export function createAutomationRuntime(deps: {
           name: rule.name,
           enabled: Boolean(rule.enabled),
           trigger: rule.trigger_topic,
+          triggerData: rule.trigger_data,
           conditions: safeParseJson(rule.conditions_json, []),
           actions: safeParseJson(rule.actions_json, []),
           cooldown: rule.cooldown_ms,

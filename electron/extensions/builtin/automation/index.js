@@ -72,6 +72,7 @@
       "conversation.agent.ended": "Fin d'execution",
       "project.created": "Nouveau projet",
       "extension.event": "Evenement d'extension",
+      "cron": "Date et heure (cron)",
     };
     if (trigger && trigger.startsWith("extension.")) {
       return "Evenement: " + trigger.substring(10);
@@ -119,9 +120,28 @@
     var low = t.toLowerCase();
 
     var trigger = "conversation.created";
-    if (low.includes("message")) trigger = "conversation.message.received";
-    if (low.includes("projet")) trigger = "project.created";
-    if (low.includes("fin") || low.includes("termin")) {
+    var triggerData = "";
+
+    // Check for cron/time-based patterns first
+    var timePatterns = [
+      /(?:chaque|tous les|toutes les|every|quotidien|daily|hebdomadaire|weekly)/i,
+      /\d+\s*(?:min|minute|minutes|h|heure|heures|jour|jours|day|days|semaine|semaines|week|weeks)/i,
+      /(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+      /(?:\d{1,2})[:h](?:\d{2})?\s*(?:am|pm|h)?/i,
+    ];
+    var hasTimePattern = timePatterns.some(function (pattern) {
+      return pattern.test(t);
+    });
+
+    if (hasTimePattern || low.includes("cron") || low.includes("planif") || low.includes("schedule")) {
+      trigger = "cron";
+      // Use the full text as triggerData for natural language parsing
+      triggerData = t;
+    } else if (low.includes("message")) {
+      trigger = "conversation.message.received";
+    } else if (low.includes("projet")) {
+      trigger = "project.created";
+    } else if (low.includes("fin") || low.includes("termin")) {
       trigger = "conversation.agent.ended";
     }
 
@@ -143,7 +163,11 @@
       low.includes("fetch") ||
       low.includes("data") ||
       low.includes("query") ||
-      low.includes("recuper")
+      low.includes("recuper") ||
+      low.includes("verif") ||
+      low.includes("check") ||
+      low.includes("resume") ||
+      low.includes("report")
     ) {
       action = "executeAndNotify";
     }
@@ -163,13 +187,19 @@
       return hit;
     });
 
-    return {
+    var result = {
       name: t || "Nouvelle automatisation",
       trigger: trigger,
       action: action,
       cooldown: cooldown,
       projectId: projectId,
     };
+
+    if (triggerData) {
+      result.triggerData = triggerData;
+    }
+
+    return result;
   }
 
   function buildShell() {
@@ -299,6 +329,7 @@
       ["conversation.agent.ended", "Fin d'agent"],
       ["project.created", "Nouveau projet"],
       ["extension.event", "Evenement d'extension"],
+      ["cron", "Date et heure (cron)"],
     ].forEach(function (entry) {
       var option = ui.el("option", "", entry[1]);
       option.value = entry[0];
@@ -309,7 +340,7 @@
     // Extension event name field (shown only when extension.event is selected)
     var extensionEventField = ui.el("div", "ce-modal__inline-row", "");
     extensionEventField.style.display = "none";
-    
+
     var eventNameInput = ui.el("input", "ce-input");
     eventNameInput.id = "extensionEventName";
     eventNameInput.type = "text";
@@ -319,9 +350,159 @@
     );
     modal.appendChild(extensionEventField);
 
-    // Show/hide extension event field based on trigger selection
+    // Cron scheduler UI (shown only when cron is selected)
+    var cronField = ui.el("div", "ce-modal__primary ce-cron-field", "");
+    cronField.style.display = "none";
+
+    // Day of week selector
+    var daysLabel = ui.el("label", "ce-field-label", "Jours de la semaine");
+    daysLabel.style.cssText = "display:block;font-size:12px;font-weight:500;margin-bottom:8px;color:var(--ce-fg);";
+    cronField.appendChild(daysLabel);
+
+    var daysRow = ui.el("div", "ce-cron-days-row");
+    var dayButtons = [];
+    var dayNames = [
+      { key: "0", label: "Dim" },
+      { key: "1", label: "Lun" },
+      { key: "2", label: "Mar" },
+      { key: "3", label: "Mer" },
+      { key: "4", label: "Jeu" },
+      { key: "5", label: "Ven" },
+      { key: "6", label: "Sam" },
+    ];
+    dayNames.forEach(function (day) {
+      var btn = ui.el("button", "ce-cron-day-btn");
+      btn.type = "button";
+      btn.dataset.day = day.key;
+      btn.textContent = day.label;
+      btn.addEventListener("click", function () {
+        btn.classList.toggle("ce-cron-day-btn--selected");
+        updateCronPreview();
+      });
+      dayButtons.push(btn);
+      daysRow.appendChild(btn);
+    });
+    cronField.appendChild(daysRow);
+
+    // Time selector
+    var timeRow = ui.el("div", "ce-cron-time-row");
+    
+    var hourSelect = ui.el("select", "ce-select ce-cron-time-select");
+    hourSelect.id = "cronHour";
+    for (var h = 0; h < 24; h++) {
+      var hourOpt = ui.el("option", "", (h < 10 ? "0" : "") + h + " h");
+      hourOpt.value = String(h);
+      hourSelect.appendChild(hourOpt);
+    }
+    hourSelect.value = "9";
+    hourSelect.addEventListener("change", updateCronPreview);
+
+    var minuteSelect = ui.el("select", "ce-select ce-cron-time-select");
+    minuteSelect.id = "cronMinute";
+    for (var m = 0; m < 60; m += 5) {
+      var minOpt = ui.el("option", "", (m < 10 ? "0" : "") + m + " min");
+      minOpt.value = String(m);
+      minuteSelect.appendChild(minOpt);
+    }
+    minuteSelect.value = "0";
+    minuteSelect.addEventListener("change", updateCronPreview);
+
+    timeRow.appendChild(ui.el("span", "ce-cron-time-label", "à"));
+    timeRow.appendChild(hourSelect);
+    timeRow.appendChild(ui.el("span", "ce-cron-time-separator", ":"));
+    timeRow.appendChild(minuteSelect);
+    cronField.appendChild(timeRow);
+
+    // Quick presets
+    var presetsRow = ui.el("div", "ce-cron-presets");
+    var presets = [
+      { label: "Tous les jours", days: ["0", "1", "2", "3", "4", "5", "6"] },
+      { label: "Lun-Ven", days: ["1", "2", "3", "4", "5"] },
+      { label: "Week-end", days: ["0", "6"] },
+    ];
+    presets.forEach(function (preset) {
+      var presetBtn = ui.el("button", "ce-cron-preset-btn");
+      presetBtn.type = "button";
+      presetBtn.textContent = preset.label;
+      presetBtn.addEventListener("click", function () {
+        dayButtons.forEach(function (btn) {
+          btn.classList.toggle("ce-cron-day-btn--selected", preset.days.includes(btn.dataset.day));
+        });
+        updateCronPreview();
+      });
+      presetsRow.appendChild(presetBtn);
+    });
+    cronField.appendChild(presetsRow);
+
+    // Advanced mode toggle
+    var advancedToggle = ui.el("button", "ce-cron-advanced-toggle");
+    advancedToggle.type = "button";
+    advancedToggle.innerHTML = "<span class='ce-cron-chevron'>\u25B8</span> Mode avancé";
+    cronField.appendChild(advancedToggle);
+
+    // Advanced cron input (hidden by default)
+    var advancedPanel = ui.el("div", "ce-cron-advanced-panel");
+    advancedPanel.style.display = "none";
+
+    var cronInput = ui.el("input", "ce-input");
+    cronInput.id = "cronExpression";
+    cronInput.type = "text";
+    cronInput.placeholder = "0 9 * * 1,3,5";
+    var cronInputWrapper = ui.createField({ label: "Expression cron", input: cronInput });
+    
+    var cronHelp = ui.el("p", "", "min heure jour_mois mois jour_semaine");
+    cronHelp.style.cssText = "font-size:11px;color:var(--ce-muted);margin-top:4px;margin-bottom:0;";
+    cronInputWrapper.appendChild(cronHelp);
+    advancedPanel.appendChild(cronInputWrapper);
+    cronField.appendChild(advancedPanel);
+
+    // Preview of generated expression
+    var previewRow = ui.el("div", "ce-cron-preview");
+    var previewLabel = ui.el("span", "ce-cron-preview-label", "Expression: ");
+    var previewValue = ui.el("span", "ce-cron-preview-value", "0 9 * * *");
+    previewValue.id = "cronPreview";
+    previewRow.appendChild(previewLabel);
+    previewRow.appendChild(previewValue);
+    cronField.appendChild(previewRow);
+
+    // Toggle advanced mode
+    advancedToggle.addEventListener("click", function () {
+      var isOpen = advancedPanel.style.display !== "none";
+      advancedPanel.style.display = isOpen ? "none" : "block";
+      advancedToggle.querySelector(".ce-cron-chevron").textContent = isOpen ? "\u25B8" : "\u25BE";
+    });
+
+    modal.appendChild(cronField);
+
+    // Helper function to update cron preview
+    function updateCronPreview() {
+      var selectedDays = [];
+      dayButtons.forEach(function (btn) {
+        if (btn.classList.contains("ce-cron-day-btn--selected")) {
+          selectedDays.push(btn.dataset.day);
+        }
+      });
+      
+      var hour = hourSelect.value || "9";
+      var minute = minuteSelect.value || "0";
+      
+      var cronExpr;
+      if (selectedDays.length === 0) {
+        cronExpr = minute + " " + hour + " * * *";
+      } else if (selectedDays.length === 7) {
+        cronExpr = minute + " " + hour + " * * *";
+      } else {
+        cronExpr = minute + " " + hour + " * * " + selectedDays.join(",");
+      }
+      
+      previewValue.textContent = cronExpr;
+      cronInput.value = cronExpr;
+    }
+
+    // Show/hide conditional fields based on trigger selection
     triggerSelect.addEventListener("change", function() {
       extensionEventField.style.display = triggerSelect.value === "extension.event" ? "grid" : "none";
+      cronField.style.display = triggerSelect.value === "cron" ? "grid" : "none";
     });
 
     var actionTypeSelect = ui.el("select", "ce-select");
@@ -404,6 +585,12 @@
       advancedChevron.textContent = open ? "\u25B8" : "\u25BE";
     });
 
+    // Error message container (hidden by default)
+    var errorContainer = ui.el("div", "ce-modal__error");
+    errorContainer.id = "errorContainer";
+    errorContainer.style.cssText = "display:none;color:#ef4444;font-size:13px;margin-bottom:12px;padding:10px 12px;background:rgba(239,68,68,0.1);border-radius:6px;border:1px solid rgba(239,68,68,0.2);";
+    modal.appendChild(errorContainer);
+
     // AI pre-fill button sits inline with footer
     var fillBtn = ui.createButton({
       text: "Pre-remplir via IA",
@@ -449,11 +636,13 @@
       requestInput: requestInput,
       instructionInput: instructionInput,
       extensionEventName: extensionEventName,
+      cronInput: cronInput,
       newBtn: newBtn,
       cancelBtn: cancelBtn,
       fillBtn: fillBtn,
       saveBtn: saveBtn,
       modalTitle: modalTitle,
+      errorContainer: errorContainer,
     };
   }
 
@@ -953,12 +1142,20 @@
     refs.modalTitle.textContent = "Creer une automatisation";
     refs.saveBtn.textContent = "Creer";
     refs.nameInput.value = "";
+    // Hide error message
+    if (refs.errorContainer) {
+      refs.errorContainer.style.display = "none";
+      refs.errorContainer.textContent = "";
+    }
     refs.projectSelect.value = "";
     refs.triggerSelect.value = "conversation.created";
     refs.actionTypeSelect.value = "notify";
     refs.cooldownInput.value = "0";
     refs.requestInput.value = "";
     refs.instructionInput.value = "";
+    if (refs.cronInput) {
+      refs.cronInput.value = "";
+    }
     if (refs.runOnceCheckbox) {
       refs.runOnceCheckbox.checked = false;
     }
@@ -971,6 +1168,28 @@
     var chevron = document.querySelector(".ce-modal__advanced-chevron");
     if (panel) panel.style.display = "none";
     if (chevron) chevron.textContent = "\u25B8";
+    // Hide conditional fields
+    var cronField = document.querySelector(".ce-cron-field");
+    if (cronField) cronField.style.display = "none";
+    // Reset cron UI elements
+    var dayButtons = document.querySelectorAll(".ce-cron-day-btn");
+    dayButtons.forEach(function (btn) {
+      btn.classList.remove("ce-cron-day-btn--selected");
+    });
+    var hourSelect = document.getElementById("cronHour");
+    var minuteSelect = document.getElementById("cronMinute");
+    if (hourSelect) hourSelect.value = "9";
+    if (minuteSelect) minuteSelect.value = "0";
+    var preview = document.getElementById("cronPreview");
+    if (preview) preview.textContent = "0 9 * * *";
+    // Hide advanced cron panel
+    var cronAdvancedPanel = document.querySelector(".ce-cron-advanced-panel");
+    var cronAdvancedToggle = document.querySelector(".ce-cron-advanced-toggle");
+    if (cronAdvancedPanel) cronAdvancedPanel.style.display = "none";
+    if (cronAdvancedToggle) {
+      var chevron = cronAdvancedToggle.querySelector(".ce-cron-chevron");
+      if (chevron) chevron.textContent = "\u25B8";
+    }
   }
 
   function populateForm(rule) {
@@ -1000,6 +1219,42 @@
     // Set runOnce checkbox
     refs.runOnceCheckbox.checked = rule.runOnce || false;
 
+    // Handle cron expression - stored in trigger_data from backend
+    var cronExpr = rule.triggerData || "";
+    if (refs.cronInput) {
+      refs.cronInput.value = cronExpr;
+    }
+
+    // Parse cron expression and set UI elements
+    if (rule.trigger === "cron" && cronExpr) {
+      var parsed = parseCronExpression(cronExpr);
+      if (parsed) {
+        // Set day buttons
+        var dayButtons = document.querySelectorAll(".ce-cron-day-btn");
+        dayButtons.forEach(function (btn) {
+          var day = btn.dataset.day;
+          var isSelected = parsed.days.length === 0 || parsed.days.includes(day);
+          btn.classList.toggle("ce-cron-day-btn--selected", isSelected);
+        });
+
+        // Set time selectors
+        var hourSelect = document.getElementById("cronHour");
+        var minuteSelect = document.getElementById("cronMinute");
+        if (hourSelect) hourSelect.value = parsed.hour;
+        if (minuteSelect) minuteSelect.value = parsed.minute;
+
+        // Update preview
+        var preview = document.getElementById("cronPreview");
+        if (preview) preview.textContent = cronExpr;
+      }
+    }
+
+    // Show/hide conditional fields based on trigger
+    var cronField = document.querySelector(".ce-cron-field");
+    if (cronField) {
+      cronField.style.display = rule.trigger === "cron" ? "grid" : "none";
+    }
+
     // Open advanced panel if any advanced field is set
     var hasAdvanced = cd > 0 || action.projectId || action.model || rule.runOnce;
     var panel = document.querySelector(".ce-modal__advanced-panel");
@@ -1008,6 +1263,44 @@
       panel.style.display = "grid";
       if (chevron) chevron.textContent = "\u25BE";
     }
+  }
+
+  // Helper function to parse cron expression into components
+  function parseCronExpression(expr) {
+    var parts = expr.trim().split(/\s+/);
+    if (parts.length !== 5) return null;
+
+    var minute = parts[0];
+    var hour = parts[1];
+    var dayOfMonth = parts[2];
+    var month = parts[3];
+    var dayOfWeek = parts[4];
+
+    var days = [];
+    if (dayOfWeek !== "*") {
+      // Parse day of week (can be comma-separated like "1,3,5" or ranges like "1-5")
+      var dayParts = dayOfWeek.split(",");
+      dayParts.forEach(function (part) {
+        if (part.includes("-")) {
+          var range = part.split("-");
+          var start = parseInt(range[0], 10);
+          var end = parseInt(range[1], 10);
+          for (var i = start; i <= end; i++) {
+            days.push(String(i));
+          }
+        } else {
+          days.push(part);
+        }
+      });
+    }
+
+    return {
+      minute: minute,
+      hour: hour,
+      days: days,
+      dayOfMonth: dayOfMonth,
+      month: month,
+    };
   }
 
   function openModal(rule) {
@@ -1033,6 +1326,16 @@
     opts.forEach(function (v) { if (v <= suggestionCooldown) best = String(v); });
     refs.cooldownInput.value = best;
     if (data.runOnce) refs.runOnceCheckbox.checked = true;
+    // Handle triggerData for cron expressions
+    var triggerValue = String(data.trigger || "cron");
+    if (triggerValue === "cron" && data.triggerData && refs.cronInput) {
+      refs.cronInput.value = String(data.triggerData);
+    }
+    // Show/hide conditional fields based on trigger
+    var cronField = document.getElementById("cronExpression")?.closest(".ce-modal__primary");
+    if (cronField) {
+      cronField.style.display = triggerValue === "cron" ? "grid" : "none";
+    }
     refs.modalBg.classList.add("is-open");
     refs.nameInput.focus();
   }
@@ -1126,13 +1429,49 @@
     opts.forEach(function (v) { if (v <= cd) best = String(v); });
     refs.cooldownInput.value = best;
     if (plan.projectId) refs.projectSelect.value = plan.projectId;
+    // Handle cron expression from AI prefill
+    if (plan.triggerData) {
+      if (refs.cronInput) refs.cronInput.value = plan.triggerData;
+      // Parse and update UI elements
+      var parsed = parseCronExpression(plan.triggerData);
+      if (parsed) {
+        var dayButtons = document.querySelectorAll(".ce-cron-day-btn");
+        dayButtons.forEach(function (btn) {
+          var day = btn.dataset.day;
+          var isSelected = parsed.days.length === 0 || parsed.days.includes(day);
+          btn.classList.toggle("ce-cron-day-btn--selected", isSelected);
+        });
+        var hourSelect = document.getElementById("cronHour");
+        var minuteSelect = document.getElementById("cronMinute");
+        if (hourSelect) hourSelect.value = parsed.hour;
+        if (minuteSelect) minuteSelect.value = parsed.minute;
+        var preview = document.getElementById("cronPreview");
+        if (preview) preview.textContent = plan.triggerData;
+      }
+    }
+    // Show/hide conditional fields based on trigger
+    var cronField = document.querySelector(".ce-cron-field");
+    if (cronField) {
+      cronField.style.display = plan.trigger === "cron" ? "grid" : "none";
+    }
     notify("Pre-remplissage IA applique.");
   });
 
   refs.saveBtn.addEventListener("click", async function () {
+    // Clear previous error
+    if (refs.errorContainer) {
+      refs.errorContainer.style.display = "none";
+      refs.errorContainer.textContent = "";
+    }
+
     var name = refs.nameInput.value.trim();
     if (!name) {
-      notify("Nom d'automatisation requis");
+      var nameError = "Nom d'automatisation requis";
+      if (refs.errorContainer) {
+        refs.errorContainer.textContent = nameError;
+        refs.errorContainer.style.display = "block";
+      }
+      notify(nameError);
       refs.nameInput.focus();
       return;
     }
@@ -1142,12 +1481,25 @@
     var instruction = refs.instructionInput.value.trim();
     var runOnce = refs.runOnceCheckbox.checked;
     var extensionEventName = refs.extensionEventName ? refs.extensionEventName.value.trim() : "";
+    var cronExpression = refs.cronInput ? refs.cronInput.value.trim() : "";
     var action;
 
     // For extension events, use the custom event name
     var finalTrigger = trigger;
     if (trigger === "extension.event" && extensionEventName) {
       finalTrigger = "extension." + extensionEventName;
+    }
+
+    // Validate cron expression when cron trigger is selected
+    if (trigger === "cron" && !cronExpression) {
+      var cronError = "Expression cron requise pour le declencheur Date et heure";
+      if (refs.errorContainer) {
+        refs.errorContainer.textContent = cronError;
+        refs.errorContainer.style.display = "block";
+      }
+      notify(cronError);
+      if (refs.cronInput) refs.cronInput.focus();
+      return;
     }
 
     if (actionType === "notify") {
@@ -1186,6 +1538,11 @@
       runOnce: runOnce,
     };
 
+    // Include cron expression in payload when trigger is cron
+    if (trigger === "cron" && cronExpression) {
+      payload.triggerData = cronExpression;
+    }
+
     if (state.editingRuleId) {
       var currentRule = state.rules.find(function (rule) {
         return rule.id === state.editingRuleId;
@@ -1197,12 +1554,16 @@
     var res = await call("automation.rules.save", payload);
 
     if (!res.ok) {
-      notify(
-        (res.error && res.error.message) ||
+      var errorMsg = (res.error && res.error.message) ||
           (state.editingRuleId
             ? "Impossible de modifier la regle"
-            : "Impossible de creer la regle"),
-      );
+            : "Impossible de creer la regle");
+      // Display error in modal
+      if (refs.errorContainer) {
+        refs.errorContainer.textContent = errorMsg;
+        refs.errorContainer.style.display = "block";
+      }
+      notify(errorMsg);
       return;
     }
 

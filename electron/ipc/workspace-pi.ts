@@ -972,9 +972,10 @@ export async function probeProviderBaseUrl(baseUrl: string): Promise<{
   }
 
   const isReachableStatus = (status: number): boolean => {
-    // Only consider 2xx (success) and 401 (unauthorized but endpoint exists) as reachable
-    // Exclude 400 (bad request), 403 (forbidden), 404 (not found), 410 (gone), and 5xx (server errors)
-    return (status >= 200 && status < 300) || status === 401;
+    // Consider 2xx (success), 401 (unauthorized but endpoint exists), and 400 (bad request) as reachable.
+    // 400 indicates the endpoint exists but the request was invalid (expected for test probes).
+    // Exclude 403 (forbidden), 404 (not found), 405 (method not allowed), 410 (gone), and 5xx (server errors).
+    return (status >= 200 && status < 300) || status === 401 || status === 400;
   };
 
   const probeReachable = async (
@@ -999,17 +1000,25 @@ export async function probeProviderBaseUrl(baseUrl: string): Promise<{
 
   const results = await Promise.all(
     candidates.map(async (candidate) => {
+      // Use POST with minimal body for generation endpoints to better detect actual compatibility.
+      // Some providers return 405 for HEAD but work correctly with POST.
       const [modelsReachable, chatReachable, responsesReachable] =
         await Promise.all([
           probeReachable(`${candidate}/models`, { method: "GET" }),
-          probeReachable(`${candidate}/chat/completions`, { method: "HEAD" }),
-          probeReachable(`${candidate}/responses`, { method: "HEAD" }),
+          probeReachable(`${candidate}/chat/completions`, {
+            method: "POST",
+            body: JSON.stringify({ model: "test", messages: [] }),
+          }),
+          probeReachable(`${candidate}/responses`, {
+            method: "POST",
+            body: JSON.stringify({ model: "test", input: [] }),
+          }),
         ]);
       const score =
         (modelsReachable ? 1 : 0) +
         (chatReachable ? 4 : 0) +
         (responsesReachable ? 4 : 0);
-      return {
+      const result = {
         candidate,
         reachable: score > 0,
         score,
@@ -1017,6 +1026,10 @@ export async function probeProviderBaseUrl(baseUrl: string): Promise<{
         chatReachable,
         responsesReachable,
       };
+      console.log(
+        `[pi] probeProviderBaseUrl candidate="${candidate}" score=${score} models=${modelsReachable} chat=${chatReachable} responses=${responsesReachable}`,
+      );
+      return result;
     }),
   );
 
@@ -1043,6 +1056,9 @@ export async function probeProviderBaseUrl(baseUrl: string): Promise<{
       return best;
     },
     null,
+  );
+  console.log(
+    `[pi] probeProviderBaseUrl winner="${winner?.candidate ?? "none"}" original="${baseUrl}" matched=${Boolean(winner)}`,
   );
   return {
     resolvedBaseUrl: winner ? winner.candidate : candidates[0],
@@ -1970,9 +1986,7 @@ export async function listPiModels(): Promise<PiModelsResult> {
               supportsThinking: Boolean(
                 (entry as Record<string, unknown>).reasoning,
               ),
-              thinkingLevels: Boolean(
-                (entry as Record<string, unknown>).reasoning,
-              )
+              thinkingLevels: (entry as Record<string, unknown>).reasoning
                 ? THINKING_LEVELS
                 : [],
               contextWindow:

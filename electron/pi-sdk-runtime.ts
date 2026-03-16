@@ -963,14 +963,25 @@ export class PiSdkRuntime {
       : SessionManager.create(runtimeCwd, path.dirname(sessionPath));
 
     const desiredProvider =
-      conversation.model_provider ??
-      settingsManager.getDefaultProvider() ??
-      "openai-codex";
+      conversation.model_provider ?? settingsManager.getDefaultProvider();
     const desiredModelId =
-      conversation.model_id ??
-      settingsManager.getDefaultModel() ??
-      "gpt-5.3-codex";
+      conversation.model_id ?? settingsManager.getDefaultModel();
+
+    if (!desiredProvider || !desiredModelId) {
+      throw new Error(
+        `No model configured for conversation and no default model set. ` +
+          `Please select a model in the conversation settings or set a default model.`,
+      );
+    }
+
     const model = modelRegistry.find(desiredProvider, desiredModelId);
+    if (!model) {
+      throw new Error(
+        `Model not found: ${desiredProvider}/${desiredModelId}. ` +
+          `The model may not be available in your configured providers. ` +
+          `Please check your model configuration or select a different model.`,
+      );
+    }
     const thinkingLevel = (conversation.thinking_level ??
       settingsManager.getDefaultThinkingLevel() ??
       "medium") as ThinkingLevel;

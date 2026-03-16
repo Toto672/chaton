@@ -24,6 +24,7 @@ import { useModelCache } from "@/components/shell/composer/useModelCache";
 import { useComposerExtensionButtons } from "@/hooks/use-composer-extension-buttons";
 import {
   buildAttachment,
+  buildMessageWithAttachments,
   formatBytes,
 } from "@/components/shell/composer/attachments";
 import {
@@ -48,6 +49,7 @@ import type {
   PiModel,
   ThinkingLevel,
 } from "@/components/shell/composer/types";
+import type { ImageContent, FileContent } from "@/features/workspace/rpc";
 import { useWorkspace } from "@/features/workspace/store";
 import { usePiRuntimeMeta, usePiMessages } from "@/features/workspace/store/pi-store";
 import { perfMonitor } from "@/features/workspace/store/perf-monitor";
@@ -581,6 +583,48 @@ export function Composer() {
     if (fileMentionOpen) {
       return;
     }
+
+    // Shift+Enter: if conversation is busy, send as steer immediately
+    // Otherwise, allow default behavior (new line insertion)
+    if (event.key === "Enter" && event.shiftKey) {
+      const isConversationBusy = Boolean(
+        selectedRuntime?.status === "streaming" ||
+        selectedRuntime?.status === "starting" ||
+        selectedRuntime?.pendingUserMessage ||
+        (selectedRuntime?.pendingCommands ?? 0) > 0
+      );
+
+      if (isConversationBusy && selectedConversation?.id) {
+        event.preventDefault();
+        const messageToSend = message.trim();
+        if (!messageToSend && pendingAttachments.length === 0) {
+          return;
+        }
+        const images = pendingAttachments
+          .map((piece) => piece.image)
+          .filter((piece): piece is ImageContent => Boolean(piece));
+        const files = pendingAttachments
+          .map((piece) => piece.file)
+          .filter((piece): piece is FileContent => Boolean(piece));
+        const finalMessage = buildMessageWithAttachments(messageToSend, pendingAttachments);
+
+        // Send as steer immediately
+        void sendPiPrompt({
+          conversationId: selectedConversation.id,
+          message: finalMessage,
+          steer: true,
+          images,
+          files,
+        });
+
+        // Clear the input and attachments
+        setMessage("");
+        setPendingAttachmentsByKey((previous) => ({ ...previous, [composerKey]: [] }));
+      }
+      return;
+    }
+
+    // Regular Enter (without Shift): send message
     if (event.key !== "Enter" || event.shiftKey) {
       return;
     }

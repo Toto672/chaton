@@ -1011,6 +1011,12 @@ export const workspaceIpc = {
       memoryId?: string | null;
     }) => void,
   ) => getApi().onMemorySaving(listener),
+  onMemoryInjected: (
+    listener: (payload: {
+      conversationId: string;
+      status: "injected";
+    }) => void,
+  ) => getApi().onMemoryInjected(listener),
   setConversationMemoryInjected: (conversationId: string, injected: boolean): Promise<{ ok: boolean }> =>
     getApi().setConversationMemoryInjected(conversationId, injected),
 };

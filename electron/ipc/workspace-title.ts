@@ -25,11 +25,9 @@ const LONGUEUR_MAX_TITRE = 60;
 const NOMBRE_MOTS_MIN_TITRE = 3;
 const NOMBRE_MOTS_MAX_TITRE = 7;
 export const AFFINAGE_TITRE_IA_ACTIVE = true;
-const MODELES_TITRE_PREFERES = [
-  "openai-codex/gpt-5.3-codex",
-  "openai-codex/gpt-5.2-codex",
-  "openai-codex/gpt-5.1-codex",
-] as const;
+// Hardcoded fallback models removed to avoid errors when these providers
+// are not configured. If the selected model fails, deterministic title
+// generation will be used instead.
 
 // Title model preference storage key
 const TITLE_MODEL_SETTINGS_KEY = "title_model";
@@ -156,9 +154,6 @@ function choisirModelePourTitre(params: {
   };
 
   ajouter(params.preferredModelKey);
-  for (const modelKey of MODELES_TITRE_PREFERES) {
-    ajouter(modelKey);
-  }
   ajouter(params.fallbackModelKey ?? null);
 
   if (candidats.length === 0 && disponibles.size > 0) {

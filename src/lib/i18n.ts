@@ -263,6 +263,8 @@ i18n.use(initReactI18next).init({
           "Unable to send message to the model: {{reason}}",
         "Chime à la fin des conversations": "Chime at end of conversations",
         "Memory injected": "Memory injected",
+        "Saving to memory...": "Saving to memory...",
+        "Saved to memory": "Saved to memory",
         // Assistant mode
         Workspace: "Workspace",
         Assistant: "Assistant",
@@ -689,6 +691,8 @@ i18n.use(initReactI18next).init({
           "Pratique quand vous voulez une aide plus large.",
         "Chime à la fin des conversations": "Chime à la fin des conversations",
         "Memory injected": "Mémoire injectée",
+        "Saving to memory...": "Enregistrement en mémoire...",
+        "Saved to memory": "Mémoire enregistrée",
         // Assistant mode
         Workspace: "Workspace",
         Assistant: "Assistant",

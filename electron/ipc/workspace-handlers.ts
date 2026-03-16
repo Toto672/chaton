@@ -2483,6 +2483,14 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
                 if (conversation) {
                   conversation.memory_injected = 1;
                 }
+                
+                // Notify renderer that memory was injected
+                for (const win of BrowserWindow.getAllWindows()) {
+                  win.webContents.send("memory:injected", {
+                    conversationId,
+                    status: "injected",
+                  });
+                }
               }
             }
           } catch (err) {

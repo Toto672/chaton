@@ -1,5 +1,6 @@
 import type { Conversation } from "@/features/workspace/types";
 import type { ThinkingLevel } from "./types";
+import { extractModelId } from "@/utils/model-pricing";
 
 export const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
 
@@ -36,6 +37,9 @@ export function saveGlobalAccessMode(mode: "secure" | "open") {
   window.localStorage.setItem(GLOBAL_ACCESS_MODE_KEY, mode);
 }
 
+/**
+ * @deprecated Use extractModelId from @/utils/model-pricing instead
+ */
 export function parseModelKey(modelKey: string): { provider: string; modelId: string } | null {
   const separator = modelKey.indexOf("/");
   if (separator <= 0 || separator >= modelKey.length - 1) {
@@ -44,7 +48,7 @@ export function parseModelKey(modelKey: string): { provider: string; modelId: st
 
   return {
     provider: modelKey.slice(0, separator),
-    modelId: modelKey.slice(separator + 1),
+    modelId: extractModelId(modelKey),
   };
 }
 

@@ -42,6 +42,7 @@ function TopbarWidgetHost({
 }) {
   const [html, setHtml] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isVisible, setIsVisible] = useState<boolean>(true)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const pendingDeeplinkRef = useRef<{ viewId: string; target: string; params?: Record<string, unknown> } | null>(null)
 
@@ -108,12 +109,26 @@ function TopbarWidgetHost({
     return () => window.removeEventListener('chaton:extension:deeplink', handle)
   }, [extensionId, item.widget?.viewId])
 
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'chaton.extension.widgetVisibility') {
+        setIsVisible(event.data.payload?.isVisible !== false)
+      }
+    }
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [])
+
   if (error) return null
   if (!html) {
     return (
       <div
         className="topbar-extension-widget"
-        style={{ width: item.widget?.width ?? 44, minWidth: item.widget?.minWidth ?? item.widget?.width ?? 44 }}
+        style={
+          isVisible
+            ? { width: item.widget?.width ?? 44, minWidth: item.widget?.minWidth ?? item.widget?.width ?? 44 }
+            : { width: 0, minWidth: 0, overflow: 'hidden' }
+        }
         aria-label={item.label}
         title={item.label}
       />
@@ -123,7 +138,11 @@ function TopbarWidgetHost({
   return (
     <div
       className="topbar-extension-widget"
-      style={{ width: item.widget?.width ?? 44, minWidth: item.widget?.minWidth ?? item.widget?.width ?? 44 }}
+      style={
+        isVisible
+          ? { width: item.widget?.width ?? 44, minWidth: item.widget?.minWidth ?? item.widget?.width ?? 44 }
+          : { width: 0, minWidth: 0, overflow: 'hidden' }
+      }
       aria-label={item.label}
       title={item.label}
     >

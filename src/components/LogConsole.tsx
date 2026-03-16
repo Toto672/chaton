@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { X, Copy, Trash2, FileText, Search, Filter, Download } from 'lucide-react'
+import { X, Copy, Trash2, FileText, Search, Filter, Download, ChevronDown, ChevronUp } from 'lucide-react'
 
 type LogEntry = {
   timestamp: string
@@ -33,7 +33,9 @@ export function LogConsole({ isOpen, onClose }: LogConsoleProps) {
   const [filterSource, setFilterSource] = useState<'all' | 'electron' | 'pi' | 'frontend'>('all')
   const [autoScroll, setAutoScroll] = useState(true)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const [logFilePath, setLogFilePath] = useState('')
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     if (isOpen) {
@@ -52,6 +54,34 @@ export function LogConsole({ isOpen, onClose }: LogConsoleProps) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight
     }
   }, [filteredLogs, autoScroll])
+
+  // Gérer la touche Échap pour fermer le panneau
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
+  // Gérer le clic en dehors du panneau pour le fermer
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        onClose()
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen, onClose])
 
   const fetchLogs = async () => {
     setIsLoading(true)
@@ -162,13 +192,25 @@ export function LogConsole({ isOpen, onClose }: LogConsoleProps) {
     return new Date(timestamp).toLocaleTimeString()
   }
 
+  const toggleRowExpansion = (index: number) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(index)) {
+        newSet.delete(index)
+      } else {
+        newSet.add(index)
+      }
+      return newSet
+    })
+  }
+
   const shouldRenderConsole = isOpen
 
   if (!shouldRenderConsole) return null
 
   return (
     <div className="log-console-overlay fixed inset-0 z-50 flex items-end">
-      <div className="log-console-panel h-2/3 w-full rounded-t-lg border-t shadow-lg">
+      <div ref={panelRef} className="log-console-panel h-2/3 w-full rounded-t-lg border-t shadow-lg">
         <div className="log-console-header flex items-center justify-between border-b p-4">
           <h2 className="text-lg font-semibold">Console de logs</h2>
           <div className="flex items-center space-x-2">
@@ -255,29 +297,46 @@ export function LogConsole({ isOpen, onClose }: LogConsoleProps) {
               </div>
             ) : (
               <div className="space-y-2 text-sm">
-                {filteredLogs.map((log, index) => (
-                  <div key={`${log.timestamp}-${index}`} className="log-console-row flex items-start space-x-2 rounded p-2">
-                    <span className={`log-console-time w-12 font-mono text-xs ${getLogLevelColor(log.level)}`}>
-                      {formatTimestamp(log.timestamp)}
-                    </span>
-                    <span className={`log-console-source w-20 font-mono text-xs ${getSourceColor(log.source)}`}>
-                      {log.source.toUpperCase()}
-                    </span>
-                    <span className={`log-console-message flex-1 font-medium ${getLogLevelColor(log.level)}`}>
-                      {log.message}
-                    </span>
-                    {log.data && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 w-6 p-0" 
-                        onClick={() => alert(JSON.stringify(log.data, null, 2))}
-                      >
-                        ⓘ
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                {filteredLogs.map((log, index) => {
+                  const isExpanded = expandedRows.has(index)
+                  return (
+                    <div key={`${log.timestamp}-${index}`} className="log-console-row-wrapper">
+                      <div className="log-console-row flex items-start space-x-2 rounded p-2">
+                        <span className={`log-console-time w-12 font-mono text-xs ${getLogLevelColor(log.level)}`}>
+                          {formatTimestamp(log.timestamp)}
+                        </span>
+                        <span className={`log-console-source w-20 font-mono text-xs ${getSourceColor(log.source)}`}>
+                          {log.source.toUpperCase()}
+                        </span>
+                        <span className={`log-console-message flex-1 font-medium ${getLogLevelColor(log.level)}`}>
+                          {log.message}
+                        </span>
+                        {log.data && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => toggleRowExpansion(index)}
+                            title={isExpanded ? 'Masquer les détails' : 'Afficher les détails'}
+                          >
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                      {isExpanded && log.data && (
+                        <div className="log-console-details ml-[136px] mt-1 rounded border p-3 bg-muted/50">
+                          <pre className="text-xs font-mono whitespace-pre-wrap break-all">
+                            {JSON.stringify(log.data, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
