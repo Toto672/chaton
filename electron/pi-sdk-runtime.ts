@@ -444,6 +444,31 @@ function fingerprint(value: string): string {
   return createHash("sha256").update(value).digest("hex").slice(0, 10);
 }
 
+function extractNestedErrorMessage(
+  value: unknown,
+  seen = new Set<unknown>(),
+): string | null {
+  if (!value || seen.has(value)) return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+  if (typeof value !== "object") return null;
+
+  seen.add(value);
+  const record = value as Record<string, unknown>;
+  const directMessage =
+    typeof record.message === "string" ? record.message.trim() : "";
+  if (directMessage) return directMessage;
+
+  const nestedCandidates = [record.cause, record.error, record.err, record.reason];
+  for (const candidate of nestedCandidates) {
+    const nestedMessage = extractNestedErrorMessage(candidate, seen);
+    if (nestedMessage) return nestedMessage;
+  }
+  return null;
+}
+
 function buildState(runtime: RuntimeState): RpcSessionState {
   const model = runtime.session.model;
   return {
@@ -717,6 +742,11 @@ export class PiSdkRuntime {
   }
 
   private enrichRuntimeError(message: string): string {
+    const detailedConnectionMessage =
+      this.describeGenericConnectionError(message);
+    if (detailedConnectionMessage) {
+      return detailedConnectionMessage;
+    }
     const lower = message.toLowerCase();
     const isAuthError =
       /\b401\b/.test(lower) ||
@@ -725,6 +755,47 @@ export class PiSdkRuntime {
       /\bapi key\b/.test(lower);
     if (!isAuthError) return message;
     return `${message}${this.buildAuthDebugSuffix()}`;
+  }
+
+  private describeGenericConnectionError(message: string): string | null {
+    if (!this.runtime) return null;
+    if (message.trim().toLowerCase() !== "connection error.") return null;
+
+    const messages = this.runtime.session.messages as unknown as Array<
+      Record<string, unknown>
+    >;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const entry = messages[index];
+      if (!entry || typeof entry !== "object") continue;
+      if (entry.role !== "assistant") continue;
+      if (entry.stopReason !== "error") continue;
+      if (typeof entry.errorMessage !== "string") continue;
+      if (entry.errorMessage.trim().toLowerCase() !== "connection error.") continue;
+
+      const nested = extractNestedErrorMessage(entry.error);
+      if (!nested) return null;
+      if (nested.trim().toLowerCase() === "connection error.") return null;
+      return `Connection error: ${nested}`;
+    }
+    return null;
+  }
+
+  private rewriteLastAssistantConnectionError(message: string) {
+    if (!this.runtime) return;
+
+    const messages = this.runtime.session.messages as unknown as Array<
+      Record<string, unknown>
+    >;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const entry = messages[index];
+      if (!entry || typeof entry !== "object") continue;
+      if (entry.role !== "assistant") continue;
+      if (entry.stopReason !== "error") continue;
+      if (typeof entry.errorMessage !== "string") continue;
+      if (entry.errorMessage.trim().toLowerCase() !== "connection error.") continue;
+      entry.errorMessage = message;
+      break;
+    }
   }
 
   private refreshSnapshot() {
@@ -1788,6 +1859,10 @@ export class PiSdkRuntime {
       const baseMessage =
         error instanceof Error ? error.message : String(error);
       const message = this.enrichRuntimeError(baseMessage);
+      if (message !== baseMessage) {
+        this.rewriteLastAssistantConnectionError(message);
+      }
+      this.refreshSnapshot();
       const db = getDb();
       saveConversationPiRuntime(db, this.conversationId, {
         lastRuntimeError: message,

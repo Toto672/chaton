@@ -5,6 +5,18 @@ description: Verified documentation changes and rationale for Chatons features a
 
 # Documentation Audit
 
+## 2026-03-16
+
+### Preserved nested transport details for generic provider connection failures
+
+**Change:** Updated the Pi runtime integration docs to note that Chatons now enriches generic provider `Connection error.` failures with the nested SDK transport cause when one is available.
+
+**Why:** Some OpenAI-compatible SDK failures collapse to a plain `Connection error.` message, which hides the actionable reason users need to diagnose local-network providers, DNS mistakes, TLS issues, and refused connections.
+
+**Verified files:**
+- `electron/pi-sdk-runtime.ts` -- Enriches generic connection failures from nested SDK causes and rewrites the last errored assistant message before snapshot emission
+- `docs/content/pi-integration.mdx` -- Documented the new runtime error-surfacing behavior for provider transport failures
+
 ## 2026-03-15
 
 ### Moved AI conversation titles to runtime-backed Pi sessions

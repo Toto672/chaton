@@ -16,6 +16,18 @@ export type TelemetryEvent = {
   data?: unknown;
 };
 
+function shouldSuppressTelemetryEvent(event: TelemetryEvent): boolean {
+  if (event.source !== "pi" || event.level !== "error") return false;
+  if (!event.message.startsWith("Pi runtime status: error")) return false;
+
+  const lower = event.message.toLowerCase();
+  return (
+    lower.includes("no api key") ||
+    lower.includes("unauthorized") ||
+    /\b401\b/.test(lower)
+  );
+}
+
 type SentryTelemetryOptions = {
   dsn?: string;
   appVersion: string;
@@ -64,6 +76,7 @@ class SentryTelemetry {
 
   send(event: TelemetryEvent) {
     if (!this.isReady || !this.isEnabled()) return;
+    if (shouldSuppressTelemetryEvent(event)) return;
 
     // Allow the startup heartbeat through alongside errors
     const isHeartbeat = event.message === "app_started";
