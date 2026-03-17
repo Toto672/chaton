@@ -502,8 +502,48 @@
     @apply border-[#273244] bg-[#0f1724];
   }
 
+  .dark .project-terminal-sheet {
+    @apply bg-[#0f1724] border-[#273244];
+  }
+
+  .dark .project-terminal-header {
+    @apply border-[#273244];
+  }
+
+  .dark .project-terminal-toolbar {
+    @apply border-[#273244];
+  }
+
+  .dark .project-terminal-select {
+    @apply border-[#273244] bg-[#121b2a] text-[#e6ecfa];
+  }
+
   .dark .project-terminal-custom-input {
     @apply border-[#273244] bg-[#121b2a] text-[#e6ecfa] placeholder:text-[#7f8ba3] focus:border-[#3b82f6] focus:ring-[#1d4ed8];
+  }
+
+  .dark .project-terminal-tabs {
+    @apply border-[#273244];
+  }
+
+  .dark .project-terminal-tab {
+    @apply border-[#273244] bg-[#121b2a];
+  }
+
+  .dark .project-terminal-tab-active {
+    @apply border-[#3b82f6] bg-[#0f1724];
+  }
+
+  .dark .project-terminal-tab-button {
+    @apply text-[#e6ecfa];
+  }
+
+  .dark .project-terminal-empty {
+    @apply border-[#273244] bg-[#121b2a] text-[#8ea0bf];
+  }
+
+  .dark .project-terminal-empty-tabs {
+    @apply text-[#8ea0bf];
   }
 
   .dark .worktree-commit-label {

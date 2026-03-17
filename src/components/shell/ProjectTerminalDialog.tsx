@@ -40,6 +40,8 @@ type TerminalRun = {
   lastSeq: number;
 };
 
+const SCROLL_THRESHOLD = 30; // pixels from bottom to consider "at bottom"
+
 export function ProjectTerminalDialog({
   conversationId,
   open,
@@ -67,8 +69,36 @@ export function ProjectTerminalDialog({
   const [startError, setStartError] = useState<string | null>(null);
   const [switchingToOpenMode, setSwitchingToOpenMode] = useState(false);
   const [isAccessDenied, setIsAccessDenied] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [isRendered, setIsRendered] = useState(open);
   const backdropRef = useRef<HTMLDivElement | null>(null);
   const terminalPollInFlightRef = useRef(false);
+  
+  // Auto-scroll refs and state
+  const outputRef = useRef<HTMLPreElement | null>(null);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const prevEventsLengthRef = useRef<number>(0);
+
+  // Handle open/close with animation
+  useEffect(() => {
+    if (open) {
+      setIsRendered(true);
+      setIsClosing(false);
+      return;
+    }
+
+    if (!isRendered) {
+      return;
+    }
+
+    setIsClosing(true);
+    const timeout = window.setTimeout(() => {
+      setIsRendered(false);
+      setIsClosing(false);
+    }, 220);
+
+    return () => window.clearTimeout(timeout);
+  }, [open, isRendered]);
 
   useEffect(() => {
     if (!open) {
@@ -145,7 +175,7 @@ export function ProjectTerminalDialog({
   }, [open, runs]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!isRendered) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onClose();
@@ -153,16 +183,7 @@ export function ProjectTerminalDialog({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, open]);
-
-  const handleBackdropClick = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (event.target === backdropRef.current) {
-        onClose();
-      }
-    },
-    [onClose],
-  );
+  }, [isRendered, onClose]);
 
   const activeRun = useMemo(
     () => runs.find((run) => run.id === activeRunId) ?? runs[0] ?? null,
@@ -173,6 +194,55 @@ export function ProjectTerminalDialog({
     if (!activeRun) return "";
     return sanitizeTerminalText(activeRun.events.map((event) => event.text).join(""));
   }, [activeRun]);
+
+  // Smart auto-scroll effect
+  useEffect(() => {
+    const output = outputRef.current;
+    if (!output || !activeRun) return;
+
+    const currentEventsLength = activeRun.events.length;
+    
+    // Only scroll if new events were added
+    if (currentEventsLength > prevEventsLengthRef.current) {
+      prevEventsLengthRef.current = currentEventsLength;
+      
+      // Only auto-scroll if user hasn't scrolled up
+      if (!isScrolledUp) {
+        output.scrollTop = output.scrollHeight;
+      }
+    }
+  }, [activeRun, isScrolledUp]);
+
+  // Handle scroll events to detect if user scrolled up
+  const handleScroll = useCallback(() => {
+    const output = outputRef.current;
+    if (!output) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = output;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    
+    // User is considered "scrolled up" if they're more than threshold away from bottom
+    const scrolledUp = distanceFromBottom > SCROLL_THRESHOLD;
+    setIsScrolledUp(scrolledUp);
+  }, []);
+
+  // Scroll to bottom helper
+  const scrollToBottom = useCallback(() => {
+    const output = outputRef.current;
+    if (output) {
+      output.scrollTop = output.scrollHeight;
+      setIsScrolledUp(false);
+    }
+  }, []);
+
+  const handleBackdropClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (event.target === backdropRef.current) {
+        onClose();
+      }
+    },
+    [onClose],
+  );
 
   const startRun = async () => {
     if (!selectedCommandId || starting) return;
@@ -211,6 +281,10 @@ export function ProjectTerminalDialog({
       };
       setRuns((current) => [nextRun, ...current]);
       setActiveRunId(nextRun.id);
+      // Reset scroll tracking for new run
+      setIsScrolledUp(false);
+      prevEventsLengthRef.current = 0;
+      
       if (selectedCommandId === "custom:new") {
         const refresh = await workspaceIpc.detectProjectCommands(conversationId);
         if (refresh.ok) {
@@ -271,18 +345,21 @@ export function ProjectTerminalDialog({
     setActiveRunId((current) => (current === runId ? null : current));
   };
 
-  if (!open) return null;
+  if (!isRendered) return null;
 
   return (
     <div
       ref={backdropRef}
-      className="project-terminal-sheet-backdrop"
+      className={`project-terminal-sheet-backdrop ${isClosing ? 'project-terminal-sheet-backdrop-closing' : ''}`}
       onClick={handleBackdropClick}
+      style={{ zIndex: 1000 }}
     >
       <div
-        className="project-terminal-sheet"
+        className={`project-terminal-sheet ${isClosing ? 'project-terminal-sheet-closing' : ''}`}
         role="dialog"
         aria-modal="true"
+        onClick={(event) => event.stopPropagation()}
+        style={{ zIndex: 1001 }}
       >
         <div className="project-terminal-header">
           <div>
@@ -392,14 +469,33 @@ export function ProjectTerminalDialog({
             <>
               <div className="project-terminal-runbar">
                 <code>{activeRun.commandPreview}</code>
-                {activeRun.status === "running" ? (
-                  <Button type="button" variant="outline" size="sm" onClick={() => void stopRun(activeRun.id)}>
-                    <Square className="h-4 w-4" />
-                    Stop
-                  </Button>
-                ) : null}
+                <div className="flex items-center gap-2">
+                  {isScrolledUp && (
+                    <button
+                      type="button"
+                      className="project-terminal-scroll-indicator"
+                      onClick={scrollToBottom}
+                      title="Scroll to bottom"
+                    >
+                      <span className="text-[10px]">Scrolled up</span>
+                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 5v14M19 12l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  )}
+                  {activeRun.status === "running" ? (
+                    <Button type="button" variant="outline" size="sm" onClick={() => void stopRun(activeRun.id)}>
+                      <Square className="h-4 w-4" />
+                      Stop
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-              <pre className={`chat-tool-code project-terminal-output ${activeRun.status === "failed" ? "project-terminal-output-error" : ""}`}>
+              <pre 
+                ref={outputRef}
+                className={`chat-tool-code project-terminal-output ${activeRun.status === "failed" ? "project-terminal-output-error" : ""}`}
+                onScroll={handleScroll}
+              >
                 {activeRunText || "Waiting for output..."}
               </pre>
             </>
