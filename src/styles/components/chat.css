@@ -59,7 +59,7 @@
   .chat-message-text {
     white-space: pre-wrap;
     font-family: inherit;
-    @apply max-h-[560px] overflow-auto bg-transparent p-0 text-[15px] leading-7 text-[#232731];
+    @apply bg-transparent p-0 text-[15px] leading-7 text-[#232731];
   }
 
   .chat-message-user .chat-message-text {
@@ -67,7 +67,7 @@
   }
 
   .chat-markdown {
-    @apply max-h-[560px] overflow-auto text-[15px] leading-7 text-[#232731];
+    @apply text-[15px] leading-7 text-[#232731];
   }
 
   /* Scroll shadow wrapper: use relative positioning on the scrollable element
@@ -819,5 +819,148 @@
 
   .dark .memory-injected-text {
     @apply text-blue-300;
+  }
+
+  /* ============================================
+     Virtual Height Message - Preview Pattern
+     ============================================ */
+
+  .virtual-height-message {
+    @apply relative;
+  }
+
+  .virtual-height-content {
+    @apply relative;
+    /* Smooth transition when expanding */
+    transition: max-height 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    overflow: hidden;
+  }
+
+  .virtual-height-content.is-expanded,
+  .virtual-height-content.is-expanded.has-overflow {
+    max-height: none !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+
+  /* Text fade-out effect using CSS mask - only when content overflows */
+  .virtual-height-content.is-collapsed.has-overflow {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      black 0%,
+      black 70%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      black 0%,
+      black 70%,
+      transparent 100%
+    );
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+  }
+
+  /* Floating controls - positioned at bottom of collapsed content */
+  .virtual-height-floating-controls {
+    @apply absolute left-0 right-0 flex justify-center;
+    bottom: 8px;
+    z-index: 10;
+    animation: virtual-height-floating-in 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes virtual-height-floating-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* Floating expand/collapse button - subtle secondary style */
+  .virtual-height-floating-btn {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-medium transition-all duration-200 ease-out;
+    /* Subtle gray styling - blends with UI */
+    border-color: rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.95);
+    color: #6b7280;
+    box-shadow: 
+      0 1px 3px rgba(0, 0, 0, 0.08),
+      0 1px 2px rgba(0, 0, 0, 0.04);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .virtual-height-floating-btn:hover {
+    transform: translateY(-1px);
+    border-color: rgba(0, 0, 0, 0.12);
+    background: rgba(255, 255, 255, 1);
+    color: #374151;
+    box-shadow: 
+      0 3px 8px rgba(0, 0, 0, 0.1),
+      0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+
+  .virtual-height-floating-btn:active {
+    transform: translateY(0);
+    box-shadow: 
+      0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+
+  .virtual-height-floating-btn:focus-visible {
+    @apply outline-none;
+    box-shadow: 
+      0 0 0 2px rgba(156, 163, 175, 0.3),
+      0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  .virtual-height-floating-icon {
+    @apply transition-transform duration-200;
+    color: #9ca3af;
+  }
+
+  /* Dark mode floating button - subtle */
+  .dark .virtual-height-floating-btn {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(45, 48, 58, 0.95);
+    color: #9ca3af;
+    box-shadow: 
+      0 1px 3px rgba(0, 0, 0, 0.2),
+      0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  .dark .virtual-height-floating-btn:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(55, 58, 70, 1);
+    color: #d1d5db;
+    box-shadow: 
+      0 3px 8px rgba(0, 0, 0, 0.25),
+      0 1px 3px rgba(0, 0, 0, 0.15);
+  }
+
+  .dark .virtual-height-floating-btn:focus-visible {
+    box-shadow: 
+      0 0 0 2px rgba(107, 114, 128, 0.3),
+      0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+
+  .dark .virtual-height-floating-icon {
+    color: #6b7280;
+  }
+
+  /* Ensure markdown content doesn't overflow in collapsed state with overflow */
+  .virtual-height-content.is-collapsed.has-overflow .chat-markdown pre,
+  .virtual-height-content.is-collapsed.has-overflow .chat-markdown table,
+  .virtual-height-content.is-collapsed.has-overflow .chat-markdown img {
+    @apply max-w-full;
+  }
+
+  /* Disable scroll shadows when inside virtual height container with overflow */
+  .virtual-height-content.is-collapsed.has-overflow .chat-message-text,
+  .virtual-height-content.is-collapsed.has-overflow .chat-markdown {
+    box-shadow: none !important;
   }
 }

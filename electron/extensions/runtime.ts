@@ -4,7 +4,7 @@ import { BrowserWindow } from 'electron'
 import { listQueueMessages } from '../db/repos/extension-queue.js'
 import { getDb } from '../db/index.js'
 import { hasCapability, trackCapability } from './runtime/capabilities.js'
-import { BUILTIN_AUTOMATION_ID, BUILTIN_BROWSER_ID, BUILTIN_MEMORY_ID } from './runtime/constants.js'
+import { BUILTIN_AUTOMATION_ID, BUILTIN_BROWSER_ID, BUILTIN_EXTENSION_MANAGER_ID, BUILTIN_MEMORY_ID, BUILTIN_PROJECTS_ID } from './runtime/constants.js'
 import { createHostCall } from './runtime/host.js'
 import { getExtensionMainViewHtml } from './runtime/html.js'
 import { asRecord } from './runtime/helpers.js'
@@ -18,8 +18,20 @@ import { storageFilesRead, storageFilesWrite, storageKvDeleteEntry, storageKvGet
 import { buildExtensionToolDefinitions } from './runtime/tools.js'
 import { buildToolCatalogFromExposedTools, getToolCatalogEntry, searchToolCatalog } from './runtime/tool-catalog.js'
 import { extensionKvGet, extensionKvSet } from '../db/repos/extension-kv.js'
+import { listProjects, findProjectById } from '../db/repos/projects.js'
+import { listConversations } from '../db/repos/conversations.js'
 import type { ChatonsExtensionRegistryEntry } from './manager.js'
-import { lookupMarketplaceIconUrl } from './manager.js'
+import { 
+  lookupMarketplaceIconUrl,
+  listChatonsExtensions,
+  installChatonsExtension,
+  removeChatonsExtension,
+  getChatonsExtensionLogs,
+  checkForExtensionUpdates,
+  updateChatonsExtension,
+  toggleChatonsExtension,
+  listChatonsExtensionCatalog,
+} from './manager.js'
 import { setMarketplaceIconUrlLookup } from './runtime/manifest.js'
 import type { ExposedExtensionToolDefinition, ExtensionHostCallResult, ExtensionManifest, HostEventTopic } from './runtime/types.js'
 import { createAutomationRuntime } from './runtime/automation.js'
@@ -133,7 +145,7 @@ export function getBuiltinExtensionTools(): ExposedExtensionToolDefinition[] {
  * extension tools (discovered on demand).
  */
 export function getLazyDiscoveryToolNames(): Set<string> {
-  const alwaysActiveIds = new Set([BUILTIN_AUTOMATION_ID, BUILTIN_MEMORY_ID])
+  const alwaysActiveIds = new Set([BUILTIN_AUTOMATION_ID, BUILTIN_MEMORY_ID, BUILTIN_EXTENSION_MANAGER_ID])
   const lazyTools = getExposedExtensionTools().filter(
     (tool) => !alwaysActiveIds.has(tool.extensionId),
   )
@@ -145,7 +157,7 @@ export function getLazyDiscoveryToolNames(): Set<string> {
  * grouped catalog entries by extensionId).
  */
 export function getLazyDiscoveryExtensionIds(): Set<string> {
-  const alwaysActiveIds = new Set([BUILTIN_AUTOMATION_ID, BUILTIN_MEMORY_ID])
+  const alwaysActiveIds = new Set([BUILTIN_AUTOMATION_ID, BUILTIN_MEMORY_ID, BUILTIN_EXTENSION_MANAGER_ID])
   const lazyTools = getExposedExtensionTools().filter(
     (tool) => !alwaysActiveIds.has(tool.extensionId),
   )
@@ -302,6 +314,162 @@ export function extensionsCall(
     if (apiName === 'browser.list') return browserList()
   }
 
+  if (extensionId === BUILTIN_EXTENSION_MANAGER_ID) {
+    if (apiName === 'extension.search_marketplace') {
+      const params = payload as Record<string, unknown>
+      const query = typeof params?.query === 'string' ? params.query : undefined
+      const category = typeof params?.category === 'string' ? params.category : undefined
+      const limit = typeof params?.limit === 'number' ? params.limit : 20
+      
+      const catalog = listChatonsExtensionCatalog()
+      if (!catalog.ok) {
+        return { ok: false, error: { code: 'internal', message: 'Failed to load extension catalog' } }
+      }
+      
+      let entries = catalog.entries
+      
+      // Filter by query
+      if (query) {
+        const q = query.toLowerCase()
+        entries = entries.filter(e => 
+          e.name.toLowerCase().includes(q) || 
+          e.description.toLowerCase().includes(q) ||
+          (e.tags && e.tags.some(t => t.toLowerCase().includes(q)))
+        )
+      }
+      
+      // Filter by category
+      if (category) {
+        entries = entries.filter(e => e.category === category)
+      }
+      
+      // Limit results
+      entries = entries.slice(0, limit)
+      
+      // Check which are installed
+      const installed = listChatonsExtensions()
+      const installedIds = new Set(installed.extensions.map(e => e.id))
+      
+      return { 
+        ok: true, 
+        data: {
+          entries: entries.map(e => ({
+            ...e,
+            installed: installedIds.has(e.id),
+          })),
+          total: entries.length,
+          source: catalog.source,
+          updatedAt: catalog.updatedAt,
+        }
+      }
+    }
+    
+    if (apiName === 'extension.list_installed') {
+      const result = listChatonsExtensions()
+      return { ok: true, data: { extensions: result.extensions } }
+    }
+    
+    if (apiName === 'extension.install') {
+      const params = payload as Record<string, unknown>
+      const id = typeof params?.id === 'string' ? params.id : ''
+      if (!id) {
+        return { ok: false, error: { code: 'invalid_args', message: 'Extension ID is required' } }
+      }
+      const result = installChatonsExtension(id)
+      return result.ok 
+        ? { ok: true, data: { message: result.started ? 'Installation started' : 'Extension enabled', state: result.state } }
+        : { ok: false, error: { code: 'internal', message: result.message || 'Installation failed' } }
+    }
+    
+    if (apiName === 'extension.uninstall') {
+      const params = payload as Record<string, unknown>
+      const id = typeof params?.id === 'string' ? params.id : ''
+      if (!id) {
+        return { ok: false, error: { code: 'invalid_args', message: 'Extension ID is required' } }
+      }
+      const result = removeChatonsExtension(id)
+      return result.ok 
+        ? { ok: true, data: { message: 'Extension uninstalled', id: result.id } }
+        : { ok: false, error: { code: 'internal', message: result.message || 'Uninstall failed' } }
+    }
+    
+    if (apiName === 'extension.get_logs') {
+      const params = payload as Record<string, unknown>
+      const id = typeof params?.id === 'string' ? params.id : ''
+      const lines = typeof params?.lines === 'number' ? params.lines : 500
+
+      if (!id) {
+        return { ok: false, error: { code: 'invalid_args', message: 'Extension ID is required' } }
+      }
+
+      const result = getChatonsExtensionLogs(id)
+      if (!result.ok) {
+        return { ok: false, error: { code: 'internal', message: 'Failed to get logs' } }
+      }
+      
+      // Limit lines if requested
+      let content = result.content
+      if (lines > 0) {
+        const allLines = content.split('\n')
+        content = allLines.slice(-lines).join('\n')
+      }
+      
+      return { ok: true, data: { id, content, lines: content.split('\n').length } }
+    }
+    
+    if (apiName === 'extension.check_updates') {
+      const result = checkForExtensionUpdates()
+      return result.ok 
+        ? { ok: true, data: { updates: result.updates } }
+        : { ok: false, error: { code: 'internal', message: 'Failed to check for updates' } }
+    }
+    
+    if (apiName === 'extension.update') {
+      const params = payload as Record<string, unknown>
+      const id = typeof params?.id === 'string' ? params.id : ''
+      if (!id) {
+        return { ok: false, error: { code: 'invalid_args', message: 'Extension ID is required' } }
+      }
+      const result = updateChatonsExtension(id)
+      return result.ok 
+        ? { ok: true, data: { message: 'Update started', state: result.state } }
+        : { ok: false, error: { code: 'internal', message: result.message || 'Update failed' } }
+    }
+    
+    if (apiName === 'extension.toggle') {
+      const params = payload as Record<string, unknown>
+      const id = typeof params?.id === 'string' ? params.id : ''
+      const enabled = params?.enabled === true
+
+      if (!id) {
+        return { ok: false, error: { code: 'invalid_args', message: 'Extension ID is required' } }
+      }
+
+      const result = toggleChatonsExtension(id, enabled)
+      return result.ok 
+        ? { ok: true, data: { id, enabled: result.enabled, message: `Extension ${enabled ? 'enabled' : 'disabled'}` } }
+        : { ok: false, error: { code: 'internal', message: result.message || 'Toggle failed' } }
+    }
+  }
+
+  if (extensionId === BUILTIN_PROJECTS_ID) {
+    if (apiName === 'chatons_list_projects') {
+      return handleListProjects(payload)
+    }
+    if (apiName === 'chatons_get_project') {
+      return handleGetProject(payload)
+    }
+    if (apiName === 'chatons_get_project_conversations') {
+      return handleGetProjectConversations(payload)
+    }
+    if (apiName === 'chatons_get_hidden_projects') {
+      return handleGetHiddenProjects(payload)
+    }
+    if (apiName === 'chatons_get_visible_projects') {
+      return handleGetVisibleProjects(payload)
+    }
+  }
+
   // Non-builtin extensions run in sandboxed workers with resource limits
   const hasHandler = hasExtensionHandler(extensionId)
   if (extensionId === '@thibautrey/chatons-extension-linear') {
@@ -350,5 +518,256 @@ export function getExtensionRuntimeHealth() {
       capabilitiesDeclared: manifest.capabilities,
       capabilitiesUsed: Array.from(runtimeState.capabilityUsage.get(manifest.id) ?? new Set()),
     })),
+  }
+}
+
+// ---- Projects Extension Handlers ----
+
+async function handleListProjects(payload: unknown): Promise<ExtensionHostCallResult> {
+  const params = (payload as Record<string, unknown>) ?? {}
+  const includeArchived = params?.includeArchived === true
+  const limit = typeof params?.limit === 'number' && params.limit > 0 ? params.limit : null
+
+  try {
+    const db = getDb()
+    let projects = listProjects(db)
+
+    // Apply limit if specified
+    if (limit && projects.length > limit) {
+      projects = projects.slice(0, limit)
+    }
+
+    // Sort by updatedAt (most recent first)
+    projects.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+
+    return {
+      ok: true,
+      data: {
+        projects: projects.map((row) => ({
+          id: row.id,
+          name: row.name,
+          repoPath: row.repo_path,
+          repoName: row.repo_name,
+          isArchived: row.is_archived === 1,
+          isHidden: row.is_hidden === 1,
+          icon: row.icon,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
+        total: projects.length,
+        includeArchived,
+      },
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: 'internal',
+        message: error instanceof Error ? error.message : String(error),
+      },
+    }
+  }
+}
+
+async function handleGetProject(payload: unknown): Promise<ExtensionHostCallResult> {
+  const params = (payload as Record<string, unknown>) ?? {}
+  const projectId = typeof params?.projectId === 'string' ? params.projectId.trim() : ''
+
+  if (!projectId) {
+    return {
+      ok: false,
+      error: {
+        code: 'invalid_args',
+        message: 'projectId is required',
+      },
+    }
+  }
+
+  try {
+    const db = getDb()
+    const project = findProjectById(db, projectId)
+
+    if (!project) {
+      return {
+        ok: false,
+        error: {
+          code: 'not_found',
+          message: `Project with ID "${projectId}" not found`,
+        },
+      }
+    }
+
+    // Get conversations for this project
+    const conversations = listConversations(db)
+      .filter((c) => c.project_id === projectId)
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+
+    return {
+      ok: true,
+      data: {
+        project: {
+          id: project.id,
+          name: project.name,
+          repoPath: project.repo_path,
+          repoName: project.repo_name,
+          isArchived: project.is_archived === 1,
+          isHidden: project.is_hidden === 1,
+          icon: project.icon,
+          createdAt: project.created_at,
+          updatedAt: project.updated_at,
+        },
+        conversationCount: conversations.length,
+        conversations: conversations.map((c) => ({
+          id: c.id,
+          title: c.title,
+          updatedAt: c.updated_at,
+          lastMessageAt: c.last_message_at,
+          modelProvider: c.model_provider,
+          modelId: c.model_id,
+          thinkingLevel: c.thinking_level,
+        })),
+      },
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: 'internal',
+        message: error instanceof Error ? error.message : String(error),
+      },
+    }
+  }
+}
+
+async function handleGetProjectConversations(payload: unknown): Promise<ExtensionHostCallResult> {
+  const params = (payload as Record<string, unknown>) ?? {}
+  const projectId = typeof params?.projectId === 'string' ? params.projectId.trim() : ''
+
+  if (!projectId) {
+    return {
+      ok: false,
+      error: {
+        code: 'invalid_args',
+        message: 'projectId is required',
+      },
+    }
+  }
+
+  try {
+    const db = getDb()
+    const project = findProjectById(db, projectId)
+
+    if (!project) {
+      return {
+        ok: false,
+        error: {
+          code: 'not_found',
+          message: `Project with ID "${projectId}" not found`,
+        },
+      }
+    }
+
+    const conversations = listConversations(db)
+      .filter((c) => c.project_id === projectId)
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+
+    return {
+      ok: true,
+      data: {
+        projectId,
+        projectName: project.name,
+        repoPath: project.repo_path,
+        totalConversations: conversations.length,
+        conversations: conversations.map((c) => ({
+          id: c.id,
+          title: c.title,
+          updatedAt: c.updated_at,
+          lastMessageAt: c.last_message_at,
+          modelProvider: c.model_provider,
+          modelId: c.model_id,
+          thinkingLevel: c.thinking_level,
+        })),
+      },
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: 'internal',
+        message: error instanceof Error ? error.message : String(error),
+      },
+    }
+  }
+}
+
+async function handleGetHiddenProjects(_payload: unknown): Promise<ExtensionHostCallResult> {
+  try {
+    const db = getDb()
+    const projects = listProjects(db)
+      .filter((p) => p.is_hidden === 1)
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+
+    return {
+      ok: true,
+      data: {
+        projects: projects.map((row) => ({
+          id: row.id,
+          name: row.name,
+          repoPath: row.repo_path,
+          repoName: row.repo_name,
+          isArchived: row.is_archived === 1,
+          isHidden: true,
+          icon: row.icon,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
+        total: projects.length,
+        note: 'These projects are hidden from the sidebar but still accessible.',
+      },
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: 'internal',
+        message: error instanceof Error ? error.message : String(error),
+      },
+    }
+  }
+}
+
+async function handleGetVisibleProjects(_payload: unknown): Promise<ExtensionHostCallResult> {
+  try {
+    const db = getDb()
+    const projects = listProjects(db)
+      .filter((p) => p.is_hidden === 0)
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+
+    return {
+      ok: true,
+      data: {
+        projects: projects.map((row) => ({
+          id: row.id,
+          name: row.name,
+          repoPath: row.repo_path,
+          repoName: row.repo_name,
+          isArchived: row.is_archived === 1,
+          isHidden: false,
+          icon: row.icon,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
+        total: projects.length,
+        note: 'These projects are currently visible in the sidebar.',
+      },
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: 'internal',
+        message: error instanceof Error ? error.message : String(error),
+      },
+    }
   }
 }

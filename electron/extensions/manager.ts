@@ -193,6 +193,22 @@ const BUILTIN_TPS_MONITOR_EXTENSION: Omit<ChatonsExtensionRegistryEntry, 'enable
   installSource: 'builtin',
 }
 
+const BUILTIN_EXTENSION_MANAGER_EXTENSION: Omit<ChatonsExtensionRegistryEntry, 'enabled' | 'health' | 'lastRunAt' | 'lastRunStatus' | 'lastError'> = {
+  id: '@chaton/extension-manager',
+  name: 'Extension Manager',
+  version: '1.0.0',
+  description: 'Manage Chatons extensions from the marketplace. Search, install, uninstall, and debug extensions with built-in tools.',
+  installSource: 'builtin',
+}
+
+const BUILTIN_PROJECTS_EXTENSION: Omit<ChatonsExtensionRegistryEntry, 'enabled' | 'health' | 'lastRunAt' | 'lastRunStatus' | 'lastError'> = {
+  id: '@chaton/projects',
+  name: 'Chatons Projects',
+  version: '1.0.0',
+  description: 'List and manage Chatons projects from conversations. View all projects including those hidden from the sidebar.',
+  installSource: 'builtin',
+}
+
 const installProcesses = new Map<string, ChildProcess>()
 const installStates = new Map<string, ChatonsExtensionInstallState>()
 
@@ -245,6 +261,16 @@ function defaultRegistry(): RegistryFile {
         enabled: true,
         health: 'ok',
       },
+      {
+        ...BUILTIN_EXTENSION_MANAGER_EXTENSION,
+        enabled: true,
+        health: 'ok',
+      },
+      {
+        ...BUILTIN_PROJECTS_EXTENSION,
+        enabled: true,
+        health: 'ok',
+      },
     ],
   }
 }
@@ -292,6 +318,20 @@ function safeReadRegistry(): RegistryFile {
         if (!existing.has(BUILTIN_TPS_MONITOR_EXTENSION.id)) {
           parsed.extensions.push({
             ...BUILTIN_TPS_MONITOR_EXTENSION,
+            enabled: true,
+            health: 'ok',
+          })
+        }
+        if (!existing.has(BUILTIN_EXTENSION_MANAGER_EXTENSION.id)) {
+          parsed.extensions.push({
+            ...BUILTIN_EXTENSION_MANAGER_EXTENSION,
+            enabled: true,
+            health: 'ok',
+          })
+        }
+        if (!existing.has(BUILTIN_PROJECTS_EXTENSION.id)) {
+          parsed.extensions.push({
+            ...BUILTIN_PROJECTS_EXTENSION,
             enabled: true,
             health: 'ok',
           })
@@ -676,6 +716,7 @@ function getRegistryEntryFromBuiltin(id: string): Omit<ChatonsExtensionRegistryE
   if (id === BUILTIN_MEMORY_EXTENSION.id) return BUILTIN_MEMORY_EXTENSION
   if (id === BUILTIN_BROWSER_EXTENSION.id) return BUILTIN_BROWSER_EXTENSION
   if (id === BUILTIN_TPS_MONITOR_EXTENSION.id) return BUILTIN_TPS_MONITOR_EXTENSION
+  if (id === BUILTIN_PROJECTS_EXTENSION.id) return BUILTIN_PROJECTS_EXTENSION
   return null
 }
 
@@ -1191,7 +1232,7 @@ export function toggleChatonsExtension(id: string, enabled: boolean) {
 }
 
 export function removeChatonsExtension(id: string) {
-  if (id === BUILTIN_AUTOMATION_EXTENSION.id || id === BUILTIN_MEMORY_EXTENSION.id || id === BUILTIN_BROWSER_EXTENSION.id) {
+  if (id === BUILTIN_AUTOMATION_EXTENSION.id || id === BUILTIN_MEMORY_EXTENSION.id || id === BUILTIN_BROWSER_EXTENSION.id || id === BUILTIN_TPS_MONITOR_EXTENSION.id || id === BUILTIN_EXTENSION_MANAGER_EXTENSION.id || id === BUILTIN_PROJECTS_EXTENSION.id) {
     return { ok: false as const, message: 'Builtin extension cannot be removed' }
   }
 

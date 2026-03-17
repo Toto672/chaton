@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -10,6 +10,7 @@ import { CollapsibleToolBlock, LiveToolTrace } from '@/components/shell/mainView
 import { useScrollShadow } from '@/hooks/useScrollShadow'
 import { useLinkSheet } from '@/hooks/useLinkSheetContext'
 import ClickableMessage from '@/components/ClickableMessage'
+import { VirtualHeightMessage, countWords } from '@/components/shell/mainView/VirtualHeightMessage'
 import {
   compactCommandLabel,
   dedupeToolCalls,
@@ -110,6 +111,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   const messageBodyRef = useRef<HTMLDivElement>(null)
   const isAssistantMessage = role === 'assistant'
   const renderedText = text || fallbackAssistantErrorText
+  const wordCount = useMemo(() => countWords(renderedText), [renderedText])
   const shouldThrottleMarkdownStreaming =
     isStreaming &&
     isAssistantMessage &&
@@ -455,17 +457,23 @@ export const ChatMessageItem = memo(function ChatMessageItem({
           </div>
         ) : null}
         {renderedText ? (
-          shouldUseLightweightStreamingText ? (
-            <TypewriterText text={renderedText} active={isStreaming} onLinkClick={setSelectedLink} />
-          ) : shouldThrottleMarkdownStreaming || hasMarkdownSyntax(renderedText) ? (
-            <div className="chat-markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {shouldThrottleMarkdownStreaming ? streamingMarkdownText : renderedText}
-              </ReactMarkdown>
-            </div>
-          ) : (
-            <ClickableMessage text={renderedText} onLinkClick={setSelectedLink} />
-          )
+          <VirtualHeightMessage
+            contentId={id}
+            wordCount={wordCount}
+            isStreaming={isStreaming}
+          >
+            {shouldUseLightweightStreamingText ? (
+              <TypewriterText text={renderedText} active={isStreaming} onLinkClick={setSelectedLink} />
+            ) : shouldThrottleMarkdownStreaming || hasMarkdownSyntax(renderedText) ? (
+              <div className="chat-markdown">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {shouldThrottleMarkdownStreaming ? streamingMarkdownText : renderedText}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <ClickableMessage text={renderedText} onLinkClick={setSelectedLink} />
+            )}
+          </VirtualHeightMessage>
         ) : null}
         {hasAssistantMeta && assistantMeta ? (
           <div className="chat-assistant-meta">

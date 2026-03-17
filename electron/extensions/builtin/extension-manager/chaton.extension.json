@@ -1,0 +1,182 @@
+{
+  "id": "@chaton/extension-manager",
+  "name": "Extension Manager",
+  "version": "1.0.0",
+  "description": "Manage Chatons extensions from the marketplace. Search, install, uninstall, and debug extensions with built-in tools.",
+  "capabilities": [
+    "llm.tools"
+  ],
+  "llm": {
+    "tools": [
+      {
+        "name": "extension.search_marketplace",
+        "label": "Search Extension Marketplace",
+        "description": "Search for extensions available on the Chatons marketplace. Find extensions by name, category, or keywords to install new functionality.",
+        "promptSnippet": "Search the extension marketplace for available extensions.",
+        "promptGuidelines": [
+          "Use this tool when the user wants to find new extensions to install.",
+          "Provide clear search terms like 'linear', 'calendar', 'telegram', etc.",
+          "The search will return matching extensions with their descriptions and install status."
+        ],
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Search query to find extensions by name, description, or keywords."
+            },
+            "category": {
+              "type": "string",
+              "description": "Filter by category like 'Channels', 'Productivity', 'Analytics', 'Tools', etc."
+            },
+            "limit": {
+              "type": "number",
+              "description": "Maximum number of results to return (default 20)."
+            }
+          }
+        }
+      },
+      {
+        "name": "extension.list_installed",
+        "label": "List Installed Extensions",
+        "description": "List all currently installed extensions with their status, version, and health information.",
+        "promptSnippet": "List all installed extensions.",
+        "promptGuidelines": [
+          "Use this tool when the user wants to see what extensions are currently installed.",
+          "This shows both enabled and disabled extensions."
+        ],
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "extension.install",
+        "label": "Install Extension",
+        "description": "Install an extension from the marketplace by its npm package name. Extensions are downloaded from npm and installed locally.",
+        "promptSnippet": "Install an extension from the marketplace.",
+        "promptGuidelines": [
+          "Use this tool when the user asks to install an extension.",
+          "Always provide the full npm package name (e.g., '@thibautrey/chatons-extension-linear').",
+          "Search the marketplace first if the user doesn't know the exact package name."
+        ],
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The npm package name of the extension to install (e.g., '@thibautrey/chatons-extension-linear')."
+            }
+          },
+          "required": ["id"]
+        }
+      },
+      {
+        "name": "extension.uninstall",
+        "label": "Uninstall Extension",
+        "description": "Remove an installed extension completely. This deletes the extension files and removes it from the registry.",
+        "promptSnippet": "Uninstall an extension.",
+        "promptGuidelines": [
+          "Use this tool when the user asks to remove or uninstall an extension.",
+          "Always provide the exact extension ID.",
+          "List installed extensions first if the user is unsure of the exact ID."
+        ],
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The ID of the extension to uninstall (e.g., '@thibautrey/chatons-extension-linear')."
+            }
+          },
+          "required": ["id"]
+        }
+      },
+      {
+        "name": "extension.get_logs",
+        "label": "Get Extension Logs",
+        "description": "Read the runtime and installation logs of an extension for debugging purposes. Useful when an extension is not working correctly.",
+        "promptSnippet": "Read extension logs for debugging.",
+        "promptGuidelines": [
+          "Use this tool when the user reports an extension is not working or showing errors.",
+          "Always provide the exact extension ID.",
+          "Logs include both runtime logs and installation logs if available."
+        ],
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The ID of the extension to get logs for."
+            },
+            "lines": {
+              "type": "number",
+              "description": "Maximum number of log lines to return (default 500)."
+            }
+          },
+          "required": ["id"]
+        }
+      },
+      {
+        "name": "extension.check_updates",
+        "label": "Check for Extension Updates",
+        "description": "Check if any installed extensions have updates available in the marketplace.",
+        "promptSnippet": "Check for available extension updates.",
+        "promptGuidelines": [
+          "Use this tool when the user wants to know if their extensions are up to date.",
+          "Returns a list of extensions that can be updated with their current and latest versions."
+        ],
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "extension.update",
+        "label": "Update Extension",
+        "description": "Update an installed extension to the latest version available in the marketplace.",
+        "promptSnippet": "Update an extension to the latest version.",
+        "promptGuidelines": [
+          "Use this tool when the user asks to update a specific extension.",
+          "Check for updates first if the user is unsure which extensions need updating.",
+          "Always provide the exact extension ID."
+        ],
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The ID of the extension to update."
+            }
+          },
+          "required": ["id"]
+        }
+      },
+      {
+        "name": "extension.toggle",
+        "label": "Enable/Disable Extension",
+        "description": "Enable or disable an installed extension without uninstalling it. Disabled extensions won't be loaded or show their UI.",
+        "promptSnippet": "Enable or disable an extension.",
+        "promptGuidelines": [
+          "Use this tool when the user wants to temporarily disable an extension without removing it.",
+          "Or when they want to re-enable a previously disabled extension.",
+          "Always provide the exact extension ID and the desired state (true for enabled, false for disabled)."
+        ],
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The ID of the extension to enable or disable."
+            },
+            "enabled": {
+              "type": "boolean",
+              "description": "true to enable the extension, false to disable it."
+            }
+          },
+          "required": ["id", "enabled"]
+        }
+      }
+    ]
+  }
+}

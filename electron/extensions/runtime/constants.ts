@@ -12,6 +12,8 @@ export const BUILTIN_MEMORY_ID = '@chaton/memory'
 export const BUILTIN_BROWSER_ID = '@chaton/browser'
 export const BUILTIN_IDE_LAUNCHER_ID = '@chaton/ide-launcher'
 export const BUILTIN_TPS_MONITOR_ID = '@chaton/tps-monitor'
+export const BUILTIN_EXTENSION_MANAGER_ID = '@chaton/extension-manager'
+export const BUILTIN_PROJECTS_ID = '@chaton/projects'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 export const BUILTIN_AUTOMATION_DIR = path.join(__dirname, '..', 'builtin', 'automation')
@@ -19,6 +21,8 @@ export const BUILTIN_MEMORY_DIR = path.join(__dirname, '..', 'builtin', 'memory'
 export const BUILTIN_BROWSER_DIR = path.join(__dirname, '..', 'builtin', 'browser')
 export const BUILTIN_IDE_LAUNCHER_DIR = path.join(__dirname, '..', 'builtin', 'ide-launcher')
 export const BUILTIN_TPS_MONITOR_DIR = path.join(__dirname, '..', 'builtin', 'tps-monitor')
+export const BUILTIN_EXTENSION_MANAGER_DIR = path.join(__dirname, '..', 'builtin', 'extension-manager')
+export const BUILTIN_PROJECTS_DIR = path.join(__dirname, '..', 'builtin', 'projects')
 export const AUTOMATION_TRIGGER_TOPICS = [
   'conversation.created',
   'conversation.message.received',
@@ -138,6 +142,88 @@ export const AUTOMATION_MANIFEST: ExtensionManifest = {
           properties: {
             limit: { type: 'number', description: 'Optional max number of rules.' },
           },
+        },
+      },
+    ],
+  },
+}
+
+export const PROJECTS_MANIFEST: ExtensionManifest = {
+  id: BUILTIN_PROJECTS_ID,
+  name: 'Chatons Projects',
+  version: '1.0.0',
+  capabilities: ['llm.tools', 'host.projects.read', 'host.conversations.read'],
+  apis: {
+    exposes: [
+      { name: 'projects.list', version: '1.0.0' },
+      { name: 'projects.get', version: '1.0.0' },
+      { name: 'projects.get_conversations', version: '1.0.0' },
+    ],
+  },
+  llm: {
+    tools: [
+      {
+        name: 'chatons_list_projects',
+        label: 'List Chatons projects',
+        description: 'List all projects in Chatons, including those hidden from the sidebar. Optionally filter by archived status.',
+        promptSnippet: 'List all Chatons projects.',
+        promptGuidelines: [
+          'Use this tool to see all projects in the workspace, including hidden ones.',
+          'By default, only active (non-archived) projects are returned.',
+          'Set includeArchived to true to see archived projects as well.',
+        ],
+        parameters: {
+          type: 'object',
+          properties: {
+            includeArchived: { type: 'boolean', description: 'Include archived projects in the results (default: false).' },
+            limit: { type: 'number', description: 'Maximum number of projects to return (default: all).' },
+          },
+        },
+      },
+      {
+        name: 'chatons_get_project',
+        label: 'Get Chatons project details',
+        description: 'Get detailed information about a specific Chatons project by its ID.',
+        promptSnippet: 'Get details of a specific Chatons project.',
+        parameters: {
+          type: 'object',
+          properties: {
+            projectId: { type: 'string', description: 'The project ID (UUID).' },
+          },
+          required: ['projectId'],
+        },
+      },
+      {
+        name: 'chatons_get_project_conversations',
+        label: 'Get project conversations',
+        description: 'List all conversations belonging to a specific project.',
+        promptSnippet: 'List conversations for a project.',
+        parameters: {
+          type: 'object',
+          properties: {
+            projectId: { type: 'string', description: 'The project ID (UUID).' },
+          },
+          required: ['projectId'],
+        },
+      },
+      {
+        name: 'chatons_get_hidden_projects',
+        label: 'Get hidden projects',
+        description: 'Get only the projects that are hidden from the sidebar.',
+        promptSnippet: 'Show me hidden projects.',
+        parameters: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'chatons_get_visible_projects',
+        label: 'Get visible projects',
+        description: 'Get only the projects that are visible in the sidebar (not hidden).',
+        promptSnippet: 'Show me visible projects.',
+        parameters: {
+          type: 'object',
+          properties: {},
         },
       },
     ],

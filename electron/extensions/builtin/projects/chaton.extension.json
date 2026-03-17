@@ -1,0 +1,94 @@
+{
+  "id": "@chaton/projects",
+  "name": "Chatons Projects",
+  "version": "1.0.0",
+  "description": "List and manage Chatons projects from conversations. View all projects including those hidden from the sidebar.",
+  "capabilities": ["llm.tools", "host.projects.read", "host.conversations.read"],
+  "apis": {
+    "exposes": [
+      { "name": "projects.list", "version": "1.0.0" },
+      { "name": "projects.get", "version": "1.0.0" },
+      { "name": "projects.get_conversations", "version": "1.0.0" }
+    ]
+  },
+  "llm": {
+    "tools": [
+      {
+        "name": "chatons_list_projects",
+        "label": "List Chatons projects",
+        "description": "List all projects in Chatons, including those hidden from the sidebar. Optionally filter by archived status.",
+        "promptSnippet": "List all Chatons projects.",
+        "promptGuidelines": [
+          "Use this tool to see all projects in the workspace, including hidden ones.",
+          "By default, only active (non-archived) projects are returned.",
+          "Set includeArchived to true to see archived projects as well."
+        ],
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "includeArchived": {
+              "type": "boolean",
+              "description": "Include archived projects in the results (default: false)."
+            },
+            "limit": {
+              "type": "number",
+              "description": "Maximum number of projects to return (default: all)."
+            }
+          }
+        }
+      },
+      {
+        "name": "chatons_get_project",
+        "label": "Get Chatons project details",
+        "description": "Get detailed information about a specific Chatons project by its ID.",
+        "promptSnippet": "Get details of a specific Chatons project.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "projectId": {
+              "type": "string",
+              "description": "The project ID (UUID)."
+            }
+          },
+          "required": ["projectId"]
+        }
+      },
+      {
+        "name": "chatons_get_project_conversations",
+        "label": "Get project conversations",
+        "description": "List all conversations belonging to a specific project.",
+        "promptSnippet": "List conversations for a project.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "projectId": {
+              "type": "string",
+              "description": "The project ID (UUID)."
+            }
+          },
+          "required": ["projectId"]
+        }
+      },
+      {
+        "name": "chatons_get_hidden_projects",
+        "label": "Get hidden projects",
+        "description": "Get only the projects that are hidden from the sidebar.",
+        "promptSnippet": "Show me hidden projects.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "chatons_get_visible_projects",
+        "label": "Get visible projects",
+        "description": "Get only the projects that are visible in the sidebar (not hidden).",
+        "promptSnippet": "Show me visible projects.",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ]
+  }
+}
