@@ -242,6 +242,27 @@ function isEmptyRecord(value: JsonValue | undefined): boolean {
   return isPlainRecord(value) && Object.keys(value).length === 0
 }
 
+/**
+ * Check if a project is visible in the sidebar based on current settings
+ */
+function isProjectVisible(projectId: string | null, projects: Project[]): boolean {
+  if (projectId === null) {
+    return true // Global conversations are always visible
+  }
+  
+  const project = projects.find(p => p.id === projectId)
+  if (!project) {
+    return false
+  }
+  
+  // Check if project is archived or hidden
+  if (project.isArchived || project.isHidden) {
+    return false
+  }
+  
+  return true
+}
+
 // Extract all toolCallIds from a message's content array
 function getToolCallIdsFromMessage(message: JsonValue): string[] {
   if (!isPlainRecord(message)) return []
@@ -462,9 +483,27 @@ export function reducer(state: WorkspaceState, action: Action): WorkspaceState {
       const selectedConversationId = state.selectedConversationId === action.payload.conversationId ? null : state.selectedConversationId
       const selectedStillExists =
         selectedConversationId !== null && nextConversations.some((conversation) => conversation.id === selectedConversationId)
+      
+      // Try to find a fallback conversation, prioritizing visible projects
       const fallbackConversation = selectedStillExists
         ? nextConversations.find((conversation) => conversation.id === selectedConversationId) ?? null
-        : nextConversations.find((conversation) => conversation.projectId === state.selectedProjectId) ?? nextConversations[0] ?? null
+        : (() => {
+            // First try to find a conversation from the same project if it's visible
+            const sameProjectConversation = nextConversations.find((conversation) => conversation.projectId === state.selectedProjectId)
+            if (sameProjectConversation && isProjectVisible(state.selectedProjectId, state.projects)) {
+              return sameProjectConversation
+            }
+            
+            // If the current project is not visible, find the first conversation from any visible project
+            for (const conversation of nextConversations) {
+              if (isProjectVisible(conversation.projectId, state.projects)) {
+                return conversation
+              }
+            }
+            
+            // If no visible projects have conversations, fall back to any conversation
+            return nextConversations[0] ?? null
+          })()
 
       // Pi state cleanup handled by piReducer
       return {
@@ -489,9 +528,27 @@ export function reducer(state: WorkspaceState, action: Action): WorkspaceState {
       const selectedConversationId = state.selectedConversationId === action.payload.conversationId ? null : state.selectedConversationId
       const selectedStillExists =
         selectedConversationId !== null && visibleConversations.some((conversation) => conversation.id === selectedConversationId)
+      
+      // Try to find a fallback conversation, prioritizing visible projects
       const fallbackConversation = selectedStillExists
         ? visibleConversations.find((conversation) => conversation.id === selectedConversationId) ?? null
-        : visibleConversations.find((conversation) => conversation.projectId === state.selectedProjectId) ?? visibleConversations[0] ?? null
+        : (() => {
+            // First try to find a conversation from the same project if it's visible
+            const sameProjectConversation = visibleConversations.find((conversation) => conversation.projectId === state.selectedProjectId)
+            if (sameProjectConversation && isProjectVisible(state.selectedProjectId, state.projects)) {
+              return sameProjectConversation
+            }
+            
+            // If the current project is not visible, find the first conversation from any visible project
+            for (const conversation of visibleConversations) {
+              if (isProjectVisible(conversation.projectId, state.projects)) {
+                return conversation
+              }
+            }
+            
+            // If no visible projects have conversations, fall back to any conversation
+            return visibleConversations[0] ?? null
+          })()
 
       return {
         ...state,

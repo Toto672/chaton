@@ -4,6 +4,7 @@ import type { ImageContent, FileContent } from "@/features/workspace/rpc";
 import { usePiStore } from "@/features/workspace/store/pi-store";
 import { workspaceIpc } from "@/services/ipc/workspace";
 import { useNotifications } from "@/features/notifications/NotificationContext";
+import { useMessageExpansion } from "@/hooks/useMessageExpansionContext";
 
 import { buildMessageWithAttachments } from "./attachments";
 import { parseModelKey, saveGlobalModel } from "./models";
@@ -253,6 +254,7 @@ export function useComposerMessaging({
     };
   }, [composerKey, fileAttenteMessagesByKey]);
 
+  const { collapseAllMessages } = useMessageExpansion()
   const envoyerMessage = useCallback(
     async (messageATraiter: string, piecesJointes: PendingAttachment[] = []) => {
       let conversationId = selectedConversationId;
@@ -303,6 +305,10 @@ export function useComposerMessaging({
       const messageFinal = buildMessageWithAttachments(messageATraiter, piecesJointes);
       await sendPiPrompt({ conversationId: conversationId!, message: messageFinal, images, files });
       saveGlobalModel(selectedModelKey);
+      
+      // Collapse all expanded messages after sending a new message
+      collapseAllMessages();
+      
       return true;
     },
     [

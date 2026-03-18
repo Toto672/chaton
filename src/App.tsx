@@ -1,6 +1,7 @@
 import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from 'react'
 import type { SyntheticEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+import { MessageExpansionProvider } from '@/hooks/useMessageExpansionContext'
 
 import { Sidebar } from '@/components/sidebar/Sidebar'
 import { BackgroundChannelExtensions } from '@/components/extensions/BackgroundChannelExtensions'
@@ -112,9 +113,12 @@ function AppShell() {
     if (isLoading || hasHydratedSidebarWidthRef.current) {
       return
     }
-    setSidebarWidth(clamp(state.settings.sidebarWidth, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH))
+    const clampedWidth = clamp(state.settings.sidebarWidth, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+    if (sidebarWidth !== clampedWidth) {
+      setSidebarWidth(clampedWidth)
+    }
     hasHydratedSidebarWidthRef.current = true
-  }, [isLoading, state.settings.sidebarWidth])
+  }, [isLoading, state.settings.sidebarWidth, sidebarWidth])
 
   useEffect(() => {
     if (!isResizing) {
@@ -273,8 +277,10 @@ function AppShell() {
           ) : (
             <>
               {state.sidebarMode === 'skills' || state.sidebarMode === 'extensions' || state.sidebarMode === 'extension-main-view' ? null : <Topbar />}
-              <MainView />
-              {state.sidebarMode === 'skills' || state.sidebarMode === 'extensions' || state.sidebarMode === 'extension-main-view' ? null : <Composer />}
+              <MessageExpansionProvider>
+                <MainView />
+                {state.sidebarMode === 'skills' || state.sidebarMode === 'extensions' || state.sidebarMode === 'extension-main-view' ? null : <Composer />}
+              </MessageExpansionProvider>
             </>
           )}
         </main>

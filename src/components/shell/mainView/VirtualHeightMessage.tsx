@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useMessageExpansion } from '@/hooks/useMessageExpansionContext'
 
 const MAX_PREVIEW_HEIGHT_PX = 320
 const HEIGHT_CHECK_DEBOUNCE_MS = 100
@@ -25,6 +26,7 @@ export function VirtualHeightMessage({
   isStreaming = false,
 }: VirtualHeightMessageProps) {
   const { t } = useTranslation()
+  const { registerMessage, unregisterMessage } = useMessageExpansion()
   const contentRef = useRef<HTMLDivElement>(null)
   const [isExpanded, setIsExpanded] = useState(false)
   const [shouldShowExpand, setShouldShowExpand] = useState(false)
@@ -37,6 +39,21 @@ export function VirtualHeightMessage({
   useEffect(() => {
     isExpandedRef.current = isExpanded
   }, [isExpanded])
+
+  // Register collapse callback with context
+  useEffect(() => {
+    const collapseCallback = () => {
+      if (isExpanded && !userManuallySetExpanded.current) {
+        setIsExpanded(false)
+      }
+    }
+    
+    registerMessage(contentId, collapseCallback)
+    
+    return () => {
+      unregisterMessage(contentId)
+    }
+  }, [contentId, isExpanded, registerMessage, unregisterMessage])
 
   // Calculate how much content is hidden
   const hiddenInfo = useMemo(() => {
