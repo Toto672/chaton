@@ -106,7 +106,8 @@ import electron from "electron";
 import fs from "node:fs";
 import { getDb } from "../db/index.js";
 import { getSentryTelemetry } from "../lib/telemetry/sentry.js";
-import { getOAuthProvider } from "@mariozechner/pi-ai";
+import { OAuthProvider } from "@mariozechner/pi-ai";
+import { getOAuthProvider } from "@mariozechner/pi-ai/oauth";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -1299,7 +1300,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
 
     try {
       const credentials = await provider.login({
-        onAuth: ({ url, instructions }) => {
+        onAuth: ({ url, instructions }: { url: string; instructions?: string }) => {
           shell.openExternal(url);
           event.sender.send("pi:oauthEvent", {
             type: "auth",
@@ -1307,7 +1308,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
             instructions,
           });
         },
-        onPrompt: ({ message, placeholder, allowEmpty }) => {
+        onPrompt: ({ message, placeholder, allowEmpty }: { message: string; placeholder?: string; allowEmpty?: boolean }) => {
           return new Promise<string>((resolve, reject) => {
             promptResolve = resolve;
             promptReject = reject;

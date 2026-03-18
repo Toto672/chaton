@@ -173,10 +173,10 @@ function spawnWorker(
       },
     );
 
-    worker.on("error", (err) => {
+    worker.on("error", (err: unknown) => {
       appendExtensionLog(extensionId, "error", "sandbox.worker_error", {
-        message: err.message,
-        stack: err.stack,
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
       });
       // Reject all pending calls
       for (const [id, pending] of entry.pendingCalls) {
@@ -185,7 +185,7 @@ function spawnWorker(
           ok: false,
           error: {
             code: "internal",
-            message: `Worker crashed: ${err.message}`,
+            message: `Worker crashed: ${err instanceof Error ? err.message : String(err)}`,
           },
         });
       }
