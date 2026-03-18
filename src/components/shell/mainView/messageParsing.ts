@@ -413,6 +413,27 @@ function getToolCallGroupKey(block: Extract<ToolBlock, { kind: 'toolCall' }>): s
     return summary.trim()
   }
 
+  // Group similar bash commands together (e.g., multiple find commands)
+  if (block.name === 'bash') {
+    const bashCmd = summary.replace(/^bash\s+/, '').trim()
+    const commandName = bashCmd.split(/\s+/)[0]
+    
+    // Group find commands by their base pattern (find with different paths)
+    if (commandName === 'find') {
+      return 'find'
+    }
+    
+    // Group grep/rg commands  
+    if (commandName === 'grep' || commandName === 'rg') {
+      return commandName
+    }
+    
+    // Group ls commands
+    if (commandName === 'ls') {
+      return 'ls'
+    }
+  }
+
   return null
 }
 

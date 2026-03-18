@@ -169,7 +169,7 @@
   }
 
   .chat-tool-details {
-    @apply w-full min-w-0 rounded-lg border border-transparent;
+    @apply w-full min-w-0 rounded-lg border-0;
   }
 
   .chat-tool-details-animating {
