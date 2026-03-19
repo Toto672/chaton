@@ -3,6 +3,7 @@ import { X, Check, AlertTriangle, Info, AlertCircle, ExternalLink, LinkIcon } fr
 import { useState } from 'react'
 import { handleDeeplink } from './deeplink-handler'
 import { NotificationUrlViewer } from './NotificationUrlViewer'
+import { NotificationMarkdown } from './NotificationMarkdown'
 
 export function GlobalNotificationDisplay() {
   const { notifications, removeNotification } = useNotifications()
@@ -35,6 +36,29 @@ export function GlobalNotificationDisplay() {
       default:
         return 'notification-info'
     }
+  }
+
+  // Detect if text contains markdown syntax
+  const hasMarkdownSyntax = (text: string): boolean => {
+    const markdownPatterns = [
+      /\*\*.*?\*\*/, // bold
+      /_.*?_/, // italic
+      /`[^`]+`/, // inline code
+      /\n\* /, // list items
+      /\n- /, // list items
+      /\n\d\. /, // numbered lists
+      /\n#{1,6} /, // headings
+      /\n\n/, // paragraphs
+      /\[.*?\]\(.*?\)/, // links
+      /!\\[.*?\\]\(.*?\)/, // images
+      /\n---\n/, // horizontal rule
+      /\n___\n/, // horizontal rule
+      /\n\*\*\*\n/, // horizontal rule
+      /\n```/, // code blocks
+      /\n> /, // blockquotes
+    ]
+    
+    return markdownPatterns.some(pattern => pattern.test(text))
   }
 
   const handleClose = (id: string) => {
@@ -81,7 +105,13 @@ export function GlobalNotificationDisplay() {
                 {getIcon(notification.type)}
               </div>
               <div className="notification-content">
-                <div className="notification-message">{notification.message}</div>
+                {hasMarkdownSyntax(notification.message) ? (
+                  <NotificationMarkdown className="notification-message">
+                    {notification.message}
+                  </NotificationMarkdown>
+                ) : (
+                  <div className="notification-message">{notification.message}</div>
+                )}
                 {notification.link && (
                   <button
                     className="notification-link-button"

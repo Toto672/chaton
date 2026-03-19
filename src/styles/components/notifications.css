@@ -81,6 +81,118 @@
   display: block;
 }
 
+/* Markdown rendering in notifications */
+.notification-markdown {
+  display: block;
+  width: 100%;
+}
+
+.notification-markdown p {
+  margin: 0 0 8px 0;
+  line-height: 1.5;
+}
+
+.notification-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.notification-markdown strong, .notification-markdown b {
+  font-weight: 600;
+  color: inherit;
+}
+
+.notification-markdown em, .notification-markdown i {
+  font-style: italic;
+}
+
+.notification-markdown code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
+.notification-markdown pre {
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.notification-markdown pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.notification-markdown a {
+  color: #3d6b99;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.notification-markdown a:hover {
+  color: #2d5282;
+}
+
+.notification-markdown ul, .notification-markdown ol {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.notification-markdown li {
+  margin: 4px 0;
+}
+
+.notification-markdown blockquote {
+  border-left: 3px solid rgba(0, 0, 0, 0.1);
+  padding-left: 12px;
+  margin-left: 4px;
+  color: rgba(0, 0, 0, 0.7);
+  font-style: italic;
+}
+
+.notification-markdown hr {
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  margin: 12px 0;
+}
+
+/* Dark mode markdown styles */
+@media (prefers-color-scheme: dark) {
+  .notification-markdown code {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .notification-markdown pre {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .notification-markdown a {
+    color: #60a5fa;
+  }
+
+  .notification-markdown a:hover {
+    color: #7fb3ff;
+  }
+
+  .notification-markdown blockquote {
+    border-left-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .notification-markdown hr {
+    border-top-color: rgba(255, 255, 255, 0.15);
+  }
+}
+
 .notification-link-button {
   display: inline-flex;
   align-items: center;
