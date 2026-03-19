@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { X, Copy, Trash2, FileText, Search, Filter, Download, ChevronDown, ChevronUp } from 'lucide-react'
 
 type LogEntry = {
-  id: string
+  id?: string
   timestamp: string
   source: 'electron' | 'pi' | 'frontend'
   level: 'info' | 'warn' | 'error' | 'debug'
@@ -40,6 +40,31 @@ export function LogConsole({ isOpen, onClose }: LogConsoleProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const [logFilePath, setLogFilePath] = useState('')
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
+
+  const applyFilters = useCallback(() => {
+    let result = [...logs]
+
+    // Filtre par niveau
+    if (filterLevel !== 'all') {
+      result = result.filter(log => log.level === filterLevel)
+    }
+
+    // Filtre par source
+    if (filterSource !== 'all') {
+      result = result.filter(log => log.source === filterSource)
+    }
+
+    // Filtre par recherche
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase()
+      result = result.filter(log =>
+        log.message.toLowerCase().includes(searchLower) ||
+        (log.data && JSON.stringify(log.data).toLowerCase().includes(searchLower))
+      )
+    }
+
+    setFilteredLogs(result)
+  }, [logs, filterLevel, filterSource, searchTerm])
 
   useEffect(() => {
     if (isOpen) {
@@ -116,31 +141,6 @@ export function LogConsole({ isOpen, onClose }: LogConsoleProps) {
       console.error('Erreur lors de la récupération du chemin du fichier de log:', error)
     }
   }
-
-  const applyFilters = useCallback(() => {
-    let result = [...logs]
-    
-    // Filtre par niveau
-    if (filterLevel !== 'all') {
-      result = result.filter(log => log.level === filterLevel)
-    }
-    
-    // Filtre par source
-    if (filterSource !== 'all') {
-      result = result.filter(log => log.source === filterSource)
-    }
-    
-    // Filtre par recherche
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase()
-      result = result.filter(log => 
-        log.message.toLowerCase().includes(searchLower) ||
-        (log.data && JSON.stringify(log.data).toLowerCase().includes(searchLower))
-      )
-    }
-    
-    setFilteredLogs(result)
-  }, [logs, filterLevel, filterSource, searchTerm])
 
   const clearLogs = async () => {
     if (window.logger) {
@@ -318,7 +318,7 @@ export function LogConsole({ isOpen, onClose }: LogConsoleProps) {
                           {log.source.toUpperCase()}
                         </span>
                         <span className={`log-console-message flex-1 font-medium ${getLogLevelColor(log.level)}`}>
-                          {log.message}
+                          {String(log.message)}
                         </span>
                         {log.data && (
                           <Button
@@ -339,7 +339,7 @@ export function LogConsole({ isOpen, onClose }: LogConsoleProps) {
                       {isExpanded && log.data && (
                         <div className="log-console-details ml-[136px] mt-1 rounded border p-3 bg-muted/50">
                           <pre className="text-xs font-mono whitespace-pre-wrap break-all">
-                            {JSON.stringify(log.data, null, 2)}
+                            {String(JSON.stringify(log.data, null, 2))}
                           </pre>
                         </div>
                       )}

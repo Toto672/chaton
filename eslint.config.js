@@ -12,6 +12,7 @@ export default defineConfig([
     'docs/.next',
     'docs/.source',
     'docs/app',
+    'extension-registry',
     'landing',
     'node_modules',
     'electron',
