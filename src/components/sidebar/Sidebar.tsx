@@ -4,6 +4,7 @@ import { ConversationRow } from '@/components/sidebar/ConversationRow'
 import { SettingsSidebar } from '@/components/sidebar/settings/SettingsSidebar'
 import { SidebarHeaderActions } from '@/components/sidebar/SidebarHeaderActions'
 import { SidebarModeSwitcher } from '@/components/sidebar/SidebarModeSwitcher'
+import { ToolCallDisplayModeSwitcher } from '@/components/sidebar/ToolCallDisplayModeSwitcher'
 import { ProjectGroup } from '@/components/sidebar/ProjectGroup'
 import { ProjectFolder } from '@/components/sidebar/ProjectFolder'
 import { UpdateButton } from '@/components/sidebar/UpdateButton'
@@ -300,6 +301,7 @@ export function Sidebar({ width }: { width: number }) {
 
       <div className="border-t border-[#dcdddf] dark:border-[#1e2634] px-3 py-3 space-y-2">
         <UpdateButton />
+        <ToolCallDisplayModeSwitcher />
         <SidebarModeSwitcher />
         <button type="button" className="sidebar-item text-[#45464d]" onClick={openSettings}>
           <Settings className="h-4 w-4" />

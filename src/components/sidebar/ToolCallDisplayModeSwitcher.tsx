@@ -1,0 +1,44 @@
+import { List, Minus, AlignJustify } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+
+import { useWorkspace } from '@/features/workspace/store'
+import type { ToolCallDisplayMode } from '@/features/workspace/types'
+
+const MODES: Array<{ value: ToolCallDisplayMode; icon: React.ReactNode; labelKey: string }> = [
+  { value: 'verbose', icon: <List className="h-3 w-3" />, labelKey: 'Verbose' },
+  { value: 'light', icon: <Minus className="h-3 w-3" />, labelKey: 'Light' },
+  { value: 'quiet', icon: <AlignJustify className="h-3 w-3" />, labelKey: 'Quiet' },
+]
+
+export function ToolCallDisplayModeSwitcher() {
+  const { t } = useTranslation()
+  const { state, updateSettings } = useWorkspace()
+  const currentMode = state.settings.toolCallDisplayMode
+
+  const handleModeChange = async (mode: ToolCallDisplayMode) => {
+    if (mode === currentMode) return
+    await updateSettings({
+      ...state.settings,
+      toolCallDisplayMode: mode,
+    })
+  }
+
+  return (
+    <div className="tool-call-display-mode-switcher" role="radiogroup" aria-label={t('Affichage des appels d\'outils')}>
+      {MODES.map((mode) => (
+        <button
+          key={mode.value}
+          type="button"
+          role="radio"
+          aria-checked={currentMode === mode.value}
+          className={`tool-call-mode-segment ${currentMode === mode.value ? 'tool-call-mode-segment-active' : ''}`}
+          onClick={() => handleModeChange(mode.value)}
+          title={t(`toolCallDisplayMode.${mode.value}.description`)}
+        >
+          {mode.icon}
+          <span>{t(mode.labelKey)}</span>
+        </button>
+      ))}
+    </div>
+  )
+}

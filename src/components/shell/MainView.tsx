@@ -610,6 +610,7 @@ export function MainView() {
                   message={message}
                   isStreaming={isStreaming}
                   showAssistantStats={state.settings.showAssistantStats}
+                  toolCallDisplayMode={state.settings.toolCallDisplayMode}
                   nowMs={nowMs}
                   toolResultStatusByCallId={toolResultStatusByCallId}
                   toolCallTimingById={toolCallTimingById}

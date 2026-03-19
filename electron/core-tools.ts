@@ -8,6 +8,8 @@
 
 import { Type } from "@sinclair/typebox";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
+import { ModelRegistry, SettingsManager } from "@mariozechner/pi-coding-agent";
+import type { Api, Model } from "@mariozechner/pi-ai";
 import { getDb } from "./db/index.js";
 import { findConversationById } from "./db/repos/conversations.js";
 import { piSessionRuntimeManager } from "./pi-runtime-singleton.js";
@@ -49,10 +51,14 @@ function errorResult(message: string) {
  *
  * @param conversationId - the owning conversation
  * @param emitUiRequest  - bound reference to PiSdkRuntime.emitExtensionUiRequest
+ * @param settingsManager - Pi settings manager for accessing scoped models
+ * @param modelRegistry  - Pi model registry for accessing providers and models
  */
 export function createCoreTools(
   conversationId: string,
   emitUiRequest: EmitUiRequest,
+  settingsManager?: SettingsManager,
+  modelRegistry?: ModelRegistry,
 ): ToolDefinition[] {
   // ---- create_task_list ----
   const createTaskList: ToolDefinition = {
@@ -1007,6 +1013,150 @@ export function createCoreTools(
     },
   };
 
+  // ---- list_providers ----
+  const listProviders: ToolDefinition = {
+    name: "list_providers",
+    label: "List providers",
+    description:
+      "List all providers, their models, and scoped models. Returns structured data about available models grouped by provider, plus information about which models are currently scoped (enabled for selection).",
+    parameters: Type.Object({
+      filter: Type.Optional(
+        Type.Union([
+          Type.Literal("all"),
+          Type.Literal("scoped"),
+          Type.Literal("available"),
+        ]),
+      ),
+    }),
+    execute: async (
+      _toolCallId: string,
+      params: { filter?: "all" | "scoped" | "available" },
+    ) => {
+      const filterMode = params.filter ?? "all";
+
+      // Get enabled models (scoped) from settings
+      const enabledModelKeys = new Set(
+        settingsManager?.getEnabledModels() ?? [],
+      );
+
+      // Get all models from registry
+      const allModels = modelRegistry?.getAll() ?? [];
+      const availableModels = modelRegistry?.getAvailable() ?? [];
+
+      // Build provider -> models mapping
+      type ModelInfo = {
+        id: string;
+        name: string;
+        key: string;
+        scoped: boolean;
+        available: boolean;
+        reasoning: boolean;
+        input: string[];
+        contextWindow: number;
+        maxTokens: number;
+        cost: {
+          input: number;
+          output: number;
+          cacheRead: number;
+          cacheWrite: number;
+        };
+      };
+
+      type ProviderInfo = {
+        id: string;
+        models: ModelInfo[];
+        scopedCount: number;
+        availableCount: number;
+      };
+
+      const providerMap = new Map<string, ProviderInfo>();
+
+      const addModelToProvider = (model: Model<Api>) => {
+        const provider = model.provider as string;
+        const modelKey = `${provider}/${model.id}`;
+        const isScoped = enabledModelKeys.has(modelKey);
+        const isAvailable = availableModels.some(
+          (m) => m.provider === model.provider && m.id === model.id,
+        );
+
+        if (!providerMap.has(provider)) {
+          providerMap.set(provider, {
+            id: provider,
+            models: [],
+            scopedCount: 0,
+            availableCount: 0,
+          });
+        }
+
+        const providerInfo = providerMap.get(provider)!;
+        providerInfo.models.push({
+          id: model.id,
+          name: model.name,
+          key: modelKey,
+          scoped: isScoped,
+          available: isAvailable,
+          reasoning: model.reasoning,
+          input: model.input as string[],
+          contextWindow: model.contextWindow,
+          maxTokens: model.maxTokens,
+          cost: model.cost,
+        });
+
+        if (isScoped) providerInfo.scopedCount++;
+        if (isAvailable) providerInfo.availableCount++;
+      };
+
+      // Add all models
+      for (const model of allModels) {
+        addModelToProvider(model);
+      }
+
+      // Convert to array and sort
+      let providers = Array.from(providerMap.values()).sort((a, b) =>
+        a.id.localeCompare(b.id),
+      );
+
+      // Sort models within each provider
+      for (const provider of providers) {
+        provider.models.sort((a, b) => a.id.localeCompare(b.id));
+      }
+
+      // Apply filter
+      if (filterMode === "scoped") {
+        providers = providers
+          .map((p) => ({
+            ...p,
+            models: p.models.filter((m) => m.scoped),
+          }))
+          .filter((p) => p.models.length > 0);
+      } else if (filterMode === "available") {
+        providers = providers
+          .map((p) => ({
+            ...p,
+            models: p.models.filter((m) => m.available),
+          }))
+          .filter((p) => p.models.length > 0);
+      }
+
+      // Compute summary statistics
+      const totalModels = allModels.length;
+      const totalScoped = enabledModelKeys.size;
+      const totalAvailable = availableModels.length;
+      const totalProviders = providers.length;
+
+      return textResult({
+        filter: filterMode,
+        summary: {
+          totalProviders,
+          totalModels,
+          totalScoped,
+          totalAvailable,
+        },
+        providers,
+      });
+    },
+  };
+
   return [
     createTaskList,
     updateTaskStatus,
@@ -1024,6 +1174,7 @@ export function createCoreTools(
     runSubagents,
     getAccessMode,
     getCommands,
+    listProviders,
   ];
 }
 
@@ -1045,4 +1196,5 @@ export const CORE_TOOL_NAMES = new Set([
   "run_subagents",
   "get_access_mode",
   "get_commands",
+  "list_providers",
 ]);

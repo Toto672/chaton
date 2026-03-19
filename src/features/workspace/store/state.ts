@@ -67,6 +67,7 @@ export const defaultSettings: SidebarSettings = {
   sortBy: 'updated',
   show: 'all',
   showAssistantStats: false,
+  toolCallDisplayMode: 'light',
   searchQuery: '',
   isSearchVisible: false,
   collapsedProjectIds: [],

@@ -871,6 +871,13 @@
         ) +
         12px
     );
+    /* Hide scrollbar visually while keeping scroll functionality */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+  }
+
+  .main-scroll::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/Opera */
   }
 
   .extension-main-scroll {

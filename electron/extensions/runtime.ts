@@ -10,6 +10,7 @@ import { getExtensionMainViewHtml } from './runtime/html.js'
 import { asRecord } from './runtime/helpers.js'
 import { browserBack, browserClick, browserClose, browserForward, browserList, browserNavigate, browserOpen, browserPress, browserReload, browserSnapshot, browserType, browserWait, closeAllBrowserSessions } from './runtime/browser.js'
 import { memoryDelete, memoryGet, memoryList, memorySearch, memoryUpdate, memoryUpsert } from './runtime/memory.js'
+import { chatonsGetHiddenProjects, chatonsGetProject, chatonsGetProjectConversations, chatonsGetVisibleProjects, chatonsListProjects, chatonsUpdateProjectVisibility } from './runtime/projects.js'
 import { publishExtensionEvent, queueAck, queueConsume, queueEnqueue, queueListDeadLetters, queueNack } from './runtime/queue.js'
 import { configureRegistryRuntime, enrichExtensionsWithRuntimeFields, getBuiltinAutomationExtensionId, getExtensionManifest, getExtensionRuntimeHealth as getRegistryRuntimeHealth, initializeExtensionsRuntime as initializeRegistry, listExtensionManifests, listRegisteredExtensionUi, loadExtensionManifestIntoRegistry } from './runtime/registry.js'
 import { registerExtensionServer, ensureExtensionServerStarted } from './runtime/server.js'
@@ -312,6 +313,16 @@ export function extensionsCall(
     if (apiName === 'browser.wait') return browserWait(payload)
     if (apiName === 'browser.close') return browserClose(payload)
     if (apiName === 'browser.list') return browserList()
+  }
+
+  if (extensionId === BUILTIN_PROJECTS_ID) {
+    if (apiName === 'chatons_list_projects') return chatonsListProjects(payload)
+    if (apiName === 'chatons_get_project') return chatonsGetProject(payload)
+    if (apiName === 'chatons_get_project_conversations') return chatonsGetProjectConversations(payload)
+    if (apiName === 'chatons_get_hidden_projects') return chatonsGetHiddenProjects()
+    if (apiName === 'chatons_get_visible_projects') return chatonsGetVisibleProjects()
+    if (apiName === 'chatons_update_project_visibility') return chatonsUpdateProjectVisibility(payload)
+    return { ok: false, error: { code: 'not_found', message: `API ${apiName} not found on ${extensionId}` } }
   }
 
   if (extensionId === BUILTIN_EXTENSION_MANAGER_ID) {

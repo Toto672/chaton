@@ -30,6 +30,7 @@ import {
 } from '@/components/shell/mainView/messageParsing'
 import type { JsonValue } from '@/features/workspace/rpc'
 import type { FileDiffDetails } from '@/components/shell/composer/types'
+import type { ToolCallDisplayMode } from '@/features/workspace/types'
 
 type ChatMessageItemProps = {
   conversationId: string | null
@@ -38,6 +39,7 @@ type ChatMessageItemProps = {
   message: JsonValue
   isStreaming: boolean
   showAssistantStats: boolean
+  toolCallDisplayMode: ToolCallDisplayMode
   nowMs: number
   toolResultStatusByCallId: Map<string, 'success' | 'error' | 'running'>
   toolCallTimingById: Map<string, { startMs: number | null; endMs: number | null }>
@@ -97,6 +99,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   message,
   isStreaming,
   showAssistantStats,
+  toolCallDisplayMode,
   nowMs,
   toolResultStatusByCallId,
   toolCallTimingById,
@@ -121,11 +124,13 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   const fileChangeSummary = getFileChangeSummary(message)
   // Filter tool calls: only render those owned by this message index (first-occurrence wins).
   // This prevents the same tool call from appearing in two different messages.
-  const visibleToolBlocks = dedupeToolCalls(toolBlocks).filter((block) => {
+  // In quiet mode, hide all tool blocks entirely.
+  const filteredByOwnership = dedupeToolCalls(toolBlocks).filter((block) => {
     const sig = getToolCallSignature(block)
     const owner = toolCallOwnerByIndex.get(block.toolCallId ? `id:${block.toolCallId}` : sig) ?? toolCallOwnerByIndex.get(sig)
     return owner === undefined || owner === index
   })
+  const visibleToolBlocks = toolCallDisplayMode === 'quiet' ? [] : filteredByOwnership
   const assistantMeta = getAssistantMeta(message)
   const fallbackAssistantErrorText =
     role === 'assistant' && !text && assistantMeta?.errorMessage ? assistantMeta.errorMessage : ''
@@ -308,7 +313,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
                   const traceId = `${id}-toolgroup-${groupIndex}`
                   const isConversationStillRunning = isStreaming
                   const shouldOverflow = isConversationStillRunning && renderedVisible.length >= MAX_VISIBLE_RUNNING_TOOL_ROWS
-                  const shouldExpandConsideringUserIntent = !shouldOverflow && isRunning && shouldGroupExpandByDuration
+                  // In light mode, always collapse tool traces
+                  const shouldExpandConsideringUserIntent = toolCallDisplayMode === 'light' ? false : (!shouldOverflow && isRunning && shouldGroupExpandByDuration)
 
                   const row = (
                     <CollapsibleToolBlock
@@ -371,7 +377,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
 
                 const traceId = `${id}-toolcall-${blockIndex}`
                 const shouldOverflow = isConversationStillRunning && renderedVisible.length >= MAX_VISIBLE_RUNNING_TOOL_ROWS
-                const shouldExpandConsideringUserIntent = !shouldOverflow && isRunning && shouldExpandByDuration
+                // In light mode, always collapse tool traces
+                const shouldExpandConsideringUserIntent = toolCallDisplayMode === 'light' ? false : (!shouldOverflow && isRunning && shouldExpandByDuration)
                 const groupedOutputs = group.calls
                   .map((call) => {
                     if (!call.toolCallId) return ''
@@ -551,6 +558,7 @@ export const ChatMessageItem = memo(function ChatMessageItem({
   if (prevProps.index !== nextProps.index) return false
   if (prevProps.isStreaming !== nextProps.isStreaming) return false
   if (prevProps.showAssistantStats !== nextProps.showAssistantStats) return false
+  if (prevProps.toolCallDisplayMode !== nextProps.toolCallDisplayMode) return false
   if (prevProps.conversationId !== nextProps.conversationId) return false
   if (prevProps.toolResultStatusByCallId !== nextProps.toolResultStatusByCallId) return false
   if (prevProps.toolCallTimingById !== nextProps.toolCallTimingById) return false

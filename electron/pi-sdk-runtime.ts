@@ -1247,6 +1247,8 @@ export class PiSdkRuntime {
     const coreTools = createCoreTools(
       this.conversationId,
       (method, payload) => this.emitExtensionUiRequest(method as RpcExtensionUiRequest["method"], payload as Record<string, JsonValue | undefined>),
+      settingsManager,
+      modelRegistry,
     );
 
     // Mutable ref so lazy discovery tools can activate tools on the session

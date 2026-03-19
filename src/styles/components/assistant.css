@@ -28,6 +28,54 @@
       0 0 0 1px rgba(0, 0, 0, 0.04);
   }
 
+  /* ─── Tool Call Display Mode Switcher ─── */
+
+  .tool-call-display-mode-switcher {
+    @apply flex items-center gap-1 rounded-lg p-0.5;
+    background: #e4e5e8;
+  }
+
+  .tool-call-mode-segment {
+    -webkit-app-region: no-drag;
+    @apply flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-all duration-200;
+    color: #8d8e95;
+    background: transparent;
+  }
+
+  .tool-call-mode-segment:hover:not(.tool-call-mode-segment-active) {
+    color: #65666e;
+    background: rgba(255, 255, 255, 0.4);
+  }
+
+  .tool-call-mode-segment-active {
+    color: #25262d;
+    background: #ffffff;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.06),
+      0 0 0 1px rgba(0, 0, 0, 0.04);
+  }
+
+  .dark .tool-call-display-mode-switcher {
+    background: #111722;
+  }
+
+  .dark .tool-call-mode-segment {
+    color: #6b7899;
+  }
+
+  .dark .tool-call-mode-segment:hover:not(.tool-call-mode-segment-active) {
+    color: #95a2bb;
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .dark .tool-call-mode-segment-active {
+    color: #e7e9ef;
+    background: #1e2634;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.2),
+      0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
   /* ─── Assistant Main View ─── */
 
   .assistant-main {

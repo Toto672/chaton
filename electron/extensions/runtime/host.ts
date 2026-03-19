@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import electron from 'electron'
 import { getDb } from '../../db/index.js'
 import { listConversations } from '../../db/repos/conversations.js'
-import { listProjects } from '../../db/repos/projects.js'
+import { listProjects, findProjectById } from '../../db/repos/projects.js'
 import { extensionKvGet, extensionKvSet } from '../../db/repos/extension-kv.js'
 import { hasCapability, trackCapability } from './capabilities.js'
 import { BUILTIN_AUTOMATION_ID } from './constants.js'
@@ -241,7 +241,39 @@ export function createHostCall(emitHostEvent: HostEventEmitter) {
           const rows = listProjects(getDb())
           return {
             ok: true,
-            data: rows.map((row) => ({ id: row.id, name: row.name, repoPath: row.repo_path, updatedAt: row.updated_at })),
+            data: rows.map((row) => ({
+              id: row.id,
+              name: row.name,
+              repoPath: row.repo_path,
+              repoName: row.repo_name,
+              isArchived: row.is_archived === 1,
+              isHidden: row.is_hidden === 1,
+              icon: row.icon,
+              updatedAt: row.updated_at,
+              createdAt: row.created_at,
+            })),
+          }
+        }
+        case 'projects.get': {
+          if (!hasCapability(extensionId, 'host.projects.read')) return unauthorized(`Extension ${extensionId} missing capability host.projects.read`)
+          trackCapability(extensionId, 'host.projects.read')
+          const projectId = typeof params?.projectId === 'string' ? params.projectId.trim() : ''
+          if (!projectId) return { ok: false, error: { code: 'invalid_args', message: 'projectId is required' } }
+          const row = findProjectById(getDb(), projectId)
+          if (!row) return { ok: false, error: { code: 'not_found', message: 'Project not found' } }
+          return {
+            ok: true,
+            data: {
+              id: row.id,
+              name: row.name,
+              repoPath: row.repo_path,
+              repoName: row.repo_name,
+              isArchived: row.is_archived === 1,
+              isHidden: row.is_hidden === 1,
+              icon: row.icon,
+              updatedAt: row.updated_at,
+              createdAt: row.created_at,
+            },
           }
         }
         case 'open.mainView': {

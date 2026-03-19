@@ -2,6 +2,8 @@ import type { JsonValue } from './rpc'
 
 export type AppMode = 'workspace' | 'assistant'
 
+export type ToolCallDisplayMode = 'verbose' | 'light' | 'quiet'
+
 export type AssistantView = 'home' | 'conversations' | 'memory' | 'automations' | 'channels' | 'channel-conversations'
 
 export type ConversationStatus = 'active' | 'done' | 'archived'
@@ -62,6 +64,7 @@ export type SidebarSettings = {
   sortBy: 'created' | 'updated'
   show: 'all' | 'relevant'
   showAssistantStats: boolean
+  toolCallDisplayMode: ToolCallDisplayMode
   searchQuery: string
   isSearchVisible: boolean
   collapsedProjectIds: string[]
