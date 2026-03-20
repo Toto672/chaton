@@ -593,6 +593,26 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     })
   }, [])
 
+  const grantCloudSubscription = useCallback(async (
+    userId: string,
+    grant: { planId: import('../types').CloudSubscriptionPlan; durationDays?: number | null },
+  ) => {
+    const result = await workspaceIpc.grantCloudSubscription(userId, grant)
+    if (!result.ok) {
+      dispatch({
+        type: 'setNotice',
+        payload: { notice: result.message ?? "Impossible d'allouer cet abonnement complémentaire." },
+      })
+      return
+    }
+    dispatch({ type: 'setCloudAccount', payload: { account: result.account } })
+    dispatch({ type: 'setCloudAdminUsers', payload: { users: result.users } })
+    dispatch({
+      type: 'setNotice',
+      payload: { notice: 'Abonnement complémentaire alloué.' },
+    })
+  }, [])
+
   const updateCloudPlan = useCallback(async (
     planId: import('../types').CloudSubscriptionPlan,
     updates: { label?: string; parallelSessionsLimit?: number; isDefault?: boolean },
@@ -1457,6 +1477,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       connectCloudInstance,
       refreshCloudAccount,
       updateCloudUser,
+      grantCloudSubscription,
       updateCloudPlan,
       createCloudProject,
       createConversationGlobal,

@@ -123,6 +123,13 @@ declare global {
         | { ok: true; account: import('@/features/workspace/types').CloudAccount | null; users: import('@/features/workspace/types').CloudAccountUser[] }
         | { ok: false; reason: "not_connected" | "forbidden" | "unknown"; message?: string }
       >;
+      grantCloudSubscription: (
+        userId: string,
+        grant: { planId: import('@/features/workspace/types').CloudSubscriptionPlan; durationDays?: number | null },
+      ) => Promise<
+        | { ok: true; account: import('@/features/workspace/types').CloudAccount | null; users: import('@/features/workspace/types').CloudAccountUser[] }
+        | { ok: false; reason: "not_connected" | "forbidden" | "unknown"; message?: string }
+      >;
       updateCloudPlan: (
         planId: import('@/features/workspace/types').CloudSubscriptionPlan,
         updates: { label?: string; parallelSessionsLimit?: number; isDefault?: boolean },

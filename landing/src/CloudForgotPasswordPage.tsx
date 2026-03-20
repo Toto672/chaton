@@ -1,21 +1,19 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { signupCloudAccount } from "./cloud";
+import { Link } from "react-router-dom";
+import { requestPasswordReset } from "./cloud";
 import { type LanguageCode, LanguageSwitcher } from "./i18n";
 
-export function CloudSignupPage({
+export function CloudForgotPasswordPage({
   currentLanguage,
   onLanguageChange,
 }: {
   currentLanguage: LanguageCode;
   onLanguageChange?: (code: LanguageCode) => void;
 }) {
-  const navigate = useNavigate();
-  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [done, setDone] = useState(false);
 
   return (
     <div className="landing-page cloud-page">
@@ -31,22 +29,22 @@ export function CloudSignupPage({
       </header>
       <main className="site-main cloud-main cloud-main-narrow">
         <div className="cloud-form-shell">
-          <div className="eyebrow">Sign up</div>
-          <h1 className="hero-title cloud-form-title">Create your cloud account</h1>
+          <div className="eyebrow">Password recovery</div>
+          <h1 className="hero-title cloud-form-title">Reset your password</h1>
           <p className="hero-subtitle">
-            This is the account your desktop app will connect to after browser login.
+            Enter your email address and we will send you a reset link if the account exists.
           </p>
           <form
             className="cloud-form"
             onSubmit={(event) => {
               event.preventDefault();
-              if (!email.trim() || !fullName.trim() || !password.trim()) {
+              if (!email.trim()) {
                 return;
               }
               setPending(true);
               setError("");
-              void signupCloudAccount({ email, fullName, password })
-                .then(() => navigate("/cloud/onboarding"))
+              void requestPasswordReset({ email })
+                .then(() => setDone(true))
                 .catch((nextError) => {
                   setError(nextError instanceof Error ? nextError.message : String(nextError));
                 })
@@ -54,26 +52,21 @@ export function CloudSignupPage({
             }}
           >
             <label className="cloud-field">
-              <span>Full name</span>
-              <input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Ada Lovelace" />
-            </label>
-            <label className="cloud-field">
               <span>Email</span>
               <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="ada@team.dev" type="email" />
             </label>
-            <label className="cloud-field">
-              <span>Password</span>
-              <input
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="At least 8 characters"
-                type="password"
-              />
-            </label>
             {error ? <div className="cloud-inline-error">{error}</div> : null}
+            {done ? (
+              <div className="cloud-inline-success">
+                If an account exists for this email, a reset link has been sent.
+              </div>
+            ) : null}
             <button className="cloud-primary-button" type="submit" disabled={pending}>
-              {pending ? "Creating account..." : "Continue to organization setup"}
+              {pending ? "Sending..." : "Send reset link"}
             </button>
+            <Link className="cloud-text-link" to="/cloud/login">
+              Back to login
+            </Link>
           </form>
         </div>
       </main>

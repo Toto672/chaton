@@ -10,6 +10,7 @@ import type {
   CloudInstanceRecord,
   CloudProjectRecord,
   CloudSubscriptionPlan,
+  CloudSubscriptionGrantRecord,
   CloudSubscriptionRecord,
   CloudUsageRecord,
   OrganizationProviderRecord,
@@ -24,6 +25,11 @@ export type CloudUserState = {
   createdAt: string
   subscriptionPlan: CloudSubscriptionPlan | null
   emailVerifiedAt?: string | null
+  complimentaryGrant?: {
+    planId: CloudSubscriptionPlan
+    grantedAt: string
+    expiresAt: string | null
+  } | null
 }
 
 export type CloudWorkspaceState = {
@@ -161,6 +167,11 @@ export type CloudStore = {
   consumePasswordResetToken(tokenHash: string): Promise<CloudUserState | null>
   updateUserPassword(userId: string, passwordHash: string): Promise<void>
   markEmailVerified(userId: string): Promise<void>
+  grantComplimentarySubscription(params: {
+    userId: string
+    planId: CloudSubscriptionPlan
+    durationDays?: number | null
+  }): Promise<CloudUserState | null>
 }
 
 type StoreContext = {
@@ -204,6 +215,32 @@ function getPlanRecord(
     plans.find((plan) => plan.isDefault) ??
     DEFAULT_PLANS[0]
   )
+}
+
+export function getEffectivePlanId(user: CloudUserState): CloudSubscriptionPlan | null {
+  const grant = user.complimentaryGrant
+  if (grant && (grant.expiresAt == null || Date.parse(grant.expiresAt) > Date.now())) {
+    return grant.planId
+  }
+  return user.subscriptionPlan
+}
+
+export function getEffectiveGrant(
+  user: CloudUserState,
+  plans: CloudSubscriptionRecord[],
+): CloudSubscriptionGrantRecord | null {
+  const grant = user.complimentaryGrant
+  if (!grant) {
+    return null
+  }
+  if (grant.expiresAt != null && Date.parse(grant.expiresAt) <= Date.now()) {
+    return null
+  }
+  return {
+    plan: getPlanRecord(plans, grant.planId),
+    grantedAt: grant.grantedAt,
+    expiresAt: grant.expiresAt,
+  }
 }
 
 function createDefaultWorkspaceState(
@@ -331,6 +368,7 @@ class MemoryCloudStore implements CloudStore {
       createdAt: new Date().toISOString(),
       subscriptionPlan: 'plus',
       emailVerifiedAt: null,
+      complimentaryGrant: null,
     }
     this.userIdsByEmail.set(normalizedEmail, user.id)
     this.usersById.set(user.id, user)
@@ -418,6 +456,26 @@ class MemoryCloudStore implements CloudStore {
     if (user) {
       user.emailVerifiedAt = new Date().toISOString()
     }
+  }
+
+  async grantComplimentarySubscription(params: {
+    userId: string
+    planId: CloudSubscriptionPlan
+    durationDays?: number | null
+  }): Promise<CloudUserState | null> {
+    const user = this.usersById.get(params.userId)
+    if (!user) {
+      return null
+    }
+    user.complimentaryGrant = {
+      planId: params.planId,
+      grantedAt: new Date().toISOString(),
+      expiresAt:
+        typeof params.durationDays === 'number' && params.durationDays > 0
+          ? new Date(Date.now() + params.durationDays * 24 * 60 * 60 * 1000).toISOString()
+          : null,
+    }
+    return user
   }
 
   async getWorkspaceState(user: CloudUserState): Promise<CloudWorkspaceState> {
@@ -746,7 +804,10 @@ class PostgresCloudStore implements CloudStore {
         created_at TIMESTAMPTZ NOT NULL,
         subscription_plan TEXT,
         password_hash TEXT,
-        email_verified_at TIMESTAMPTZ
+        email_verified_at TIMESTAMPTZ,
+        complimentary_plan_id TEXT,
+        complimentary_granted_at TIMESTAMPTZ,
+        complimentary_expires_at TIMESTAMPTZ
       );
       CREATE TABLE IF NOT EXISTS cloud_sessions (
         access_token TEXT PRIMARY KEY,
@@ -833,7 +894,13 @@ class PostgresCloudStore implements CloudStore {
       ALTER TABLE cloud_users
       ADD COLUMN IF NOT EXISTS password_hash TEXT;
       ALTER TABLE cloud_users
-      ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ
+      ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+      ALTER TABLE cloud_users
+      ADD COLUMN IF NOT EXISTS complimentary_plan_id TEXT;
+      ALTER TABLE cloud_users
+      ADD COLUMN IF NOT EXISTS complimentary_granted_at TIMESTAMPTZ;
+      ALTER TABLE cloud_users
+      ADD COLUMN IF NOT EXISTS complimentary_expires_at TIMESTAMPTZ
     `)
 
     await this.pool.query(`
@@ -894,10 +961,13 @@ class PostgresCloudStore implements CloudStore {
     email: string
     display_name: string
     is_admin: boolean
-      created_at: string | Date
-      subscription_plan: CloudSubscriptionPlan | null
-      email_verified_at?: string | Date | null
-    }): CloudUserState {
+    created_at: string | Date
+    subscription_plan: CloudSubscriptionPlan | null
+    email_verified_at?: string | Date | null
+    complimentary_plan_id?: CloudSubscriptionPlan | null
+    complimentary_granted_at?: string | Date | null
+    complimentary_expires_at?: string | Date | null
+  }): CloudUserState {
     return {
       id: row.id,
       email: row.email,
@@ -914,6 +984,24 @@ class PostgresCloudStore implements CloudStore {
           : typeof row.email_verified_at === 'string'
             ? row.email_verified_at
             : row.email_verified_at.toISOString(),
+      complimentaryGrant:
+        row.complimentary_plan_id
+          ? {
+              planId: row.complimentary_plan_id,
+              grantedAt:
+                row.complimentary_granted_at == null
+                  ? new Date().toISOString()
+                  : typeof row.complimentary_granted_at === 'string'
+                    ? row.complimentary_granted_at
+                    : row.complimentary_granted_at.toISOString(),
+              expiresAt:
+                row.complimentary_expires_at == null
+                  ? null
+                  : typeof row.complimentary_expires_at === 'string'
+                    ? row.complimentary_expires_at
+                    : row.complimentary_expires_at.toISOString(),
+            }
+          : null,
     }
   }
 
@@ -1028,9 +1116,13 @@ class PostgresCloudStore implements CloudStore {
       created_at: string | Date
       subscription_plan: CloudSubscriptionPlan | null
       email_verified_at?: string | Date | null
+      complimentary_plan_id?: CloudSubscriptionPlan | null
+      complimentary_granted_at?: string | Date | null
+      complimentary_expires_at?: string | Date | null
     }>(
       `
-        SELECT u.id, u.email, u.display_name, u.is_admin, u.created_at, u.subscription_plan, u.email_verified_at
+        SELECT u.id, u.email, u.display_name, u.is_admin, u.created_at, u.subscription_plan, u.email_verified_at,
+               u.complimentary_plan_id, u.complimentary_granted_at, u.complimentary_expires_at
         FROM cloud_sessions s
         INNER JOIN cloud_users u ON u.id = s.user_id
         WHERE s.access_token = $1
@@ -1051,9 +1143,13 @@ class PostgresCloudStore implements CloudStore {
       created_at: string | Date
       subscription_plan: CloudSubscriptionPlan | null
       email_verified_at?: string | Date | null
+      complimentary_plan_id?: CloudSubscriptionPlan | null
+      complimentary_granted_at?: string | Date | null
+      complimentary_expires_at?: string | Date | null
     }>(
       `
-        SELECT id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at
+        SELECT id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at,
+               complimentary_plan_id, complimentary_granted_at, complimentary_expires_at
         FROM cloud_users
         WHERE id = $1
       `,
@@ -1073,9 +1169,13 @@ class PostgresCloudStore implements CloudStore {
       created_at: string | Date
       subscription_plan: CloudSubscriptionPlan | null
       email_verified_at?: string | Date | null
+      complimentary_plan_id?: CloudSubscriptionPlan | null
+      complimentary_granted_at?: string | Date | null
+      complimentary_expires_at?: string | Date | null
     }>(
       `
-        SELECT id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at
+        SELECT id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at,
+               complimentary_plan_id, complimentary_granted_at, complimentary_expires_at
         FROM cloud_users
         WHERE lower(email) = $1
       `,
@@ -1098,9 +1198,13 @@ class PostgresCloudStore implements CloudStore {
       created_at: string | Date
       subscription_plan: CloudSubscriptionPlan | null
       email_verified_at?: string | Date | null
+      complimentary_plan_id?: CloudSubscriptionPlan | null
+      complimentary_granted_at?: string | Date | null
+      complimentary_expires_at?: string | Date | null
     }>(
       `
-        SELECT id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at
+        SELECT id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at,
+               complimentary_plan_id, complimentary_granted_at, complimentary_expires_at
         FROM cloud_users
         WHERE lower(email) = $1
       `,
@@ -1130,12 +1234,16 @@ class PostgresCloudStore implements CloudStore {
       createdAt: new Date().toISOString(),
       subscriptionPlan: 'plus',
       emailVerifiedAt: null,
+      complimentaryGrant: null,
     }
 
     await this.pool.query(
       `
-        INSERT INTO cloud_users(id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO cloud_users(
+          id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at,
+          complimentary_plan_id, complimentary_granted_at, complimentary_expires_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       `,
       [
         user.id,
@@ -1145,6 +1253,9 @@ class PostgresCloudStore implements CloudStore {
         user.createdAt,
         user.subscriptionPlan,
         user.emailVerifiedAt,
+        null,
+        null,
+        null,
       ],
     )
     await this.ensureWorkspaceExists(user)
@@ -1190,9 +1301,13 @@ class PostgresCloudStore implements CloudStore {
       created_at: string | Date
       subscription_plan: CloudSubscriptionPlan | null
       email_verified_at?: string | Date | null
+      complimentary_plan_id?: CloudSubscriptionPlan | null
+      complimentary_granted_at?: string | Date | null
+      complimentary_expires_at?: string | Date | null
     }>(
       `
-        SELECT id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at
+        SELECT id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at,
+               complimentary_plan_id, complimentary_granted_at, complimentary_expires_at
         FROM cloud_users
         WHERE lower(email) = $1
           AND password_hash = $2
@@ -1238,9 +1353,13 @@ class PostgresCloudStore implements CloudStore {
       created_at: string | Date
       subscription_plan: CloudSubscriptionPlan | null
       email_verified_at?: string | Date | null
+      complimentary_plan_id?: CloudSubscriptionPlan | null
+      complimentary_granted_at?: string | Date | null
+      complimentary_expires_at?: string | Date | null
     }>(
       `
-        SELECT id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at
+        SELECT id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at,
+               complimentary_plan_id, complimentary_granted_at, complimentary_expires_at
         FROM cloud_users
         ORDER BY created_at ASC
       `,
@@ -1264,9 +1383,13 @@ class PostgresCloudStore implements CloudStore {
       created_at: string | Date
       subscription_plan: CloudSubscriptionPlan | null
       email_verified_at?: string | Date | null
+      complimentary_plan_id?: CloudSubscriptionPlan | null
+      complimentary_granted_at?: string | Date | null
+      complimentary_expires_at?: string | Date | null
     }>(
       `
-        SELECT id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at
+        SELECT id, email, display_name, is_admin, created_at, subscription_plan, email_verified_at,
+               complimentary_plan_id, complimentary_granted_at, complimentary_expires_at
         FROM cloud_users
         WHERE id = $1
       `,
@@ -1317,6 +1440,33 @@ class PostgresCloudStore implements CloudStore {
       `,
       [userId],
     )
+  }
+
+  async grantComplimentarySubscription(params: {
+    userId: string
+    planId: CloudSubscriptionPlan
+    durationDays?: number | null
+  }): Promise<CloudUserState | null> {
+    await this.init()
+    const expiresAt =
+      typeof params.durationDays === 'number' && params.durationDays > 0
+        ? new Date(Date.now() + params.durationDays * 24 * 60 * 60 * 1000).toISOString()
+        : null
+    const result = await this.pool.query(
+      `
+        UPDATE cloud_users
+        SET complimentary_plan_id = $2,
+            complimentary_granted_at = $3,
+            complimentary_expires_at = $4
+        WHERE id = $1
+        RETURNING id
+      `,
+      [params.userId, params.planId, new Date().toISOString(), expiresAt],
+    )
+    if (!result.rowCount) {
+      return null
+    }
+    return this.getUserById(params.userId)
   }
 
   private async ensureWorkspaceExists(user: CloudUserState): Promise<void> {

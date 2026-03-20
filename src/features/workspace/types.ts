@@ -60,6 +60,11 @@ export type CloudAccountUser = {
   isAdmin: boolean
   createdAt: string
   subscription: CloudSubscription
+  complimentaryGrant?: {
+    plan: CloudSubscription
+    grantedAt: string
+    expiresAt: string | null
+  } | null
 }
 
 export type CloudAccount = {

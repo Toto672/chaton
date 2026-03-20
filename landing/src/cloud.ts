@@ -26,6 +26,7 @@ export type CloudAccount = {
   expiresAt?: string
   plan?: CloudPlan
   baseUrl?: string
+  requiresEmailVerification?: boolean
 }
 
 const STORAGE_KEY = "chatons-cloud-web-session"
@@ -90,6 +91,7 @@ function buildAccountFromBootstrap(input: {
     expiresAt: input.session?.expiresAt,
     plan: input.user.subscription.id,
     baseUrl: input.baseUrl ?? DEFAULT_BASE_URL,
+    requiresEmailVerification: false,
   }
 }
 
@@ -122,15 +124,52 @@ export function clearCloudAccount(): void {
 export async function signupCloudAccount(input: {
   email: string
   fullName: string
+  password: string
 }): Promise<CloudAccount> {
   const session = await request<{
     user: { id: string; email: string; displayName: string; subscription: { id: CloudPlan } }
     session: { accessToken: string; refreshToken: string; expiresAt: string }
+    requiresEmailVerification?: boolean
   }>("/v1/web/signup", {
     method: "POST",
     body: JSON.stringify({
       email: input.email.trim(),
       displayName: input.fullName.trim(),
+      password: input.password,
+    }),
+  })
+  const bootstrap = await request<{
+    organizations: Array<{
+      id: string
+      name: string
+      slug: string
+      role: "owner" | "admin" | "member" | "billing_viewer"
+      providers?: CloudOrganization["providers"]
+    }>
+  }>("/v1/bootstrap", undefined, session.session.accessToken)
+  const account = buildAccountFromBootstrap({
+    user: session.user,
+    organizations: bootstrap.organizations,
+    session: session.session,
+    baseUrl: DEFAULT_BASE_URL,
+  })
+  account.requiresEmailVerification = session.requiresEmailVerification === true
+  writeStorage(account)
+  return account
+}
+
+export async function loginCloudAccount(input: {
+  email: string
+  password: string
+}): Promise<CloudAccount> {
+  const session = await request<{
+    user: { id: string; email: string; displayName: string; subscription: { id: CloudPlan } }
+    session: { accessToken: string; refreshToken: string; expiresAt: string }
+  }>("/v1/web/login", {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email.trim(),
+      password: input.password,
     }),
   })
   const bootstrap = await request<{
@@ -152,35 +191,34 @@ export async function signupCloudAccount(input: {
   return account
 }
 
-export async function loginCloudAccount(input: {
+export async function requestPasswordReset(input: {
   email: string
-}): Promise<CloudAccount> {
-  const session = await request<{
-    user: { id: string; email: string; displayName: string; subscription: { id: CloudPlan } }
-    session: { accessToken: string; refreshToken: string; expiresAt: string }
-  }>("/v1/web/login", {
+}): Promise<void> {
+  await request<{ ok: true }>("/v1/web/forgot-password", {
     method: "POST",
     body: JSON.stringify({
       email: input.email.trim(),
     }),
   })
-  const bootstrap = await request<{
-    organizations: Array<{
-      id: string
-      name: string
-      slug: string
-      role: "owner" | "admin" | "member" | "billing_viewer"
-      providers?: CloudOrganization["providers"]
-    }>
-  }>("/v1/bootstrap", undefined, session.session.accessToken)
-  const account = buildAccountFromBootstrap({
-    user: session.user,
-    organizations: bootstrap.organizations,
-    session: session.session,
-    baseUrl: DEFAULT_BASE_URL,
+}
+
+export async function resetCloudPassword(input: {
+  token: string
+  password: string
+}): Promise<void> {
+  await request<{ ok: true }>("/v1/web/reset-password", {
+    method: "POST",
+    body: JSON.stringify(input),
   })
-  writeStorage(account)
-  return account
+}
+
+export async function verifyCloudEmail(input: {
+  token: string
+}): Promise<void> {
+  await request<{ ok: true }>("/v1/web/verify-email", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
 }
 
 export async function refreshCloudAccount(): Promise<CloudAccount | null> {

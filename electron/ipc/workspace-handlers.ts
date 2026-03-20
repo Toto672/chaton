@@ -174,6 +174,16 @@ type CloudBootstrapResponse = {
       parallelSessionsLimit: number;
       isDefault?: boolean;
     };
+    complimentaryGrant?: {
+      plan: {
+        id: "plus" | "pro" | "max";
+        label: string;
+        parallelSessionsLimit: number;
+        isDefault?: boolean;
+      };
+      grantedAt: string;
+      expiresAt: string | null;
+    } | null;
   };
   organizations: Array<{
     id: string;
@@ -2002,6 +2012,47 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
             authorization: `Bearer ${instance.access_token}`,
           },
           body: JSON.stringify(updates),
+        },
+      );
+
+      if (response.status === 403) {
+        return { ok: false as const, reason: "forbidden" as const };
+      }
+      if (!response.ok) {
+        return {
+          ok: false as const,
+          reason: "unknown" as const,
+          message: await response.text(),
+        };
+      }
+
+      const refreshed = await getPrimaryCloudAccount();
+      return { ok: true as const, account: refreshed.account, users: refreshed.users };
+    },
+  );
+
+  ipcMain.handle(
+    "cloud:grantSubscription",
+    async (
+      _event,
+      userId: string,
+      grant: { planId: "plus" | "pro" | "max"; durationDays?: number | null },
+    ) => {
+      const db = getDb();
+      const instance = listCloudInstances(db).find((entry) => Boolean(entry.access_token));
+      if (!instance?.access_token) {
+        return { ok: false as const, reason: "not_connected" as const };
+      }
+
+      const response = await fetch(
+        new URL(`/v1/admin/users/${encodeURIComponent(userId)}/grant-subscription`, instance.base_url).toString(),
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${instance.access_token}`,
+          },
+          body: JSON.stringify(grant),
         },
       );
 

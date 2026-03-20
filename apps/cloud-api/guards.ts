@@ -1,0 +1,78 @@
+import type http from 'node:http'
+import { internalServiceToken } from './config.js'
+import { store, buildUsage } from './context.js'
+import { getEffectivePlanId, type CloudUserState } from './store.js'
+import { getBearerToken, json } from './http.js'
+
+export async function requireAuthedUser(
+  request: http.IncomingMessage,
+  response: http.ServerResponse,
+): Promise<{ user: CloudUserState; accessToken: string } | null> {
+  const accessToken = getBearerToken(request)
+  if (!accessToken) {
+    json(response, 401, {
+      error: 'unauthorized',
+      message: 'Missing bearer token',
+    })
+    return null
+  }
+  const user = await store.getUserByAccessToken(accessToken)
+  if (!user) {
+    json(response, 401, {
+      error: 'unauthorized',
+      message: 'Unknown bearer token',
+    })
+    return null
+  }
+  return { user, accessToken }
+}
+
+export function requireInternalService(
+  request: http.IncomingMessage,
+  response: http.ServerResponse,
+): boolean {
+  if (!internalServiceToken) {
+    json(response, 500, {
+      error: 'misconfigured',
+      message: 'Missing internal service token',
+    })
+    return false
+  }
+  if (getBearerToken(request) !== internalServiceToken) {
+    json(response, 401, {
+      error: 'unauthorized',
+      message: 'Internal service token required',
+    })
+    return false
+  }
+  return true
+}
+
+export async function requireSubscription(
+  user: CloudUserState,
+  response: http.ServerResponse,
+): Promise<boolean> {
+  if (getEffectivePlanId(user)) {
+    return true
+  }
+  json(response, 403, {
+    error: 'subscription_required',
+    message: 'An active subscription is required to use Chatons Cloud.',
+    usage: await buildUsage(user),
+  })
+  return false
+}
+
+export function requireAdmin(
+  user: CloudUserState,
+  response: http.ServerResponse,
+): boolean {
+  if (user.isAdmin) {
+    return true
+  }
+  json(response, 403, {
+    error: 'forbidden',
+    message: 'Admin access required.',
+  })
+  return false
+}

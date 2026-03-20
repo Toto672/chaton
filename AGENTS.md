@@ -64,6 +64,8 @@ For a cloud project:
 - cloud conversation message history is read from and persisted back to the cloud control plane
 - provider credentials, OAuth tokens, model access, and runtime execution remain organization-owned in the cloud
 - the browser-side cloud portal in `landing/` may collect signup, organization, and provider data, but it is only a thin client over `cloud-api`; it must not become a second source of truth
+- password-based web auth, email verification, and password recovery for Chatons Cloud must also remain control-plane owned; mail tokens and SMTP delivery belong to `cloud-api`, not to the desktop app or landing-only client state
+- complimentary cloud subscription grants assigned by admins must also remain control-plane owned and time-aware; the effective plan used for quota checks is the active grant if one exists, otherwise the user's stored baseline plan
 - cloud subscription, quota, project access, conversation ownership, and websocket authorization must be derived server-side by the cloud control plane, never trusted from desktop-supplied headers or request bodies
 - internal service-to-service routes between `cloud-api`, `cloud-realtime`, and `runtime-headless` must require a shared service credential; network reachability alone is not sufficient authorization
 - the desktop app must not create a local Pi session as a fallback

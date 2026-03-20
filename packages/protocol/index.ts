@@ -112,6 +112,11 @@ export type CloudAdminUpdateUserRequest = {
   isAdmin?: boolean
 }
 
+export type CloudAdminGrantSubscriptionRequest = {
+  planId: CloudSubscriptionPlan
+  durationDays?: number | null
+}
+
 export type CloudAdminUpdatePlanRequest = {
   label?: string
   parallelSessionsLimit?: number

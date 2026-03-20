@@ -296,6 +296,10 @@ export const workspaceIpc = {
     userId: string,
     updates: { subscriptionPlan?: CloudSubscriptionPlan; isAdmin?: boolean },
   ): Promise<GetCloudAccountResult> => getApi().updateCloudUser(userId, updates),
+  grantCloudSubscription: (
+    userId: string,
+    grant: { planId: CloudSubscriptionPlan; durationDays?: number | null },
+  ): Promise<GetCloudAccountResult> => getApi().grantCloudSubscription(userId, grant),
   updateCloudPlan: (
     planId: CloudSubscriptionPlan,
     updates: { label?: string; parallelSessionsLimit?: number; isDefault?: boolean },

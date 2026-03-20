@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { getCloudAccount, loginCloudAccount } from "./cloud";
 import { type LanguageCode, LanguageSwitcher } from "./i18n";
 
@@ -13,6 +13,7 @@ export function CloudLoginPage({
   const navigate = useNavigate();
   const existing = getCloudAccount();
   const [email, setEmail] = useState(existing?.email ?? "");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -39,12 +40,12 @@ export function CloudLoginPage({
             className="cloud-form"
             onSubmit={(event) => {
               event.preventDefault();
-              if (!email.trim()) {
+              if (!email.trim() || !password.trim()) {
                 return;
               }
               setPending(true);
               setError("");
-              void loginCloudAccount({ email })
+              void loginCloudAccount({ email, password })
                 .then(() => navigate("/cloud/onboarding"))
                 .catch((nextError) => {
                   setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -56,10 +57,17 @@ export function CloudLoginPage({
               <span>Email</span>
               <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="ada@team.dev" type="email" />
             </label>
+            <label className="cloud-field">
+              <span>Password</span>
+              <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Your password" type="password" />
+            </label>
             {error ? <div className="cloud-inline-error">{error}</div> : null}
             <button className="cloud-primary-button" type="submit" disabled={pending}>
               {pending ? "Signing in..." : "Continue"}
             </button>
+            <Link className="cloud-text-link" to="/cloud/forgot-password">
+              Forgot your password?
+            </Link>
           </form>
         </div>
       </main>

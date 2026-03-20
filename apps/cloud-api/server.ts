@@ -1,20 +1,12 @@
 import http from 'node:http'
 import crypto from 'node:crypto'
-import { createPublicKey } from 'node:crypto'
 import type {
   AddOrganizationProviderRequest,
   AddOrganizationProviderResponse,
   CloudAccountResponse,
   CloudConversationMessageRecord,
-  CloudAdminListUsersResponse,
-  CloudAdminUpdatePlanRequest,
-  CloudAdminUpdateUserRequest,
-  CloudBootstrapResponse,
   CloudDesktopAuthExchangeRequest,
   CloudDesktopAuthExchangeResponse,
-  CloudWebLoginRequest,
-  CloudWebSessionResponse,
-  CloudWebSignupRequest,
   CreateCloudConversationRequest,
   CreateCloudConversationResponse,
   CreateCloudProjectRequest,
@@ -26,262 +18,31 @@ import type {
 import type {
   CloudRuntimeAccessGrant,
   CloudSubscriptionPlan,
-  CloudSubscriptionRecord,
-  CloudUsageRecord,
-  CloudUserRecord,
 } from '../../packages/domain/index.js'
-import { createCloudStore, type CloudUserState } from './store.js'
-
-const port = Number.parseInt(process.env.PORT ?? '4000', 10)
-const version = process.env.CHATONS_CLOUD_VERSION ?? '0.1.0'
-const publicBaseUrl = process.env.CHATONS_CLOUD_PUBLIC_URL ?? `http://127.0.0.1:${port}`
-const desktopAuthRequestTtlSeconds = Number.parseInt(
-  process.env.CHATONS_DESKTOP_AUTH_REQUEST_TTL_SECONDS ?? '300',
-  10,
-)
-const maxJsonBodyBytes = Number.parseInt(
-  process.env.CHATONS_CLOUD_MAX_JSON_BODY_BYTES ?? '1048576',
-  10,
-)
-const internalServiceToken = process.env.CHATONS_INTERNAL_SERVICE_TOKEN?.trim() ?? ''
-const oidcIssuer = process.env.OIDC_ISSUER_URL?.trim() || publicBaseUrl
-const oidcClientId = process.env.OIDC_CLIENT_ID?.trim() || 'chatons-desktop'
-const oidcClientSecret = process.env.OIDC_CLIENT_SECRET?.trim() || ''
-const jwtSigningKey = process.env.JWT_SIGNING_KEY?.trim() || 'replace-with-32-plus-char-random-signing-key'
-const accessTokenLifetimeSeconds = Number.parseInt(
-  process.env.CHATONS_CLOUD_ACCESS_TOKEN_TTL_SECONDS ?? `${30 * 24 * 60 * 60}`,
-  10,
-)
-const idTokenLifetimeSeconds = Number.parseInt(
-  process.env.CHATONS_CLOUD_ID_TOKEN_TTL_SECONDS ?? '3600',
-  10,
-)
-
-const jwkKid = crypto
-  .createHash('sha256')
-  .update(jwtSigningKey)
-  .digest('base64url')
-  .slice(0, 16)
-
-const store = createCloudStore({
+import {
+  desktopAuthRequestTtlSeconds,
+  oidcClientId,
+  oidcClientSecret,
+  oidcIssuer,
+  port,
   publicBaseUrl,
-})
-
-const signingKeyObject = createPrivateSigningKey(jwtSigningKey)
-const signingPublicJwk = createPublicJwk(signingKeyObject, jwkKid)
-
-function getBearerToken(request: http.IncomingMessage): string | null {
-  const header = request.headers.authorization
-  if (!header) {
-    return null
-  }
-  const [scheme, token] = header.split(' ')
-  if (scheme?.toLowerCase() !== 'bearer' || !token) {
-    return null
-  }
-  return token.trim()
-}
-
-function json(
-  response: http.ServerResponse,
-  statusCode: number,
-  payload: unknown,
-): void {
-  response.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-  })
-  response.end(JSON.stringify(payload))
-}
-
-function html(response: http.ServerResponse, statusCode: number, markup: string): void {
-  response.writeHead(statusCode, {
-    'content-type': 'text/html; charset=utf-8',
-  })
-  response.end(markup)
-}
-
-function redirect(response: http.ServerResponse, location: string): void {
-  response.writeHead(302, { location })
-  response.end()
-}
-
-function base64UrlEncode(input: string | Buffer): string {
-  return Buffer.from(input).toString('base64url')
-}
-
-function createPrivateSigningKey(secret: string): crypto.KeyObject {
-  const privateKeyPem = [
-    '-----BEGIN PRIVATE KEY-----',
-    secret.includes('BEGIN PRIVATE KEY')
-      ? secret
-      : '',
-  ]
-  if (privateKeyPem[1]) {
-    return crypto.createPrivateKey(secret)
-  }
-  return crypto.createSecretKey(Buffer.from(secret, 'utf8'))
-}
-
-function createPublicJwk(key: crypto.KeyObject, kid: string): Record<string, string> {
-  if (key.type === 'secret') {
-    const digest = crypto.createHash('sha256').update(key.export()).digest('base64url')
-    return {
-      kty: 'oct',
-      k: digest,
-      alg: 'HS256',
-      use: 'sig',
-      kid,
-    }
-  }
-  const publicKey = createPublicKey(key)
-  return {
-    ...(publicKey.export({ format: 'jwk' }) as Record<string, string>),
-    alg: 'RS256',
-    use: 'sig',
-    kid,
-  }
-}
-
-function signJwt(payload: Record<string, unknown>, options?: { expiresInSeconds?: number }): string {
-  const now = Math.floor(Date.now() / 1000)
-  const header = {
-    alg: signingKeyObject.type === 'secret' ? 'HS256' : 'RS256',
-    typ: 'JWT',
-    kid: jwkKid,
-  }
-  const fullPayload = {
-    iat: now,
-    exp: now + (options?.expiresInSeconds ?? idTokenLifetimeSeconds),
-    iss: oidcIssuer,
-    ...payload,
-  }
-  const signingInput = `${base64UrlEncode(JSON.stringify(header))}.${base64UrlEncode(JSON.stringify(fullPayload))}`
-  const signature =
-    signingKeyObject.type === 'secret'
-      ? crypto.createHmac('sha256', signingKeyObject).update(signingInput).digest('base64url')
-      : crypto.sign('RSA-SHA256', Buffer.from(signingInput), signingKeyObject).toString('base64url')
-  return `${signingInput}.${signature}`
-}
-
-function verifyPkceChallenge(codeVerifier: string, expectedChallenge: string): boolean {
-  const digest = crypto.createHash('sha256').update(codeVerifier).digest('base64url')
-  return digest === expectedChallenge
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-}
-
-async function issueCloudSession(user: CloudUserState): Promise<{
-  accessToken: string
-  refreshToken: string
-  expiresAt: string
-}> {
-  const accessToken = `access-${crypto.randomUUID()}`
-  const refreshToken = `refresh-${crypto.randomUUID()}`
-  const expiresAt = new Date(Date.now() + accessTokenLifetimeSeconds * 1000).toISOString()
-  await store.saveSession({
-    userId: user.id,
-    accessToken,
-    refreshToken,
-    expiresAt,
-  })
-  return {
-    accessToken,
-    refreshToken,
-    expiresAt,
-  }
-}
-
-async function issueCloudWebSessionResponse(user: CloudUserState): Promise<CloudWebSessionResponse> {
-  const session = await issueCloudSession(user)
-  const plans = await store.listPlans()
-  return {
-    user: toCloudUserRecord(user, plans),
-    session,
-  }
-}
-
-async function issueIdToken(params: {
-  user: CloudUserState
-  audience: string
-  nonce?: string | null
-}): Promise<string> {
-  return signJwt(
-    {
-      sub: params.user.id,
-      aud: params.audience,
-      email: params.user.email,
-      email_verified: true,
-      name: params.user.displayName,
-      preferred_username: params.user.email.split('@')[0] ?? params.user.email,
-      nonce: params.nonce ?? undefined,
-    },
-    { expiresInSeconds: idTokenLifetimeSeconds },
-  )
-}
-
-async function readJsonBody<T>(request: http.IncomingMessage): Promise<T> {
-  const chunks: Buffer[] = []
-  let totalSize = 0
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    totalSize += buffer.length
-    if (totalSize > maxJsonBodyBytes) {
-      const error = new Error(`Request body exceeds ${maxJsonBodyBytes} bytes`)
-      ;(error as Error & { statusCode?: number }).statusCode = 413
-      throw error
-    }
-    chunks.push(buffer)
-  }
-  const text = Buffer.concat(chunks).toString('utf8')
-  return JSON.parse(text) as T
-}
-
-function toCloudUserRecord(
-  user: CloudUserState,
-  plans: CloudSubscriptionRecord[],
-): CloudUserRecord {
-  const subscription =
-    plans.find((plan) => plan.id === user.subscriptionPlan) ??
-    plans.find((plan) => plan.isDefault) ?? {
-      id: 'plus',
-      label: 'Plus',
-      parallelSessionsLimit: 3,
-      isDefault: true,
-    }
-
-  return {
-    id: user.id,
-    email: user.email,
-    displayName: user.displayName,
-    isAdmin: user.isAdmin,
-    createdAt: user.createdAt,
-    subscription,
-  }
-}
-
-async function buildUsage(user: CloudUserState): Promise<CloudUsageRecord> {
-  const plans = await store.listPlans()
-  const subscription =
-    plans.find((plan) => plan.id === user.subscriptionPlan) ??
-    plans.find((plan) => plan.isDefault) ??
-    { id: 'plus', label: 'Plus', parallelSessionsLimit: 3 }
-  const activeParallelSessions = await store.getActiveParallelSessions(user.id)
-  return {
-    activeParallelSessions,
-    parallelSessionsLimit: subscription.parallelSessionsLimit,
-    remainingParallelSessions: Math.max(
-      0,
-      subscription.parallelSessionsLimit - activeParallelSessions,
-    ),
-  }
-}
+  version,
+} from './config.js'
+import {
+  buildBootstrapPayload,
+  buildUsage,
+  issueCloudSession,
+  issueIdToken,
+  signingKeyObject,
+  signingPublicJwk,
+  store,
+  toCloudUserRecord,
+  verifyPkceChallenge,
+} from './context.js'
+import { requireAdmin, requireAuthedUser, requireInternalService, requireSubscription } from './guards.js'
+import { escapeHtml, html, json, readFormBody, readJsonBody, redirect } from './http.js'
+import { handleWebAuthRoute } from './web-auth.js'
+import { handleAdminRoute } from './admin-routes.js'
 
 async function renderAuthorizePage(params: {
   state: string
@@ -333,116 +94,6 @@ async function renderAuthorizePage(params: {
 </html>`
 }
 
-async function readFormBody(request: http.IncomingMessage): Promise<Record<string, string>> {
-  const chunks: Buffer[] = []
-  let totalSize = 0
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    totalSize += buffer.length
-    if (totalSize > maxJsonBodyBytes) {
-      const error = new Error(`Request body exceeds ${maxJsonBodyBytes} bytes`)
-      ;(error as Error & { statusCode?: number }).statusCode = 413
-      throw error
-    }
-    chunks.push(buffer)
-  }
-  const parsed = new URLSearchParams(Buffer.concat(chunks).toString('utf8'))
-  return Object.fromEntries(parsed.entries())
-}
-
-async function buildBootstrapPayload(user: CloudUserState): Promise<CloudBootstrapResponse> {
-  const workspace = await store.getWorkspaceState(user)
-  const plans = await store.listPlans()
-  const projects = Array.from(workspace.projectsById.values()).sort((left, right) =>
-    left.name.localeCompare(right.name),
-  )
-  const conversations = Array.from(workspace.conversationsById.values()).sort((left, right) =>
-    left.title.localeCompare(right.title),
-  )
-
-  return {
-    user: toCloudUserRecord(user, plans),
-    organizations: [workspace.organization],
-    cloudInstances: [workspace.cloudInstance],
-    projects,
-    conversations,
-    usage: await buildUsage(user),
-  }
-}
-
-async function requireAuthedUser(
-  request: http.IncomingMessage,
-  response: http.ServerResponse,
-): Promise<{ user: CloudUserState; accessToken: string } | null> {
-  const accessToken = getBearerToken(request)
-  if (!accessToken) {
-    json(response, 401, {
-      error: 'unauthorized',
-      message: 'Missing bearer token',
-    })
-    return null
-  }
-  const user = await store.getUserByAccessToken(accessToken)
-  if (!user) {
-    json(response, 401, {
-      error: 'unauthorized',
-      message: 'Unknown bearer token',
-    })
-    return null
-  }
-  return { user, accessToken }
-}
-
-function requireInternalService(
-  request: http.IncomingMessage,
-  response: http.ServerResponse,
-): boolean {
-  if (!internalServiceToken) {
-    json(response, 500, {
-      error: 'misconfigured',
-      message: 'Missing internal service token',
-    })
-    return false
-  }
-  if (getBearerToken(request) !== internalServiceToken) {
-    json(response, 401, {
-      error: 'unauthorized',
-      message: 'Internal service token required',
-    })
-    return false
-  }
-  return true
-}
-
-async function requireSubscription(
-  user: CloudUserState,
-  response: http.ServerResponse,
-): Promise<boolean> {
-  if (user.subscriptionPlan) {
-    return true
-  }
-  json(response, 403, {
-    error: 'subscription_required',
-    message: 'An active subscription is required to use Chatons Cloud.',
-    usage: await buildUsage(user),
-  })
-  return false
-}
-
-function requireAdmin(
-  user: CloudUserState,
-  response: http.ServerResponse,
-): boolean {
-  if (user.isAdmin) {
-    return true
-  }
-  json(response, 403, {
-    error: 'forbidden',
-    message: 'Admin access required.',
-  })
-  return false
-}
-
 async function handleRequest(
   request: http.IncomingMessage,
   response: http.ServerResponse,
@@ -464,6 +115,14 @@ async function handleRequest(
   if (method === 'GET' && url === '/readyz') {
     response.writeHead(204)
     response.end()
+    return
+  }
+
+  if (await handleWebAuthRoute(method, url, request, response)) {
+    return
+  }
+
+  if (await handleAdminRoute(method, url, request, response)) {
     return
   }
 
@@ -717,147 +376,6 @@ async function handleRequest(
       user: toCloudUserRecord(auth.user, plans),
       usage: await buildUsage(auth.user),
       plans,
-    }
-    json(response, 200, payload)
-    return
-  }
-
-  if (method === 'POST' && url === '/v1/web/signup') {
-    const body = await readJsonBody<CloudWebSignupRequest>(request)
-    const email = body.email?.trim() ?? ''
-    const displayName = body.displayName?.trim() ?? ''
-    if (!email || !displayName) {
-      json(response, 400, {
-        error: 'invalid_request',
-        message: 'email and displayName are required',
-      })
-      return
-    }
-    const user = await store.findOrCreateUserForLogin({
-      email,
-      displayName,
-    })
-    json(response, 201, await issueCloudWebSessionResponse(user))
-    return
-  }
-
-  if (method === 'POST' && url === '/v1/web/login') {
-    const body = await readJsonBody<CloudWebLoginRequest>(request)
-    const email = body.email?.trim() ?? ''
-    if (!email) {
-      json(response, 400, {
-        error: 'invalid_request',
-        message: 'email is required',
-      })
-      return
-    }
-    const user = await store.findOrCreateUserForLogin({
-      email,
-    })
-    json(response, 200, await issueCloudWebSessionResponse(user))
-    return
-  }
-
-  if (method === 'GET' && url === '/v1/admin/users') {
-    const auth = await requireAuthedUser(request, response)
-    if (!auth) {
-      return
-    }
-    if (!requireAdmin(auth.user, response)) {
-      return
-    }
-    const plans = await store.listPlans()
-    const payload: CloudAdminListUsersResponse = {
-      users: (await store.listUsers()).map((user) => toCloudUserRecord(user, plans)),
-      plans,
-    }
-    json(response, 200, payload)
-    return
-  }
-
-  if (method === 'PATCH' && url.startsWith('/v1/admin/plans/')) {
-    const auth = await requireAuthedUser(request, response)
-    if (!auth) {
-      return
-    }
-    if (!requireAdmin(auth.user, response)) {
-      return
-    }
-
-    const parsed = new URL(url, `http://127.0.0.1:${port}`)
-    const planId = parsed.pathname.split('/').filter(Boolean)[3] as CloudSubscriptionPlan | undefined
-    const plans = await store.listPlans()
-    const target = planId ? plans.find((plan) => plan.id === planId) ?? null : null
-    if (!target || !planId) {
-      json(response, 404, {
-        error: 'not_found',
-        message: 'Plan not found',
-      })
-      return
-    }
-
-    const body = await readJsonBody<CloudAdminUpdatePlanRequest>(request)
-    const next: CloudSubscriptionRecord = {
-      ...target,
-      label:
-        typeof body.label === 'string' && body.label.trim()
-          ? body.label.trim()
-          : target.label,
-      parallelSessionsLimit:
-        typeof body.parallelSessionsLimit === 'number'
-          ? Math.max(0, Math.floor(body.parallelSessionsLimit))
-          : target.parallelSessionsLimit,
-      isDefault: body.isDefault === true ? true : target.isDefault === true,
-    }
-    await store.savePlan(next)
-
-    const refreshedPlans = await store.listPlans()
-    const payload: CloudAdminListUsersResponse = {
-      users: (await store.listUsers()).map((user) => toCloudUserRecord(user, refreshedPlans)),
-      plans: refreshedPlans,
-    }
-    json(response, 200, payload)
-    return
-  }
-
-  if (method === 'PATCH' && url.startsWith('/v1/admin/users/')) {
-    const auth = await requireAuthedUser(request, response)
-    if (!auth) {
-      return
-    }
-    if (!requireAdmin(auth.user, response)) {
-      return
-    }
-
-    const parsed = new URL(url, `http://127.0.0.1:${port}`)
-    const userId = parsed.pathname.split('/').filter(Boolean)[3] ?? ''
-    const body = await readJsonBody<CloudAdminUpdateUserRequest>(request)
-    const plans = await store.listPlans()
-    if (body.subscriptionPlan && !plans.some((plan) => plan.id === body.subscriptionPlan)) {
-      json(response, 400, {
-        error: 'invalid_request',
-        message: 'Invalid subscription plan',
-      })
-      return
-    }
-
-    const updated = await store.updateUser(userId, {
-      subscriptionPlan: body.subscriptionPlan,
-      isAdmin: body.isAdmin,
-    })
-    if (!updated) {
-      json(response, 404, {
-        error: 'not_found',
-        message: 'User not found',
-      })
-      return
-    }
-
-    const refreshedPlans = await store.listPlans()
-    const payload: CloudAccountResponse = {
-      user: toCloudUserRecord(updated, refreshedPlans),
-      usage: await buildUsage(updated),
-      plans: refreshedPlans,
     }
     json(response, 200, payload)
     return

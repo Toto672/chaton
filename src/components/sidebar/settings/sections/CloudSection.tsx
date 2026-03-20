@@ -13,6 +13,7 @@ type Props = {
   onConnect: () => Promise<void> | void
   onRefresh: () => Promise<void> | void
   onUpdateUser: (userId: string, updates: { subscriptionPlan?: CloudSubscriptionPlan; isAdmin?: boolean }) => Promise<void> | void
+  onGrantSubscription: (userId: string, grant: { planId: CloudSubscriptionPlan; durationDays?: number | null }) => Promise<void> | void
   onUpdatePlan: (planId: CloudSubscriptionPlan, updates: { label?: string; parallelSessionsLimit?: number; isDefault?: boolean }) => Promise<void> | void
 }
 
@@ -85,13 +86,20 @@ function UserRow({
   user,
   plans,
   onUpdateUser,
+  onGrantSubscription,
 }: {
   user: CloudAccountUser
   plans: CloudSubscription[]
   onUpdateUser: Props['onUpdateUser']
+  onGrantSubscription: Props['onGrantSubscription']
 }) {
   const [plan, setPlan] = useState<CloudSubscriptionPlan>(user.subscription.id)
   const [isAdmin, setIsAdmin] = useState<boolean>(user.isAdmin)
+  const [grantPlan, setGrantPlan] = useState<CloudSubscriptionPlan>(user.subscription.id)
+  const [grantMode, setGrantMode] = useState<'unlimited' | 'days'>(
+    user.complimentaryGrant?.expiresAt ? 'days' : 'unlimited',
+  )
+  const [grantDays, setGrantDays] = useState('30')
 
   return (
     <div className="settings-list-row" style={{ alignItems: 'flex-start', gap: '16px' }}>
@@ -99,6 +107,12 @@ function UserRow({
         <div className="settings-card-title" style={{ fontSize: '14px' }}>{user.displayName}</div>
         <div className="settings-card-note">{user.email}</div>
         <div className="settings-card-note">Créé le {formatDate(user.createdAt)}</div>
+        {user.complimentaryGrant ? (
+          <div className="settings-card-note">
+            Allocation admin active: {user.complimentaryGrant.plan.label}
+            {user.complimentaryGrant.expiresAt ? ` jusqu'au ${formatDate(user.complimentaryGrant.expiresAt)}` : ' sans expiration'}
+          </div>
+        ) : null}
       </div>
       <label className="settings-row-wrap" style={{ minWidth: '160px' }}>
         <span className="settings-label">Plan</span>
@@ -129,11 +143,59 @@ function UserRow({
       >
         Sauvegarder
       </button>
+      <div className="settings-row-wrap" style={{ minWidth: '320px' }}>
+        <span className="settings-label">Allocation manuelle</span>
+        <div style={{ display: 'grid', gap: '8px' }}>
+          <select
+            className="settings-input"
+            value={grantPlan}
+            onChange={(event) => setGrantPlan(event.target.value as CloudSubscriptionPlan)}
+          >
+            {plans.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <select
+              className="settings-input"
+              value={grantMode}
+              onChange={(event) => setGrantMode(event.target.value as 'unlimited' | 'days')}
+            >
+              <option value="unlimited">Illimitée</option>
+              <option value="days">Durée en jours</option>
+            </select>
+            {grantMode === 'days' ? (
+              <input
+                className="settings-input"
+                type="number"
+                min={1}
+                value={grantDays}
+                onChange={(event) => setGrantDays(event.target.value)}
+                placeholder="30"
+              />
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="settings-action-secondary"
+            onClick={() =>
+              void onGrantSubscription(user.id, {
+                planId: grantPlan,
+                durationDays: grantMode === 'days' ? Math.max(1, Number.parseInt(grantDays, 10) || 0) : null,
+              })
+            }
+          >
+            Allouer sans paiement
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
 
-export function CloudSection({ state, onConnect, onRefresh, onUpdateUser, onUpdatePlan }: Props) {
+export function CloudSection({ state, onConnect, onRefresh, onUpdateUser, onGrantSubscription, onUpdatePlan }: Props) {
   const { t } = useTranslation()
   const account = state.cloudAccount
   const cloudInstances = state.cloudInstances
@@ -217,7 +279,7 @@ export function CloudSection({ state, onConnect, onRefresh, onUpdateUser, onUpda
             </div>
             <div className="settings-list">
               {state.cloudAdminUsers.map((user) => (
-                <UserRow key={user.id} user={user} plans={plans} onUpdateUser={onUpdateUser} />
+                <UserRow key={user.id} user={user} plans={plans} onUpdateUser={onUpdateUser} onGrantSubscription={onGrantSubscription} />
               ))}
             </div>
           </section>

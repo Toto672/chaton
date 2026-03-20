@@ -7,6 +7,56 @@ description: Verified documentation changes and rationale for Chatons features a
 
 ## 2026-03-20 (Latest)
 
+### Added admin-managed complimentary cloud subscriptions with optional expiry
+
+**Change:** Extended the cloud account model so admins can now allocate a complimentary subscription plan to any user either indefinitely or for a given number of days. The cloud control plane now persists the optional grant window, treats the active grant as the effective subscription for account payloads and quota enforcement, exposes a dedicated admin endpoint for grant assignment, and the desktop Cloud settings panel now includes UI to assign those grants per user.
+
+**Why:** The previous admin tooling only let operators edit a user's baseline plan directly, which did not model “free access without payment for a limited time” as a first-class concept. Complimentary grants need their own duration-aware control-plane state so internal/admin allocations do not require billing changes and can expire automatically without manual cleanup.
+
+**Verified files:**
+- `packages/domain/index.ts` -- Added complimentary subscription grant shape on cloud users
+- `packages/protocol/index.ts` -- Added admin request contract for complimentary subscription grants
+- `apps/cloud-api/store.ts` -- Added persisted complimentary grant state and effective-plan helpers
+- `apps/cloud-api/server.ts` -- Added admin grant endpoint and switched account/quota logic to the effective plan
+- `electron/ipc/workspace-handlers.ts` -- Added desktop IPC bridge for admin subscription grants
+- `electron/preload.ts` -- Exposed the new admin grant action to the renderer
+- `src/types/global.d.ts` -- Added preload typing for the new admin grant action
+- `src/services/ipc/workspace.ts` -- Added renderer IPC wrapper for the new admin grant action
+- `src/features/workspace/types.ts` -- Added complimentary grant data to cloud account users
+- `src/features/workspace/store/context.ts` -- Added the admin grant action to workspace context
+- `src/features/workspace/store/provider.tsx` -- Wired the new admin grant action into renderer state refresh
+- `src/components/shell/PiSettingsMainPanel.tsx` -- Passed the new admin grant action into Cloud settings
+- `src/components/sidebar/settings/sections/CloudSection.tsx` -- Added UI to allocate complimentary plans indefinitely or for N days
+- `docs/content/developer-guide.mdx` -- Documented effective-plan precedence
+- `docs/content/pi-integration.mdx` -- Documented complimentary grants as control-plane owned quota state
+- `AGENTS.md` -- Added maintainer guidance for complimentary subscription ownership rules
+
+### Added SMTP-backed verification and password-recovery emails for Chatons Cloud web auth
+
+**Change:** Extended the browser-facing Chatons Cloud auth flow with password-based signup/login, email verification, forgot-password, reset-password, and password-changed notification support. `cloud-api` now persists password hashes and one-time verification/reset tokens, sends transactional emails over SMTP, and the landing app now includes dedicated verification and recovery pages in the same visual style as the main landing site.
+
+**Why:** The first cloud portal implementation allowed browser signup and login but it still behaved more like a bootstrap demo than a real account system. A usable cloud product needs durable web credentials plus recovery and verification paths so users are not locked out and the desktop binding flow can rely on a real account lifecycle.
+
+**Verified files:**
+- `apps/cloud-api/mailer.ts` -- Added SMTP-backed transactional mail delivery helpers
+- `apps/cloud-api/server.ts` -- Added password signup/login, verify-email, forgot-password, and reset-password endpoints
+- `apps/cloud-api/store.ts` -- Added persisted password hashes and one-time verification/reset token state
+- `packages/protocol/index.ts` -- Added web auth and email-action request contracts
+- `landing/src/cloud.ts` -- Added browser client methods for password auth, verification, and recovery
+- `landing/src/CloudSignupPage.tsx` -- Added password signup
+- `landing/src/CloudLoginPage.tsx` -- Added password login and recovery link
+- `landing/src/CloudForgotPasswordPage.tsx` -- Added forgot-password UI
+- `landing/src/CloudResetPasswordPage.tsx` -- Added reset-password UI
+- `landing/src/CloudVerifyEmailPage.tsx` -- Added email-verification UI
+- `landing/src/main.tsx` -- Added the new cloud auth routes
+- `landing/src/styles.css` -- Added success/link styling for auth recovery flows
+- `k8s/base/configmap.yaml` -- Added token TTL configuration for verification and reset flows
+- `k8s/base/secrets.example.yaml` -- Added SMTP and public web URL secret values
+- `docs/content/cloud-kubernetes.mdx` -- Documented SMTP-backed web auth requirements
+- `docs/content/developer-guide.mdx` -- Clarified server ownership of web auth and mail flows
+- `docs/content/pi-integration.mdx` -- Clarified that recovery and verification remain cloud-owned
+- `AGENTS.md` -- Added maintainer guidance for SMTP-backed cloud auth ownership
+
 ### Added browser-side cloud signup, login, and onboarding in the landing app
 
 **Change:** Added a first Chatons Cloud web portal inside the existing `landing/` app, reusing the landing visual style for `/cloud`, `/cloud/signup`, `/cloud/login`, and `/cloud/onboarding`. The browser flow now talks to `cloud-api` for web signup/login session creation, organization updates, and organization-owned provider creation instead of relying only on local demo state, while keeping the desktop handoff rooted in the existing cloud auth model.

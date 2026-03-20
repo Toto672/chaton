@@ -32,6 +32,8 @@ Chatons wraps Pi with:
 Cloud projects are the main exception to this local-runtime architecture. They do not create or use a local Pi runtime. In cloud mode, the desktop app is only a client for a remote Chatons runtime hosted by the cloud service, and provider credentials remain organization-owned in the cloud. Cloud access is now gated by a cloud subscription on the authenticated user account, and the chosen tier limits how many remote cloud sessions that user may run in parallel. That quota is derived server-side by `cloud-api`; the desktop no longer sends or decides the effective parallel-session limit.
 The cloud control plane also owns cloud project, conversation, and transcript state. The desktop may cache that state locally for rendering, but the bootstrap API and cloud conversation message endpoints remain the server-side source of truth for cloud threads.
 The web onboarding flow at `cloud.chatons.ai` follows the same ownership model: browser signup/login and organization/provider setup are only presentation flows around `cloud-api`, and provider secrets entered there remain cloud-owned instead of being copied into the desktop Pi environment.
+The same applies to account recovery: email verification and password reset are cloud-side flows backed by SMTP delivery from `cloud-api`, not by any desktop Pi configuration.
+Admin-granted complimentary subscriptions are also a control-plane concern. If an admin assigns a temporary or unlimited plan override to a user, that override becomes the effective cloud quota source until it expires, and the desktop must treat the cloud account payload as authoritative.
 
 ---
 

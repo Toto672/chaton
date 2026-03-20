@@ -15,6 +15,12 @@ export type CloudSubscriptionRecord = {
   isDefault?: boolean
 }
 
+export type CloudSubscriptionGrantRecord = {
+  plan: CloudSubscriptionRecord
+  grantedAt: string
+  expiresAt: string | null
+}
+
 export type OrganizationProviderKind =
   | 'openai'
   | 'anthropic'
@@ -53,6 +59,7 @@ export type CloudUserRecord = {
   isAdmin: boolean
   createdAt: string
   subscription: CloudSubscriptionRecord
+  complimentaryGrant?: CloudSubscriptionGrantRecord | null
 }
 
 export type CloudUsageRecord = {

@@ -9,6 +9,9 @@ import { CloudPortalPage } from "./CloudPortalPage";
 import { CloudSignupPage } from "./CloudSignupPage";
 import { CloudLoginPage } from "./CloudLoginPage";
 import { CloudOnboardingPage } from "./CloudOnboardingPage";
+import { CloudForgotPasswordPage } from "./CloudForgotPasswordPage";
+import { CloudResetPasswordPage } from "./CloudResetPasswordPage";
+import { CloudVerifyEmailPage } from "./CloudVerifyEmailPage";
 import { detectLanguage, saveLanguagePreference, type LanguageCode, isValidLanguage } from "./i18n";
 import "./styles.css";
 
@@ -85,6 +88,9 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/:lang/cloud/signup" element={<RoutePage Component={CloudSignupPage} />} />
         <Route path="/:lang/cloud/login" element={<RoutePage Component={CloudLoginPage} />} />
         <Route path="/:lang/cloud/onboarding" element={<RoutePage Component={CloudOnboardingPage} />} />
+        <Route path="/:lang/cloud/forgot-password" element={<RoutePage Component={CloudForgotPasswordPage} />} />
+        <Route path="/:lang/cloud/reset-password" element={<RoutePage Component={CloudResetPasswordPage} />} />
+        <Route path="/:lang/cloud/verify-email" element={<RoutePage Component={CloudVerifyEmailPage} />} />
         
         {/* Root paths - auto-detect language */}
         <Route path="/" element={<RoutePage Component={LandingPage} />} />
@@ -94,6 +100,9 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/cloud/signup" element={<RoutePage Component={CloudSignupPage} />} />
         <Route path="/cloud/login" element={<RoutePage Component={CloudLoginPage} />} />
         <Route path="/cloud/onboarding" element={<RoutePage Component={CloudOnboardingPage} />} />
+        <Route path="/cloud/forgot-password" element={<RoutePage Component={CloudForgotPasswordPage} />} />
+        <Route path="/cloud/reset-password" element={<RoutePage Component={CloudResetPasswordPage} />} />
+        <Route path="/cloud/verify-email" element={<RoutePage Component={CloudVerifyEmailPage} />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

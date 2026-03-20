@@ -66,6 +66,10 @@ contextBridge.exposeInMainWorld("chaton", {
     userId: string,
     updates: { subscriptionPlan?: 'plus' | 'pro' | 'max'; isAdmin?: boolean },
   ) => ipcRenderer.invoke("cloud:updateUser", userId, updates),
+  grantCloudSubscription: (
+    userId: string,
+    grant: { planId: 'plus' | 'pro' | 'max'; durationDays?: number | null },
+  ) => ipcRenderer.invoke("cloud:grantSubscription", userId, grant),
   updateCloudPlan: (
     planId: 'plus' | 'pro' | 'max',
     updates: { label?: string; parallelSessionsLimit?: number; isDefault?: boolean },
