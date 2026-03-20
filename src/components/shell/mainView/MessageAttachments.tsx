@@ -57,7 +57,7 @@ export function removeAttachmentText(text: string): string {
 }
 
 export function parseAttachmentsFromText(text: string): MessageAttachmentProps['attachments'] {
-  const attachmentRegex = /--- Pièce jointe \d+ ---\nNom: (.+?)\nType: (.+?)\nTaille: (.+?)(?:\n([\s\S]*?))?(?=\n--- Pièce jointe \d+ ---|$)/g
+  const attachmentRegex = /--- Pièce jointe \d+ ---\nNom: ([^\n]+)\nType: ([^\n]+)\nTaille: ([^\n]+)(?:\n(?!--- Pièce jointe \d+ ---)([\s\S]*?))?(?=\n--- Pièce jointe \d+ ---|$)/g
   const matches = [...text.matchAll(attachmentRegex)]
   const attachments: MessageAttachmentProps['attachments'] = []
 

@@ -1,4 +1,5 @@
 import type {
+  CloudInstance,
   Conversation,
   CreateConversationResult,
   DeleteConversationResult,
@@ -27,6 +28,15 @@ function getApi() {
 type ImportProjectResult =
   | { ok: true; duplicate: boolean; project: Project }
   | { ok: false; reason: "not_git_repo" | "unknown" };
+type ConnectCloudInstanceResult =
+  | { ok: true; duplicate: boolean; id: string }
+  | { ok: false; reason: "invalid_base_url"; message?: string };
+type CreateCloudProjectResult =
+  | { ok: true; project: import("@/features/workspace/types").Project }
+  | {
+      ok: false;
+      reason: "cloud_instance_not_found" | "invalid_name" | "unknown";
+    };
 
 type PiModel = {
   id: string;
@@ -242,6 +252,21 @@ export const workspaceIpc = {
   pickProjectFolder: () => getApi().pickProjectFolder(),
   importProjectFromFolder: (folderPath: string) =>
     getApi().importProjectFromFolder(folderPath),
+  connectCloudInstance: (
+    input: { name?: string; baseUrl?: string },
+  ): Promise<ConnectCloudInstanceResult> => getApi().connectCloudInstance(input),
+  updateCloudInstanceStatus: (
+    instanceId: string,
+    status: CloudInstance["connectionStatus"],
+    lastError?: string | null,
+  ): Promise<{ ok: true } | { ok: false; reason: "instance_not_found" }> =>
+    getApi().updateCloudInstanceStatus(instanceId, status, lastError),
+  createCloudProject: (params: {
+    cloudInstanceId: string;
+    name: string;
+    organizationId: string;
+    organizationName: string;
+  }): Promise<CreateCloudProjectResult> => getApi().createCloudProject(params),
   deleteProject: (projectId: string): Promise<DeleteProjectResult> =>
     getApi().deleteProject(projectId),
   archiveProject: (projectId: string, isArchived: boolean): Promise<{ ok: boolean; reason?: string }> =>

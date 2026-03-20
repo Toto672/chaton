@@ -136,6 +136,7 @@ Structure:
 - API keys and OAuth tokens are stored here, not in `models.json`
 - Chatons may synchronize credentials between `models.json` and `auth.json` for compatibility
 - OAuth flows store credentials here after successful login
+- Writes to `auth.json` should be atomic (temp file + rename), matching the rest of the managed Pi config files
 - Known local no-auth providers such as `lmstudio`, `ollama`, `local`, and `localhost` must not be backfilled into `auth.json` during runtime startup; otherwise Pi sessions can resurrect stale `api_key` entries and incorrectly fail on keyless local endpoints
 - Those same local providers may still carry `apiKey: "!"` inside `models.json` as a Pi schema-compatibility sentinel when they define explicit custom models. Treat that bare `!` as a literal placeholder, not a shell-command config value, or Pi will resolve it to nothing and reject local model switches with false `No API key` errors.
 
@@ -151,6 +152,7 @@ For each conversation, Chatons creates a Pi session with these steps:
    - If worktree is enabled for this conversation, use worktree path
    - Else if conversation is project-linked, use project repository path
    - Else use global workspace at `<userData>/workspace/global`
+   - Only persist a worktree path after verifying the created directory is a valid Git worktree/repository; do not fall back to an empty directory as a fake runtime cwd
 
 2. **Create Pi runtime instance** via `electron/pi-sdk-runtime.ts`
 
@@ -165,6 +167,10 @@ For each conversation, Chatons creates a Pi session with these steps:
    - How to explain limitations to the user
 
 5. **Start Pi session** and expose commands like `get_access_mode` for the model to query live state
+
+### Worktree Cleanup Rule
+
+When a conversation worktree was created via native Git worktrees, cleanup should prefer `git worktree remove --force` over raw directory deletion. Removing only the folder can leave stale entries in the parent repository metadata and break later worktree reuse.
 
 ### Ephemeral Pi Sessions
 

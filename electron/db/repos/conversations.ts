@@ -142,38 +142,54 @@ export function saveConversationPiRuntime(
   db: Database.Database,
   id: string,
   updates: {
-    piSessionFile?: string
-    modelProvider?: string
-    modelId?: string
-    thinkingLevel?: string
-    lastRuntimeError?: string
-    worktreePath?: string
-    accessMode?: 'secure' | 'open'
+    piSessionFile?: string | null
+    modelProvider?: string | null
+    modelId?: string | null
+    thinkingLevel?: string | null
+    lastRuntimeError?: string | null
+    worktreePath?: string | null
+    accessMode?: 'secure' | 'open' | null
     channelExtensionId?: string | null
   },
 ) {
   const now = new Date().toISOString()
+  const hasPiSessionFile = Object.prototype.hasOwnProperty.call(updates, 'piSessionFile')
+  const hasModelProvider = Object.prototype.hasOwnProperty.call(updates, 'modelProvider')
+  const hasModelId = Object.prototype.hasOwnProperty.call(updates, 'modelId')
+  const hasThinkingLevel = Object.prototype.hasOwnProperty.call(updates, 'thinkingLevel')
+  const hasLastRuntimeError = Object.prototype.hasOwnProperty.call(updates, 'lastRuntimeError')
+  const hasWorktreePath = Object.prototype.hasOwnProperty.call(updates, 'worktreePath')
+  const hasAccessMode = Object.prototype.hasOwnProperty.call(updates, 'accessMode')
+  const hasChannelExtensionId = Object.prototype.hasOwnProperty.call(updates, 'channelExtensionId')
   db.prepare(
     `UPDATE conversations
       SET
-        pi_session_file = COALESCE(?, pi_session_file),
-        model_provider = COALESCE(?, model_provider),
-        model_id = COALESCE(?, model_id),
-        thinking_level = COALESCE(?, thinking_level),
-        last_runtime_error = COALESCE(?, last_runtime_error),
-        worktree_path = COALESCE(?, worktree_path),
-        access_mode = COALESCE(?, access_mode),
-        channel_extension_id = COALESCE(?, channel_extension_id),
+        pi_session_file = CASE WHEN ? = 1 THEN ? ELSE pi_session_file END,
+        model_provider = CASE WHEN ? = 1 THEN ? ELSE model_provider END,
+        model_id = CASE WHEN ? = 1 THEN ? ELSE model_id END,
+        thinking_level = CASE WHEN ? = 1 THEN ? ELSE thinking_level END,
+        last_runtime_error = CASE WHEN ? = 1 THEN ? ELSE last_runtime_error END,
+        worktree_path = CASE WHEN ? = 1 THEN ? ELSE worktree_path END,
+        access_mode = CASE WHEN ? = 1 THEN ? ELSE access_mode END,
+        channel_extension_id = CASE WHEN ? = 1 THEN ? ELSE channel_extension_id END,
         updated_at = ?
       WHERE id = ?`
   ).run(
+    hasPiSessionFile ? 1 : 0,
     updates.piSessionFile ?? null,
+    hasModelProvider ? 1 : 0,
     updates.modelProvider ?? null,
+    hasModelId ? 1 : 0,
     updates.modelId ?? null,
+    hasThinkingLevel ? 1 : 0,
     updates.thinkingLevel ?? null,
+    hasLastRuntimeError ? 1 : 0,
     updates.lastRuntimeError ?? null,
+    hasWorktreePath ? 1 : 0,
     updates.worktreePath ?? null,
+    hasAccessMode ? 1 : 0,
     updates.accessMode ?? null,
+    hasChannelExtensionId ? 1 : 0,
     updates.channelExtensionId ?? null,
     now,
     id,

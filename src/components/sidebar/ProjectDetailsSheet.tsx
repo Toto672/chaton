@@ -259,9 +259,26 @@ export function ProjectDetailsSheet({ project, open, onClose, onProjectUpdated, 
                     <dd>{project.repoName}</dd>
                   </div>
                   <div>
-                    <dt>{t('Chemin')}</dt>
-                    <dd className="project-sheet-path">{project.repoPath}</dd>
+                    <dt>{t('Type')}</dt>
+                    <dd>{project.location === 'cloud' ? t('Projet cloud') : t('Projet local')}</dd>
                   </div>
+                  {project.location === 'cloud' ? (
+                    <>
+                      <div>
+                        <dt>{t('Organisation')}</dt>
+                        <dd>{project.organizationName || 'N/A'}</dd>
+                      </div>
+                      <div>
+                        <dt>{t('Etat cloud')}</dt>
+                        <dd>{project.cloudStatus || 'unknown'}</dd>
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <dt>{t('Chemin')}</dt>
+                      <dd className="project-sheet-path">{project.repoPath}</dd>
+                    </div>
+                  )}
                   <div>
                     <dt>{t('Cree le')}</dt>
                     <dd>{formatDate(project.createdAt)}</dd>

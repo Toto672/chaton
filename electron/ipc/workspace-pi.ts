@@ -251,7 +251,7 @@ function ensurePiAuthJsonExists(agentDir: string): void {
     return;
   }
   fs.mkdirSync(path.dirname(authPath), { recursive: true });
-  fs.writeFileSync(authPath, "{}\n", "utf8");
+  atomicWriteJson(authPath, {});
 }
 
 function cleanupStaleLocks(agentDir: string): void {
@@ -594,7 +594,7 @@ function migrateProviderApiKeysToAuthIfNeeded(agentDir: string): void {
   }
 
   fs.mkdirSync(path.dirname(authPath), { recursive: true });
-  fs.writeFileSync(authPath, `${JSON.stringify(auth, null, 2)}\n`, "utf8");
+  atomicWriteJson(authPath, auth);
 }
 
 function cleanupNoAuthProviderKeys(agentDir: string): void {
@@ -623,7 +623,7 @@ function cleanupNoAuthProviderKeys(agentDir: string): void {
   }
 
   if (changed) {
-    fs.writeFileSync(authPath, `${JSON.stringify(auth, null, 2)}\n`, "utf8");
+    atomicWriteJson(authPath, auth);
   }
 }
 
@@ -735,16 +735,8 @@ export function syncProviderApiKeysBetweenModelsAndAuth(
       ...models,
       providers: nextProviders,
     } as Record<string, unknown>;
-    fs.writeFileSync(
-      modelsPath,
-      `${JSON.stringify(nextModels, null, 2)}\n`,
-      "utf8",
-    );
-    fs.writeFileSync(
-      authPath,
-      `${JSON.stringify(nextAuth, null, 2)}\n`,
-      "utf8",
-    );
+    atomicWriteJson(modelsPath, nextModels);
+    atomicWriteJson(authPath, nextAuth as Record<string, unknown>);
   }
 }
 

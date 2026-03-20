@@ -1,35 +1,39 @@
-import type { SidebarSettings } from "@/features/workspace/types";
-import { useTranslation } from "react-i18next";
+import { useTranslation } from 'react-i18next'
+
+import type { SidebarSettings } from '@/features/workspace/types'
 
 type Props = {
-  settings: SidebarSettings;
-  setSettings: (next: SidebarSettings) => void;
-  onSave: () => void;
-};
+  settings: SidebarSettings
+  setSettings: (next: SidebarSettings) => void
+  onSave: () => void
+}
 
 export function BehaviorSection({ settings, setSettings, onSave }: Props) {
-  const { t } = useTranslation();
+  const { t } = useTranslation()
+
   return (
     <section className="settings-card">
-      <h3 className="settings-card-title">{t("Comportement")}</h3>
-      <div className="settings-card-note">
-        {t(
-          "Prompt appliqué automatiquement au début de chaque message utilisateur.",
-        )}
+      <h3 className="settings-card-title">{t('Comportement')}</h3>
+
+      {/* Prompt système */}
+      <div className="settings-card-note" style={{ marginBottom: '12px' }}>
+        {t('Prompt appliqué automatiquement au début de chaque message utilisateur.')}
       </div>
       <label className="settings-row-wrap">
         <textarea
           className="settings-input"
-          rows={18}
-          value={String(settings.defaultBehaviorPrompt ?? "")}
+          rows={12}
+          value={String(settings.defaultBehaviorPrompt ?? '')}
           onChange={(e) =>
             setSettings({ ...settings, defaultBehaviorPrompt: e.target.value })
           }
+          placeholder={t('Entrez votre prompt système...')}
         />
       </label>
-      <button type="button" className="settings-action" onClick={onSave}>
-        {t("Sauvegarder")}
+
+      <button type="button" className="settings-action" onClick={onSave} style={{ marginTop: '16px' }}>
+        {t('Sauvegarder')}
       </button>
     </section>
-  );
+  )
 }

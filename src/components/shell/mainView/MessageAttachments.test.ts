@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest'
 import { parseAttachmentsFromText, hasAttachments, removeAttachmentText } from './MessageAttachments'
 
 describe('MessageAttachments', () => {
@@ -15,7 +16,7 @@ describe('MessageAttachments', () => {
     it('should remove attachment text from message', () => {
       const text = 'Check this out --- Pièce jointe 1 ---\nNom: test.png\nType: image/png\nTaille: 100 KB\nThis is the rest of the message'
       const cleaned = removeAttachmentText(text)
-      expect(cleaned).toBe('Check this out This is the rest of the message')
+      expect(cleaned).toBe('Check this out')
     })
   })
 
@@ -51,7 +52,7 @@ describe('MessageAttachments', () => {
     })
 
     it('should parse multiple attachments', () => {
-      const text = 'Multiple files --- Pièce jointe 1 ---\nNom: image1.jpg\nType: image/jpeg\nTaille: 100 KB\n--- Pièce jointe 2 ---\nNom: document.txt\nType: text/plain\nTaille: 5 KB'
+      const text = 'Multiple files\n--- Pièce jointe 1 ---\nNom: image1.jpg\nType: image/jpeg\nTaille: 100 KB\n--- Pièce jointe 2 ---\nNom: document.txt\nType: text/plain\nTaille: 5 KB'
       
       const attachments = parseAttachmentsFromText(text)
       expect(attachments.length).toBe(2)

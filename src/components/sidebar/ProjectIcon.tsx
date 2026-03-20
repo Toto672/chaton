@@ -1,16 +1,56 @@
-import { FolderGit2 } from 'lucide-react'
+import { Cloud, FolderGit2 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
 type ProjectIconProps = {
   icon: string | null | undefined
+  location?: 'local' | 'cloud'
+  cloudStatus?: 'connected' | 'connecting' | 'disconnected' | 'error' | null
   size?: number
   loadAsDataUrl?: boolean
 }
 
 /** Render a project icon: emoji text, file:// image (as data URL), or default FolderGit2 */
-export function ProjectIcon({ icon, size = 16, loadAsDataUrl = false }: ProjectIconProps) {
+export function ProjectIcon({ icon, location = 'local', cloudStatus = null, size = 16, loadAsDataUrl = false }: ProjectIconProps) {
   const trimmed = icon?.trim()
   const [dataUrl, setDataUrl] = useState<string | null>(null)
+
+  const cloudColor =
+    cloudStatus === 'connected'
+      ? '#16a34a'
+      : cloudStatus === 'connecting'
+        ? '#f59e0b'
+        : cloudStatus === 'error' || cloudStatus === 'disconnected'
+          ? '#dc2626'
+          : '#94a3b8'
+
+  const renderBadge = () =>
+    location === 'cloud' ? (
+      <span
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          right: -4,
+          bottom: -4,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: Math.max(10, Math.round(size * 0.75)),
+          height: Math.max(10, Math.round(size * 0.75)),
+          borderRadius: 999,
+          background: 'white',
+          boxShadow: '0 0 0 1px rgba(0,0,0,0.08)',
+        }}
+      >
+        <Cloud style={{ width: Math.max(8, Math.round(size * 0.5)), height: Math.max(8, Math.round(size * 0.5)), color: cloudColor }} />
+      </span>
+    ) : null
+
+  const wrap = (child: React.ReactNode) => (
+    <span style={{ position: 'relative', display: 'inline-flex', width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      {child}
+      {renderBadge()}
+    </span>
+  )
 
   // Convert file:// path to data URL on mount
   useEffect(() => {
@@ -37,13 +77,13 @@ export function ProjectIcon({ icon, size = 16, loadAsDataUrl = false }: ProjectI
   }, [trimmed, loadAsDataUrl])
 
   if (!trimmed) {
-    return <FolderGit2 className="shrink-0" style={{ width: size, height: size }} />
+    return wrap(<FolderGit2 className="shrink-0" style={{ width: size, height: size }} />)
   }
   if (trimmed.startsWith('file://')) {
     if (!loadAsDataUrl) {
       // Fallback: try file:// directly (may not work in Electron)
       const src = trimmed.replace(/^file:\/\//, '')
-      return (
+      return wrap(
         <img
           src={`file://${src}`}
           alt=""
@@ -55,7 +95,7 @@ export function ProjectIcon({ icon, size = 16, loadAsDataUrl = false }: ProjectI
     }
     // Use data URL if available
     if (dataUrl) {
-      return (
+      return wrap(
         <img
           src={dataUrl}
           alt=""
@@ -66,7 +106,7 @@ export function ProjectIcon({ icon, size = 16, loadAsDataUrl = false }: ProjectI
       )
     }
     // Still loading
-    return <FolderGit2 className="shrink-0" style={{ width: size, height: size, opacity: 0.5 }} />
+    return wrap(<FolderGit2 className="shrink-0" style={{ width: size, height: size, opacity: 0.5 }} />)
   }
-  return <>{trimmed}</>
+  return wrap(<span>{trimmed}</span>)
 }

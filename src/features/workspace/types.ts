@@ -11,14 +11,30 @@ export type ConversationStatus = 'active' | 'done' | 'archived'
 export type Project = {
   id: string
   name: string
-  repoPath: string
+  repoPath: string | null
   repoName: string
+  location: 'local' | 'cloud'
+  cloudInstanceId?: string | null
+  organizationId?: string | null
+  organizationName?: string | null
+  cloudStatus?: 'connected' | 'connecting' | 'disconnected' | 'error' | null
   createdAt: string
   updatedAt: string
   isArchived: boolean
   isHidden: boolean
   icon: string | null
   subFolderId?: string | null
+}
+
+export type CloudInstance = {
+  id: string
+  name: string
+  baseUrl: string
+  authMode: 'oauth'
+  connectionStatus: 'connected' | 'connecting' | 'disconnected' | 'error'
+  lastError: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export type ConversationTitleSource = 'placeholder' | 'auto-deterministic' | 'auto-ai' | 'manual'
@@ -245,6 +261,7 @@ export type ExtensionConfigSheet = {
 export type WorkspaceState = {
   projects: Project[]
   conversations: Conversation[]
+  cloudInstances: CloudInstance[]
   selectedProjectId: string | null
   selectedConversationId: string | null
   sidebarMode: SidebarMode
@@ -265,6 +282,7 @@ export type WorkspaceState = {
 export type WorkspacePayload = {
   projects: Project[]
   conversations: Conversation[]
+  cloudInstances: CloudInstance[]
   settings: SidebarSettings
   extensionUpdatesCount: number
 }

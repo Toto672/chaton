@@ -34,7 +34,7 @@ const PiSettingsContext = createContext<PiSettingsContextValue | null>(null)
 
 export function PiSettingsProvider({ children }: PropsWithChildren) {
   const REFRESH_TTL_MS = 30_000
-  const [activeSection, setActiveSection] = useState<SettingsSection>('general')
+  const [activeSection, setActiveSection] = useState<SettingsSection>('appearance')
   const [snapshot, setSnapshot] = useState<PiConfigSnapshot | null>(null)
   const [settingsJson, setSettingsJson] = useState<PiSettingsJson>({})
   const [modelsJson, setModelsJson] = useState<PiModelsJson>({})
@@ -89,7 +89,7 @@ export function PiSettingsProvider({ children }: PropsWithChildren) {
   }, [])
 
   useEffect(() => {
-    if (activeSection !== 'providersModels') {
+    if (activeSection !== 'models') {
       return
     }
     const now = Date.now()

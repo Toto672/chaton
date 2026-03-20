@@ -6,11 +6,16 @@ import type { ExtensionHostCallResult } from './types.js'
 type DbProject = {
   id: string
   name: string
-  repo_path: string
+  repo_path: string | null
   repo_name: string
   is_archived: number
   is_hidden: number
   icon: string | null
+  location: 'local' | 'cloud'
+  cloud_instance_id: string | null
+  organization_id: string | null
+  organization_name: string | null
+  cloud_status: 'connected' | 'connecting' | 'disconnected' | 'error' | null
   created_at: string
   updated_at: string
 }
@@ -32,6 +37,11 @@ function hydrateProject(row: DbProject) {
     name: row.name,
     repoPath: row.repo_path,
     repoName: row.repo_name,
+    location: row.location,
+    cloudInstanceId: row.cloud_instance_id,
+    organizationId: row.organization_id,
+    organizationName: row.organization_name,
+    cloudStatus: row.cloud_status,
     isArchived: row.is_archived === 1,
     isHidden: row.is_hidden === 1,
     icon: row.icon,

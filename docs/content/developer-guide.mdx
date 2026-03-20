@@ -127,6 +127,8 @@ Stored settings: `assistantName`, `assistantUserName`, `assistantChannelId`, `as
 
 On macOS, closing the window hides it instead of quitting. The app stays in the background with a status bar icon. `Cmd+Q` or the menu "Quit" action triggers actual quit.
 
+On Windows and Linux, closing the last window destroys it but leaves the process alive in the background. Chatons now clears the main-window reference on actual destruction so activation, notifications, and deep-link handling can recreate a fresh window instead of targeting a stale destroyed instance.
+
 ### Renderer (`src/App.tsx`)
 
 The renderer blocks the main UI behind a `LoadingSplash` component until workspace hydration completes. The loading screen shows the mascot video and rotating cat-themed messages.
@@ -190,6 +192,8 @@ The runtime `cwd` is chosen in order:
 2. Project repository path (if conversation is project-linked)
 3. Global workspace directory (`<userData>/workspace/global`)
 
+Project worktrees are only persisted after Chatons confirms the created directory is a valid Git worktree/repository. Failed creation attempts are cleaned up instead of leaving an empty folder recorded as the conversation runtime cwd.
+
 ### Access Mode
 
 | Mode | Tool cwd | Effect |
@@ -212,6 +216,8 @@ The runtime exposes `get_access_mode` so the model can re-check the live mode.
 ### Event Bridge
 
 Pi runtime events are forwarded to the renderer via `pi:event` IPC channel. Events include message lifecycle, tool execution, compaction, retry, extension UI requests, and runtime status/errors. Events are also logged through the logging pipeline with `source: "pi"`.
+
+The workspace handler layer also registers a runtime event subscription. That subscription is explicitly disposed during shutdown so same-process reload paths do not accumulate duplicate Pi listeners.
 
 ### Settings Lock Handling
 
@@ -419,6 +425,7 @@ After completed conversations, Chatons now runs a lightweight background analyze
 - Supports commit, merge to base branch, push, and VS Code integration
 - Worktree paths are stored in the conversation database row
 - Orphaned worktrees are cleaned up on app startup
+- Worktree removal prefers `git worktree remove --force` when native Git is available
 
 ### Limitations
 

@@ -1,160 +1,144 @@
-import { useMemo } from "react";
-import i18n from "@/lib/i18n";
-
-import { CommandsSection } from "@/components/sidebar/settings/sections/CommandsSection";
-import { DiagnosticsSection } from "@/components/sidebar/settings/sections/DiagnosticsSection";
-import { BehaviorSection } from "@/components/sidebar/settings/sections/BehaviorSection";
-import { GeneralSection } from "@/components/sidebar/settings/sections/GeneralSection";
-import { LanguageSection } from "@/components/sidebar/settings/sections/LanguageSection";
-import { MemorySection } from "@/components/sidebar/settings/sections/MemorySection";
-import { AutocompleteSection } from "@/components/sidebar/settings/sections/AutocompleteSection";
-import { TitleSection } from "@/components/sidebar/settings/sections/TitleSection";
-import { ProvidersModelsSection } from "@/components/sidebar/settings/sections/ProvidersModelsSection";
-import { SessionsSection } from "@/components/sidebar/settings/sections/SessionsSection";
-import { ShortcutsSection } from "@/components/sidebar/settings/sections/ShortcutsSection";
-import { SidebarSection } from "@/components/sidebar/settings/sections/SidebarSection";
-import { AudioSection } from "@/components/sidebar/settings/sections/AudioSection";
-import { useWorkspace } from "@/features/workspace/store";
-import { usePiSettingsStore } from "@/features/workspace/pi-settings-store";
-import { workspaceIpc } from "@/services/ipc/workspace";
+import { AppearanceSection } from '@/components/sidebar/settings/sections/AppearanceSection'
+import { BehaviorSection } from '@/components/sidebar/settings/sections/BehaviorSection'
+import { ModelsSection } from '@/components/sidebar/settings/sections/ModelsSection'
+import { AdvancedSection } from '@/components/sidebar/settings/sections/AdvancedSection'
+import { useWorkspace } from '@/features/workspace/store'
+import { usePiSettingsStore } from '@/features/workspace/pi-settings-store'
 
 export function PiSettingsMainPanel() {
-  const { state, setNotice, openPiPath, updateSettings } = useWorkspace();
+  const { state, setNotice, openPiPath, updateSettings } = useWorkspace()
   const {
     activeSection,
-    snapshot,
     settingsJson,
     setSettingsJson,
     modelsJson,
     setModelsJson,
-    models,
     diagnostics,
     lastResult,
-    refresh,
     saveSettings,
-  } = usePiSettingsStore();
+    refresh,
+  } = usePiSettingsStore()
 
-  const sessionDir = useMemo(
-    () => String(settingsJson.sessionDir ?? ""),
-    [settingsJson],
-  );
-
-  const handleSaveSettings = async () => {
-    const result = await saveSettings();
+  const handleSaveSettingsJson = async () => {
+    const result = await saveSettings()
     if (!result.ok) {
-      setNotice(result.message);
-      return;
+      setNotice(result.message)
+      return
     }
-    setNotice("settings.json sauvegardé.");
-    await refresh();
-  };
+    setNotice('settings.json sauvegardé.')
+    await refresh()
+  }
 
-  const handleSaveBehaviorSettings = async () => {
-    await updateSettings(state.settings);
-    setNotice("Paramètres de comportement sauvegardés.");
-  };
-
-  const handleLanguageChange = async (language: string) => {
-    await i18n.changeLanguage(language);
-    await workspaceIpc.updateLanguagePreference(language);
-  };
+  const handleSaveSidebarSettings = async () => {
+    await updateSettings(state.settings)
+    setNotice('Paramètres sauvegardés.')
+  }
 
   return (
     <div className="main-scroll">
       <section className="chat-section settings-main-wrap">
-        {activeSection === "general" ? (
-          <GeneralSection
-            settings={settingsJson}
-            setSettings={setSettingsJson}
-            onSave={handleSaveSettings}
+        {/* Apparence */}
+        {activeSection === 'appearance' && (
+          <AppearanceSection
+            settingsJson={settingsJson}
+            sidebarSettings={state.settings}
+            setSettingsJson={setSettingsJson}
+            setSidebarSettings={(next) => updateSettings(next)}
+            onSaveSettingsJson={handleSaveSettingsJson}
+            onSaveSidebar={handleSaveSidebarSettings}
           />
-        ) : null}
-        {activeSection === "behavior" ? (
+        )}
+
+        {/* Comportement */}
+        {activeSection === 'behavior' && (
           <BehaviorSection
             settings={state.settings}
             setSettings={(next) => updateSettings(next)}
-            onSave={handleSaveBehaviorSettings}
+            onSave={handleSaveSidebarSettings}
           />
-        ) : null}
-        {activeSection === "sidebar" ? (
-          <SidebarSection
-            settings={state.settings}
-            setSettings={(next) => updateSettings(next)}
-            onSave={handleSaveBehaviorSettings}
-          />
-        ) : null}
-        {activeSection === "audio" ? (
-          <AudioSection
-            settings={state.settings}
-            setSettings={(next) => updateSettings(next)}
-            onSave={handleSaveBehaviorSettings}
-          />
-        ) : null}
-        {activeSection === "language" ? (
-          <LanguageSection
-            currentLanguage={i18n.language}
-            setLanguage={handleLanguageChange}
-          />
-        ) : null}
-        {activeSection === "providersModels" ? (
-          <ProvidersModelsSection
+        )}
+
+        {/* Modèles */}
+        {activeSection === 'models' && (
+          <ModelsSection
             modelsJson={modelsJson}
             setModelsJson={setModelsJson}
-            models={models}
             onProviderConnected={() => {
-              void refresh();
-            }}
-            onToggleScope={async (model) => {
-              const result = await workspaceIpc.setPiModelScoped(
-                model.provider,
-                model.id,
-                !model.scoped,
-              );
-              if (!result.ok) {
-                setNotice(
-                  result.message ??
-                    "Impossible de modifier le scope du modèle.",
-                );
-                return;
-              }
-              const scopedKeys = result.models
-                .filter((item) => item.scoped)
-                .map((item) => item.key);
-              setSettingsJson({ ...settingsJson, enabledModels: scopedKeys });
-              await refresh();
+              void refresh()
             }}
           />
-        ) : null}
-        {activeSection === "memory" ? (
-          <MemorySection />
-        ) : null}
-        {activeSection === "autocomplete" ? (
-          <AutocompleteSection />
-        ) : null}
-        {activeSection === "title" ? (
-          <TitleSection />
-        ) : null}
-        {activeSection === "sessions" ? (
-          <SessionsSection
-            sessionDir={sessionDir}
-            openSessions={() => {
-              void openPiPath("sessions");
+        )}
+
+        {/* Audio */}
+        {activeSection === 'audio' && (
+          <AudioSectionWrapper
+            settings={state.settings}
+            setSettings={(next) => updateSettings(next)}
+            onSave={handleSaveSidebarSettings}
+          />
+        )}
+
+        {/* Sessions */}
+        {activeSection === 'sessions' && (
+          <SessionsSectionWrapper
+            sessionDir={String(settingsJson.sessionDir ?? '')}
+            onOpenSessions={() => {
+              void openPiPath('sessions')
             }}
           />
-        ) : null}
-        {activeSection === "shortcuts" ? (
-          <ShortcutsSection />
-        ) : null}
-        {activeSection === "commands" ? (
-          <CommandsSection lastResult={lastResult} />
-        ) : null}
-        {activeSection === "diagnostics" ? (
-          <DiagnosticsSection diagnostics={diagnostics} />
-        ) : null}
-        {snapshot?.errors?.length ? (
-          <div className="settings-error">{snapshot.errors.join(" | ")}</div>
-        ) : null}
+        )}
+
+        {/* Avancé */}
+        {activeSection === 'advanced' && (
+          <AdvancedSection
+            lastResult={lastResult}
+            diagnostics={diagnostics}
+          />
+        )}
       </section>
     </div>
-  );
+  )
+}
+
+// Wrapper components to maintain compatibility with existing sections
+import { AudioSection } from '@/components/sidebar/settings/sections/AudioSection'
+import type { SidebarSettings } from '@/features/workspace/types'
+
+function AudioSectionWrapper({
+  settings,
+  setSettings,
+  onSave,
+}: {
+  settings: SidebarSettings
+  setSettings: (next: SidebarSettings) => void
+  onSave: () => void
+}) {
+  return <AudioSection settings={settings} setSettings={setSettings} onSave={onSave} />
+}
+
+import { useTranslation } from 'react-i18next'
+
+function SessionsSectionWrapper({
+  sessionDir,
+  onOpenSessions,
+}: {
+  sessionDir: string
+  onOpenSessions: () => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <section className="settings-card">
+      <h3 className="settings-card-title">{t('Sessions')}</h3>
+      <div className="settings-card-note">
+        {t('Session dir')}:{' '}
+        <span className="settings-mono">{sessionDir || t('Local sessions')}</span>
+      </div>
+      <div className="settings-actions-row">
+        <button type="button" className="settings-action" onClick={onOpenSessions}>
+          {t('Ouvrir dossier sessions')}
+        </button>
+      </div>
+    </section>
+  )
 }

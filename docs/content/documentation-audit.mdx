@@ -5,6 +5,38 @@ description: Verified documentation changes and rationale for Chatons features a
 
 # Documentation Audit
 
+## 2026-03-20 (Latest)
+
+### Added proposed cloud architecture for organization-owned remote runtimes
+
+**Change:** Added a dedicated cloud architecture design document covering multi-organization tenancy, organization-scoped provider credentials, headless server runtimes, HTTP plus WebSocket synchronization, desktop OAuth connection flow, monorepo layout, scaling model, and phased implementation guidance.
+
+**Why:** Chatons currently documents only its desktop-first local runtime model. The planned cloud feature requires a separate target-state architecture that makes one rule explicit: cloud projects do not use local Pi, and cloud provider configuration and secrets are owned by the organization in the cloud rather than by each desktop client.
+
+**Verified files:**
+- `docs/content/cloud-architecture.mdx` -- New proposed architecture reference for cloud projects, remote runtimes, organization permissions, and realtime sync
+- `docs/content/meta.json` -- Added the new cloud architecture page to documentation navigation
+- `docs/content/index.mdx` -- Added the new cloud architecture page to the docs landing page
+
+## 2026-03-20
+
+### Hardened conversation worktrees, Git status caching, and window/runtime cleanup
+
+**Change:** Tightened project-thread worktree lifecycle, corrected Git status cache semantics, switched worktree removal to prefer native `git worktree remove --force`, cleared stale main-window references on real window destruction, and disposed workspace runtime event subscriptions during shutdown. Pi auth/config writes were also moved to atomic JSON writes for consistency with the rest of the managed Pi directory.
+
+**Why:** The previous worktree flow could persist an empty fallback directory as a valid conversation worktree after creation failures, direct directory deletion could leave orphaned native Git worktree metadata behind, and the Git status cache could return incorrect staged/unstaged answers depending on call order. Separately, the main process could retain a destroyed window reference while the app stayed alive in the background, and workspace handler shutdown did not release its Pi runtime subscription.
+
+**Verified files:**
+- `electron/ipc/workspace.ts` -- Worktree creation now fails closed, cleanup matches the real worktree directory layout, and async Git repo checks are awaited correctly
+- `electron/ipc/workspace-handlers.ts` -- Worktree removal now receives the parent repo path and runtime event subscriptions are disposed on shutdown
+- `electron/lib/git/git-service.ts` -- Reworked status caching, added native worktree removal helper, and exported parsing helpers for tests
+- `electron/lib/git/git-service.test.ts` -- Added tests covering independent staged vs unstaged status parsing
+- `electron/db/repos/conversations.ts` -- Allows explicit nullable runtime-field clears instead of only COALESCE-style updates
+- `electron/ipc/workspace-pi.ts` -- Uses atomic JSON writes for `auth.json` sync/bootstrap paths
+- `electron/main.ts` -- Registers window IPC once and clears `mainWindow` on actual window destruction
+- `docs/content/pi-integration.mdx` -- Documented strict worktree persistence and native worktree removal behavior
+- `docs/content/developer-guide.mdx` -- Documented stricter worktree/runtime cleanup and destroyed-window handling
+
 ## 2026-03-17 (Latest)
 
 ### Fixed CronJob removeAllListeners() TypeError in cron scheduler

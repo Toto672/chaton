@@ -36,6 +36,26 @@
     @apply bg-white text-[#2c2d34] shadow-sm;
   }
 
+  .settings-nav-divider {
+    @apply my-2 border-t border-[#e4e5ea];
+  }
+
+  .settings-tab-nav {
+    @apply flex gap-1 mb-4 p-1 bg-[#f0f1f5] rounded-lg;
+  }
+
+  .settings-tab-btn {
+    @apply flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors text-[#5c5e67] hover:text-[#2c2d34];
+  }
+
+  .settings-tab-btn-active {
+    @apply bg-white text-[#2c2d34] shadow-sm;
+  }
+
+  .settings-tab-content {
+    @apply py-3;
+  }
+
   .settings-content {
     @apply min-h-0 flex-1 space-y-2 overflow-y-auto p-2;
   }

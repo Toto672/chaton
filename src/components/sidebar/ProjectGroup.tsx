@@ -118,7 +118,12 @@ export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [
           aria-controls={sectionId}
         >
           <span className="project-leading-icon" aria-hidden="true">
-            <ProjectIcon icon={project.icon} loadAsDataUrl />
+            <ProjectIcon
+              icon={project.icon}
+              location={project.location}
+              cloudStatus={project.cloudStatus ?? null}
+              loadAsDataUrl
+            />
           </span>
           <span className="project-title truncate">{project.name}</span>
         </button>

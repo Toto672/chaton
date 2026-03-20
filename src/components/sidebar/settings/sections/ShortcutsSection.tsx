@@ -1,32 +1,32 @@
-import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Edit2, Keyboard, X } from 'lucide-react';
+import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Edit2, Keyboard, X } from 'lucide-react'
 
-import { useShortcuts } from '@/hooks/use-shortcuts';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import type { ShortcutConfig, ShortcutAction } from '@/services/ipc/shortcuts';
+import { useShortcuts } from '@/hooks/use-shortcuts'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import type { ShortcutConfig, ShortcutAction } from '@/services/ipc/shortcuts'
 
 export function ShortcutsSection() {
-  const { t } = useTranslation();
+  const { t } = useTranslation()
   const {
     getAllShortcuts,
     getAllActions,
     updateShortcut,
     saveConfigs
-  } = useShortcuts();
+  } = useShortcuts()
 
-  const [shortcuts, setShortcuts] = useState<ShortcutConfig[]>([]);
-  const [actions, setActions] = useState<ShortcutAction[]>([]);
-  const [editingShortcut, setEditingShortcut] = useState<string | null>(null);
+  const [shortcuts, setShortcuts] = useState<ShortcutConfig[]>([])
+  const [actions, setActions] = useState<ShortcutAction[]>([])
+  const [editingShortcut, setEditingShortcut] = useState<string | null>(null)
   const [editData, setEditData] = useState({
     accelerator: '',
     scope: 'foreground' as 'foreground' | 'global',
     enabled: true
-  });
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordedKeys, setRecordedKeys] = useState<string[]>([]);
+  })
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordedKeys, setRecordedKeys] = useState<string[]>([])
 
   useEffect(() => {
     const loadData = async () => {
@@ -34,76 +34,76 @@ export function ShortcutsSection() {
         const [shortcutsData, actionsData] = await Promise.all([
           getAllShortcuts(),
           getAllActions()
-        ]);
-        setShortcuts(shortcutsData);
-        setActions(actionsData);
+        ])
+        setShortcuts(shortcutsData)
+        setActions(actionsData)
       } catch (error) {
-        console.error('Failed to load shortcuts data:', error);
+        console.error('Failed to load shortcuts data:', error)
       }
-    };
+    }
 
-    loadData();
-  }, [getAllShortcuts, getAllActions]);
+    void loadData()
+  }, [getAllShortcuts, getAllActions])
 
   const handleEditClick = (shortcut: ShortcutConfig) => {
-    setEditingShortcut(shortcut.id);
+    setEditingShortcut(shortcut.id)
     setEditData({
       accelerator: shortcut.accelerator,
       scope: shortcut.scope,
       enabled: shortcut.enabled
-    });
-    setIsDialogOpen(true);
-  };
+    })
+    setIsDialogOpen(true)
+  }
 
   const handleSave = async () => {
-    if (!editingShortcut) return;
+    if (!editingShortcut) return
 
     try {
-      await updateShortcut(editingShortcut, editData);
-      await saveConfigs();
+      await updateShortcut(editingShortcut, editData)
+      await saveConfigs()
       
       // Refresh the data
-      const updatedShortcuts = await getAllShortcuts();
-      setShortcuts(updatedShortcuts);
+      const updatedShortcuts = await getAllShortcuts()
+      setShortcuts(updatedShortcuts)
       
-      setIsDialogOpen(false);
-      setEditingShortcut(null);
+      setIsDialogOpen(false)
+      setEditingShortcut(null)
     } catch (error) {
-      console.error('Failed to save shortcut:', error);
+      console.error('Failed to save shortcut:', error)
     }
-  };
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!isRecording) return;
+    if (!isRecording) return
     
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault()
+    e.stopPropagation()
     
-    const keys: string[] = [];
-    if (e.ctrlKey) keys.push('Ctrl');
-    if (e.metaKey) keys.push('Cmd');
-    if (e.shiftKey) keys.push('Shift');
-    if (e.altKey) keys.push('Alt');
+    const keys: string[] = []
+    if (e.ctrlKey) keys.push('Ctrl')
+    if (e.metaKey) keys.push('Cmd')
+    if (e.shiftKey) keys.push('Shift')
+    if (e.altKey) keys.push('Alt')
     
     if (e.key !== 'Control' && e.key !== 'Meta' && e.key !== 'Shift' && e.key !== 'Alt') {
-      keys.push(e.key);
+      keys.push(e.key)
     }
     
-    setRecordedKeys(keys);
-    setEditData(prev => ({ ...prev, accelerator: keys.join('+') }));
-    setIsRecording(false);
-  };
+    setRecordedKeys(keys)
+    setEditData(prev => ({ ...prev, accelerator: keys.join('+') }))
+    setIsRecording(false)
+  }
 
   const startRecording = () => {
-    setIsRecording(true);
-    setRecordedKeys([]);
-    setEditData(prev => ({ ...prev, accelerator: '' }));
-  };
+    setIsRecording(true)
+    setRecordedKeys([])
+    setEditData(prev => ({ ...prev, accelerator: '' }))
+  }
 
   const getActionName = (actionId: string) => {
-    const action = actions.find(a => a.id === actionId);
-    return action ? action.name : actionId;
-  };
+    const action = actions.find(a => a.id === actionId)
+    return action ? action.name : actionId
+  }
 
   return (
     <div className="settings-section">
@@ -144,11 +144,11 @@ export function ShortcutsSection() {
                     type="checkbox"
                     checked={shortcut.enabled}
                     onChange={async (e) => {
-                      const checked = e.target.checked;
-                      await updateShortcut(shortcut.id, { enabled: checked });
-                      await saveConfigs();
-                      const updatedShortcuts = await getAllShortcuts();
-                      setShortcuts(updatedShortcuts);
+                      const checked = e.target.checked
+                      await updateShortcut(shortcut.id, { enabled: checked })
+                      await saveConfigs()
+                      const updatedShortcuts = await getAllShortcuts()
+                      setShortcuts(updatedShortcuts)
                     }}
                     className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
@@ -251,5 +251,5 @@ export function ShortcutsSection() {
         )}
       </div>
     </div>
-  );
+  )
 }

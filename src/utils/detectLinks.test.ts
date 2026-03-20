@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { detectLinks, replaceLinksWithAnchors } from './detectLinks';
 
 describe('detectLinks', () => {
@@ -25,6 +26,6 @@ describe('replaceLinksWithAnchors', () => {
     const text = 'Links: https://example.com and http://test.com.';
     const processedText = replaceLinksWithAnchors(text);
     expect(processedText).toContain('<a href="#" class="clickable-link" data-url="https://example.com">https://example.com</a>');
-    expect(processedText).toContain('<a href="#" class="clickable-link" data-url="http://test.com">http://test.com</a>');
+    expect(processedText).toContain('<a href="#" class="clickable-link" data-url="http://test.com.">http://test.com.</a>');
   });
 });

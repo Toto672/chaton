@@ -26,6 +26,7 @@ import {
 } from "../db/repos/pi-models-cache.js";
 import { getLanguagePreference } from "../db/repos/settings.js";
 import { listProjects, updateProjectIcon } from "../db/repos/projects.js";
+import { listCloudInstances } from "../db/repos/cloud-instances.js";
 import {
   getSidebarSettings,
   saveSidebarSettings,
@@ -102,8 +103,13 @@ type WorkspacePayload = {
   projects: Array<{
     id: string;
     name: string;
-    repoPath: string;
+    repoPath: string | null;
     repoName: string;
+    location: "local" | "cloud";
+    cloudInstanceId: string | null;
+    organizationId: string | null;
+    organizationName: string | null;
+    cloudStatus: "connected" | "connecting" | "disconnected" | "error" | null;
     isArchived: boolean;
     isHidden: boolean;
     icon: string | null;
@@ -125,6 +131,16 @@ type WorkspacePayload = {
     lastRuntimeError: string | null;
     worktreePath: string | null;
     accessMode: "secure" | "open";
+  }>;
+  cloudInstances: Array<{
+    id: string;
+    name: string;
+    baseUrl: string;
+    authMode: "oauth";
+    connectionStatus: "connected" | "connecting" | "disconnected" | "error";
+    lastError: string | null;
+    createdAt: string;
+    updatedAt: string;
   }>;
   settings: DbSidebarSettings;
 };
@@ -302,6 +318,27 @@ function mapConversation(c: DbConversation) {
     channelExtensionId: c.channel_extension_id,
     hiddenFromSidebar: Boolean(c.hidden_from_sidebar),
     memoryInjected: Boolean(c.memory_injected),
+  };
+}
+
+function mapProject(
+  p: ReturnType<typeof listProjects>[number],
+): WorkspacePayload["projects"][number] {
+  return {
+    id: p.id,
+    name: p.name,
+    repoPath: p.repo_path ?? null,
+    repoName: p.repo_name,
+    location: p.location ?? "local",
+    cloudInstanceId: p.cloud_instance_id ?? null,
+    organizationId: p.organization_id ?? null,
+    organizationName: p.organization_name ?? null,
+    cloudStatus: p.cloud_status ?? null,
+    isArchived: Boolean(p.is_archived),
+    isHidden: Boolean(p.is_hidden),
+    icon: p.icon ?? null,
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
   };
 }
 
@@ -485,16 +522,16 @@ type ProjectTerminalRun = {
 
 function toWorkspacePayload(): WorkspacePayload {
   const db = getDb();
-  const projects = listProjects(db).map((p) => ({
-    id: p.id,
-    name: p.name,
-    repoPath: p.repo_path,
-    repoName: p.repo_name,
-    isArchived: Boolean(p.is_archived),
-    isHidden: Boolean(p.is_hidden),
-    icon: p.icon ?? null,
-    createdAt: p.created_at,
-    updatedAt: p.updated_at,
+  const projects = listProjects(db).map(mapProject);
+  const cloudInstances = listCloudInstances(db).map((instance) => ({
+    id: instance.id,
+    name: instance.name,
+    baseUrl: instance.base_url,
+    authMode: instance.auth_mode,
+    connectionStatus: instance.connection_status,
+    lastError: instance.last_error,
+    createdAt: instance.created_at,
+    updatedAt: instance.updated_at,
   }));
 
   const conversations = listConversations(db)
@@ -504,6 +541,7 @@ function toWorkspacePayload(): WorkspacePayload {
   return {
     projects,
     conversations,
+    cloudInstances,
     settings: getSidebarSettings(db),
   };
 }
@@ -552,18 +590,23 @@ async function ensureConversationWorktree(
 
     // Initialize git repo if it doesn't exist (fallback for self-contained mode)
     if (!fs.existsSync(path.join(worktreePath, ".git"))) {
-      await gitService.init(worktreePath);
+      throw new Error(`Worktree created without git metadata at ${worktreePath}`);
     }
   } catch (error) {
     console.error("Error creating worktree with self-contained git:", error);
-    // Fallback: create directory structure manually
-    fs.mkdirSync(worktreePath, { recursive: true });
+    try {
+      fs.rmSync(worktreePath, { recursive: true, force: true });
+    } catch {
+      // Best effort cleanup for failed worktree creation.
+    }
+    throw error;
   }
   return worktreePath;
 }
 
 async function removeConversationWorktree(
   worktreePath: string | null | undefined,
+  projectRepoPath?: string | null,
 ): Promise<void> {
   if (!worktreePath || !worktreePath.trim()) {
     return;
@@ -580,7 +623,11 @@ async function removeConversationWorktree(
   }
 
   try {
-    fs.rmSync(worktreePath, { recursive: true, force: true });
+    if (projectRepoPath && (await isGitRepo(projectRepoPath))) {
+      await gitService.removeWorktree(projectRepoPath, worktreePath);
+    } else {
+      fs.rmSync(worktreePath, { recursive: true, force: true });
+    }
   } catch {
     // Best effort cleanup.
   }
@@ -613,12 +660,6 @@ async function cleanupOrphanedWorktrees(): Promise<number> {
 
     for (const worktreeDir of worktreeDirs) {
       const worktreePath = path.join(root, worktreeDir);
-
-      // Check if this follows our worktree pattern (contains "chaton" subdirectory)
-      const chatonSubdir = path.join(worktreePath, "chaton");
-      if (!fs.existsSync(chatonSubdir)) {
-        continue; // Not one of our worktrees
-      }
 
       // Check if this worktree has a corresponding conversation
       // The directory name is now the shortened hash of the conversation ID
@@ -711,7 +752,10 @@ async function resolveConversationRepoPath(conversationId: string): Promise<
   if (!project) {
     return { ok: false, reason: "project_not_found" };
   }
-  if (!isGitRepo(project.repo_path)) {
+  if (project.location === "cloud" || !project.repo_path) {
+    return { ok: false, reason: "not_git_repo" };
+  }
+  if (!(await isGitRepo(project.repo_path))) {
     return { ok: false, reason: "not_git_repo" };
   }
   return { ok: true, repoPath: project.repo_path };
@@ -731,7 +775,8 @@ function getConversationAndProject(conversationId: string): {
   );
   return {
     conversation,
-    projectRepoPath: project?.repo_path ?? null,
+    projectRepoPath:
+      project && project.location === "local" ? project.repo_path ?? null : null,
   };
 }
 
@@ -1253,7 +1298,7 @@ async function mergeWorktreeIntoMain(
   if (!conversation) {
     return { ok: false, reason: "conversation_not_found" };
   }
-  if (!projectRepoPath || !isGitRepo(projectRepoPath)) {
+  if (!projectRepoPath || !(await isGitRepo(projectRepoPath))) {
     return { ok: false, reason: "project_not_found" };
   }
   const resolvedRepo = await resolveConversationRepoPath(conversationId);
@@ -1620,7 +1665,7 @@ function getConversationProjectRepoPath(conversationId: string):
   const project = listProjects(db).find(
     (item) => item.id === conversation.project_id,
   );
-  if (!project) {
+  if (!project || !project.repo_path) {
     return { ok: false, reason: "project_not_found" };
   }
   return { ok: true, repoPath: project.repo_path };

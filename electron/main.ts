@@ -95,6 +95,73 @@ const appIconPath = path.join(__dirname, "../build/icons/icon.png");
 // Variable to keep track of the main window
 let mainWindow: electron.BrowserWindow | null = null;
 let isQuitting = false;
+let windowIpcRegistered = false;
+
+function registerWindowIpc() {
+  if (windowIpcRegistered) {
+    return;
+  }
+
+  windowIpcRegistered = true;
+
+  electron.ipcMain.handle('window:isFocused', () => {
+    return mainWindow?.isFocused() ?? false;
+  });
+
+  electron.ipcMain.handle('window:showNotification', (_event, title: string, body: string, conversationId?: string) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+
+    if (mainWindow.isFocused()) {
+      return false;
+    }
+
+    const notification = new Notification({
+      title: title,
+      body: body,
+      icon: appIconPath,
+    });
+
+    notification.on('click', () => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+      }
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.show();
+      mainWindow.focus();
+      if (conversationId) {
+        mainWindow.webContents.send('desktop:notification-clicked', { conversationId });
+      }
+    });
+
+    notification.show();
+    return true;
+  });
+
+  electron.ipcMain.handle('window:close', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.close();
+    }
+  });
+
+  electron.ipcMain.handle('window:minimize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.minimize();
+    }
+  });
+
+  electron.ipcMain.handle('window:maximize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMaximized()) {
+        mainWindow.unmaximize();
+      } else {
+        mainWindow.maximize();
+      }
+    }
+  });
+}
+
 const isTelemetryEnabled = () => {
   try {
     const db = getDb();
@@ -112,6 +179,10 @@ const telemetryClient: ReturnType<typeof initSentryTelemetry> | null = isDev
     });
 
 async function createWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    return;
+  }
+
   const db = getDb();
   const initialBounds = getWindowBounds(db);
   const languagePreference = getLanguagePreference(db);
@@ -220,64 +291,10 @@ async function createWindow() {
       mainWindow!.hide();
     }
   });
-
-  // Expose method to check if window is focused
-  electron.ipcMain.handle('window:isFocused', () => {
-    return mainWindow?.isFocused() ?? false;
-  });
-
-  // Expose method to show notification
-  electron.ipcMain.handle('window:showNotification', (_event, title: string, body: string, conversationId?: string) => {
-    if (!mainWindow) return false;
-    
-    // Only show notification if window is not focused
-    if (mainWindow.isFocused()) {
-      return false;
-    }
-    
-    const notification = new Notification({
-      title: title,
-      body: body,
-      icon: appIconPath,
-    });
-    
-    notification.on('click', () => {
-      if (mainWindow) {
-        if (mainWindow.isMinimized()) {
-          mainWindow.restore();
-        }
-        mainWindow.show();
-        mainWindow.focus();
-        if (conversationId) {
-          mainWindow.webContents.send('desktop:notification-clicked', { conversationId });
-        }
-      }
-    });
-    
-    notification.show();
-    return true;
-  });
-
-  // Window control handlers
-  electron.ipcMain.handle('window:close', () => {
-    if (mainWindow) {
-      mainWindow.close();
-    }
-  });
-
-  electron.ipcMain.handle('window:minimize', () => {
-    if (mainWindow) {
-      mainWindow.minimize();
-    }
-  });
-
-  electron.ipcMain.handle('window:maximize', () => {
-    if (mainWindow) {
-      if (mainWindow.isMaximized()) {
-        mainWindow.unmaximize();
-      } else {
-        mainWindow.maximize();
-      }
+  mainWindow.on("closed", () => {
+    if (mainWindow?.isDestroyed()) {
+      setMainWindow(null);
+      mainWindow = null;
     }
   });
   // Setup status bar after window is created
@@ -434,6 +451,7 @@ app.whenReady().then(async () => {
   registerPiIpc();
   registerUpdateIpc();
   registerShortcutsIpc();
+  registerWindowIpc();
   await createWindow();
 
   // Send a single startup heartbeat so Sentry can count active users

@@ -69,13 +69,13 @@ export async function processInChunks<T, R>(
  * Debounce a function call
  * Useful for expensive operations triggered frequently (e.g., scroll, resize)
  */
-export function debounce<T extends (...args: unknown[]) => unknown>(
-  func: T,
+export function debounce<TArgs extends unknown[], TResult>(
+  func: (...args: TArgs) => TResult,
   wait: number
-): (...args: Parameters<T>) => void {
+): (...args: TArgs) => void {
   let timeout: NodeJS.Timeout | null = null;
 
-  return (...args: Parameters<T>) => {
+  return (...args: TArgs) => {
     if (timeout) {
       clearTimeout(timeout);
     }
@@ -90,13 +90,13 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
  * Throttle a function call
  * Ensures function is called at most once every X milliseconds
  */
-export function throttle<T extends (...args: unknown[]) => unknown>(
-  func: T,
+export function throttle<TArgs extends unknown[], TResult>(
+  func: (...args: TArgs) => TResult,
   limit: number
-): (...args: Parameters<T>) => void {
+): (...args: TArgs) => void {
   let inThrottle: boolean = false;
 
-  return (...args: Parameters<T>) => {
+  return (...args: TArgs) => {
     if (!inThrottle) {
       func(...args);
       inThrottle = true;

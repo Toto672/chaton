@@ -204,6 +204,8 @@ GitHub Copilot conversations are now configured against Pi's `anthropic-messages
 2. Project repository path (if conversation is project-linked)
 3. Global workspace directory (`<userData>/workspace/global`)
 
+Worktree enablement is now strict: Chatons only persists a conversation worktree after the created directory is confirmed to be a valid Git worktree/repository. Failed worktree creation is cleaned up instead of leaving an empty directory in the conversation runtime path.
+
 ### Access Mode
 
 | Mode | Tool cwd | Behavior |
@@ -230,6 +232,19 @@ This is used for:
 
 - Memory summarization and consolidation
 - AI conversation-title refinement
+
+---
+
+## 8. Worktree Cleanup and Safety
+
+Conversation worktrees under `<userData>/.pi/agent/worktrees/chaton/` are treated as disposable only when they are both:
+
+- no longer referenced by any conversation
+- free of staged or unstaged changes
+
+When native Git is available, Chatons now removes conversation worktrees through `git worktree remove --force` instead of deleting the directory directly. This keeps the main repository's worktree metadata consistent and avoids orphaned entries in `.git/worktrees/`.
+
+Startup cleanup also inspects the actual directory entries under the Chatons worktree root instead of relying on an extra nested marker folder. This matches the real layout created by `git worktree add`.
 
 The flow is the same as a normal runtime-backed conversation:
 

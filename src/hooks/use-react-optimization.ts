@@ -37,37 +37,37 @@ export function useDebouncedValue<T>(value: T, delay: number): T {
 /**
  * Hook for debouncing callback functions
  */
-export function useDebouncedCallback<T extends (...args: any[]) => unknown>(
-  callback: T,
+export function useDebouncedCallback<TArgs extends unknown[], TResult>(
+  callback: (...args: TArgs) => TResult,
   delay: number
-): T {
+): (...args: TArgs) => void {
   const debouncedRef = useRef(debounceUtil(callback, delay));
 
   useEffect(() => {
     debouncedRef.current = debounceUtil(callback, delay);
   }, [callback, delay]);
 
-  return useCallback((...args: Parameters<T>) => {
-    return (debouncedRef.current as T)(...args);
-  }, []) as T;
+  return useCallback((...args: TArgs) => {
+    debouncedRef.current(...args);
+  }, []);
 }
 
 /**
  * Hook for throttling callback functions
  */
-export function useThrottledCallback<T extends (...args: any[]) => any>(
-  callback: T,
+export function useThrottledCallback<TArgs extends unknown[], TResult>(
+  callback: (...args: TArgs) => TResult,
   limit: number
-): T {
+): (...args: TArgs) => void {
   const throttledRef = useRef(throttleUtil(callback, limit));
 
   useEffect(() => {
     throttledRef.current = throttleUtil(callback, limit);
   }, [callback, limit]);
 
-  return useCallback((...args: Parameters<T>) => {
-    return (throttledRef.current as T)(...args);
-  }, []) as T;
+  return useCallback((...args: TArgs) => {
+    throttledRef.current(...args);
+  }, []);
 }
 
 /**
@@ -166,7 +166,7 @@ export function useDeferredWork<T>(
  * Hook for scroll optimization with debouncing
  */
 export function useOptimizedScroll(callback: (scrollY: number) => void, delay: number = 100) {
-  const debouncedCallback = useDebouncedCallback<(scrollY: number) => void>(callback, delay);
+  const debouncedCallback = useDebouncedCallback<[number], void>(callback, delay);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -184,7 +184,7 @@ export function useOptimizedScroll(callback: (scrollY: number) => void, delay: n
  * Hook for window resize optimization with throttling
  */
 export function useOptimizedResize(callback: (width: number, height: number) => void, limit: number = 100) {
-  const throttledCallback = useThrottledCallback<(width: number, height: number) => void>(callback, limit);
+  const throttledCallback = useThrottledCallback<[number, number], void>(callback, limit);
 
   useEffect(() => {
     const handleResize = () => {

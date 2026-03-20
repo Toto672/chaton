@@ -39,6 +39,8 @@ export type WorkspaceContextValue = {
   startGlobalConversationDraft: () => void
   toggleProjectCollapsed: (projectId: string) => void
   importProject: () => Promise<void>
+  connectCloudInstance: () => Promise<void>
+  createCloudProject: () => Promise<void>
   createConversationGlobal: (
     options?: { modelProvider?: string; modelId?: string; thinkingLevel?: string; accessMode?: 'secure' | 'open' },
   ) => Promise<Conversation | null>

@@ -541,7 +541,126 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     })
   }, [])
 
+  const connectCloudInstance = useCallback(async () => {
+    const baseUrl = window.prompt('URL de l’instance Chatons Cloud')
+    if (!baseUrl || !baseUrl.trim()) {
+      return
+    }
+    const name = window.prompt('Nom de cette instance cloud (optionnel)') ?? undefined
+    const result = await workspaceIpc.connectCloudInstance({ baseUrl: baseUrl.trim(), name })
+    if (!result.ok) {
+      dispatch({
+        type: 'setNotice',
+        payload: { notice: result.message ?? 'Impossible de connecter cette instance cloud.' },
+      })
+      return
+    }
+
+    const snapshot = await workspaceIpc.getInitialState()
+    dispatch({
+      type: 'hydrate',
+      payload: {
+        projects: snapshot.projects,
+        conversations: snapshot.conversations,
+        cloudInstances: snapshot.cloudInstances,
+        settings: snapshot.settings,
+        extensionUpdatesCount: snapshot.extensionUpdatesCount ?? 0,
+      },
+    })
+    dispatch({
+      type: 'setNotice',
+      payload: {
+        notice: result.duplicate
+          ? 'Instance cloud déjà connectée.'
+          : 'Instance cloud connectée.',
+      },
+    })
+  }, [])
+
+  const createCloudProject = useCallback(async () => {
+    const instances = stateRef.current.cloudInstances
+    if (instances.length === 0) {
+      dispatch({
+        type: 'setNotice',
+        payload: { notice: 'Connectez d’abord une instance cloud.' },
+      })
+      return
+    }
+
+    const instanceLabel = instances
+      .map((instance, index) => `${index + 1}. ${instance.name} (${instance.baseUrl})`)
+      .join('\n')
+    const selectionRaw = window.prompt(`Choisir une instance cloud:\n${instanceLabel}`, '1')
+    if (!selectionRaw) {
+      return
+    }
+    const selectionIndex = Number.parseInt(selectionRaw, 10) - 1
+    const selectedInstance = instances[selectionIndex]
+    if (!selectedInstance) {
+      dispatch({
+        type: 'setNotice',
+        payload: { notice: 'Instance cloud invalide.' },
+      })
+      return
+    }
+
+    const projectName = window.prompt('Nom du projet cloud')
+    if (!projectName || !projectName.trim()) {
+      return
+    }
+    const organizationName =
+      window.prompt('Nom de l’organisation cloud', selectedInstance.name) ??
+      selectedInstance.name
+    const organizationId =
+      window.prompt('Identifiant de l’organisation', organizationName.toLowerCase().replace(/\s+/g, '-')) ??
+      organizationName.toLowerCase().replace(/\s+/g, '-')
+
+    const result = await workspaceIpc.createCloudProject({
+      cloudInstanceId: selectedInstance.id,
+      name: projectName.trim(),
+      organizationId: organizationId.trim(),
+      organizationName: organizationName.trim(),
+    })
+
+    if (!result.ok) {
+      dispatch({
+        type: 'setNotice',
+        payload: { notice: 'Impossible de créer ce projet cloud.' },
+      })
+      return
+    }
+
+    dispatch({ type: 'addProject', payload: { project: result.project } })
+    dispatch({
+      type: 'selectProject',
+      payload: { projectId: result.project.id },
+    })
+    dispatch({
+      type: 'setNotice',
+      payload: { notice: 'Projet cloud créé.' },
+    })
+  }, [])
+
   const hydrateConversationRuntime = useCallback(async (conversationId: string) => {
+    const conversation = stateRef.current.conversations.find((entry) => entry.id === conversationId)
+    const project =
+      conversation?.projectId
+        ? stateRef.current.projects.find((entry) => entry.id === conversation.projectId)
+        : null
+    if (project?.location === 'cloud') {
+      dispatch({
+        type: 'setPiRuntime',
+        payload: {
+          conversationId,
+          runtime: {
+            status: 'error',
+            lastError: 'Ce fil appartient à un projet cloud. Le runtime distant n’est pas encore implémenté dans ce client.',
+          },
+        },
+      })
+      return
+    }
+
     if (hydratingRuntimeIdsRef.current.has(conversationId)) {
       return
     }
@@ -751,7 +870,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       })
 
       // Start hydrating the runtime after selection (for new conversations, no cache to preload)
-      void hydrateConversationRuntime(result.conversation.id)
+      const createdProject = stateRef.current.projects.find((p) => p.id === projectId)
+      if (createdProject?.location !== 'cloud') {
+        void hydrateConversationRuntime(result.conversation.id)
+      }
       
       return result.conversation
     },
@@ -938,6 +1060,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           payload: {
             projects: snapshot.projects,
             conversations: snapshot.conversations,
+            cloudInstances: snapshot.cloudInstances,
             settings: snapshot.settings,
             extensionUpdatesCount: snapshot.extensionUpdatesCount ?? 0,
           },
@@ -1070,6 +1193,27 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       }
 
       let runtime = piStoreGetState().piByConversation[conversationId]
+      const conversation = stateRef.current.conversations.find((entry) => entry.id === conversationId)
+      const project =
+        conversation?.projectId
+          ? stateRef.current.projects.find((entry) => entry.id === conversation.projectId)
+          : null
+      if (project?.location === 'cloud') {
+        dispatch({
+          type: 'setPiRuntime',
+          payload: {
+            conversationId,
+            runtime: {
+              status: 'error',
+              pendingUserMessage: false,
+              pendingUserMessageText: null,
+              lastError: 'Les conversations cloud utiliseront un runtime distant. Cette partie n’est pas encore branchée.',
+            },
+          },
+        })
+        return
+      }
+
       if (!runtime) {
         await hydrateConversationRuntime(conversationId)
         runtime = piStoreGetState().piByConversation[conversationId]
@@ -1227,6 +1371,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       startGlobalConversationDraft: () => dispatch({ type: 'startGlobalConversationDraft' }),
       toggleProjectCollapsed,
       importProject,
+      connectCloudInstance,
+      createCloudProject,
       createConversationGlobal,
       createConversationForProject,
       enableConversationWorktree,
@@ -1290,6 +1436,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       hydrateConversationCache,
       hydrateConversationRuntime,
       importProject,
+      connectCloudInstance,
+      createCloudProject,
       isLoading,
       persistSettings,
       respondExtensionUi,

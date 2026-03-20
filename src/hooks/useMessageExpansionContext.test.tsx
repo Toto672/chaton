@@ -1,4 +1,6 @@
+import React from 'react'
 import { renderHook, act } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { MessageExpansionProvider, useMessageExpansion } from './useMessageExpansionContext'
 
 describe('useMessageExpansion', () => {
@@ -10,8 +12,8 @@ describe('useMessageExpansion', () => {
     const { result } = renderHook(() => useMessageExpansion(), { wrapper })
 
     // Mock collapse callbacks
-    const mockCollapse1 = jest.fn()
-    const mockCollapse2 = jest.fn()
+    const mockCollapse1 = vi.fn()
+    const mockCollapse2 = vi.fn()
 
     // Register messages
     act(() => {
@@ -34,13 +36,15 @@ describe('useMessageExpansion', () => {
     })
 
     // Register a new message and collapse again
-    const mockCollapse3 = jest.fn()
+    const mockCollapse3 = vi.fn()
     act(() => {
       result.current.registerMessage('msg3', mockCollapse3)
+    })
+    act(() => {
       result.current.collapseAllMessages()
     })
 
-    // Only the new message should be collapsed
+    // The newly registered message participates in the next collapse cycle
     expect(mockCollapse3).toHaveBeenCalled()
   })
 })

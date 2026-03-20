@@ -18,7 +18,7 @@ import type {
 export type Action =
   | {
       type: 'hydrate'
-      payload: Pick<WorkspaceState, 'projects' | 'conversations' | 'settings' | 'extensionUpdatesCount'>
+      payload: Pick<WorkspaceState, 'projects' | 'conversations' | 'cloudInstances' | 'settings' | 'extensionUpdatesCount'>
     }
   | { type: 'selectProject'; payload: { projectId: string } }
   | { type: 'selectConversation'; payload: { conversationId: string } }
@@ -127,6 +127,7 @@ export const makePiRuntime = (): PiConversationRuntime => ({
 export const initialState: WorkspaceState = {
   projects: [],
   conversations: [],
+  cloudInstances: [],
   selectedProjectId: null,
   selectedConversationId: null,
   sidebarMode: 'default',
@@ -331,6 +332,7 @@ export function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         ...state,
         projects: action.payload.projects,
         conversations: action.payload.conversations,
+        cloudInstances: action.payload.cloudInstances,
         settings: action.payload.settings,
         extensionUpdatesCount: action.payload.extensionUpdatesCount ?? 0,
         selectedProjectId,

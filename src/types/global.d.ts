@@ -66,6 +66,36 @@ declare global {
         | { ok: true; duplicate: boolean; project: Project }
         | { ok: false; reason: "not_git_repo" | "unknown" }
       >;
+      connectCloudInstance: (input: {
+        name?: string
+        baseUrl?: string
+      }) => Promise<
+        | { ok: true; duplicate: boolean; id: string }
+        | { ok: false; reason: "invalid_base_url"; message?: string }
+      >;
+      updateCloudInstanceStatus: (
+        instanceId: string,
+        status: "connected" | "connecting" | "disconnected" | "error",
+        lastError?: string | null,
+      ) => Promise<
+        | { ok: true }
+        | { ok: false; reason: "instance_not_found" }
+      >;
+      createCloudProject: (params: {
+        cloudInstanceId: string
+        name: string
+        organizationId: string
+        organizationName: string
+      }) => Promise<
+        | { ok: true; project: Project }
+        | {
+            ok: false
+            reason:
+              | "cloud_instance_not_found"
+              | "invalid_name"
+              | "unknown"
+          }
+      >;
       deleteProject: (projectId: string) => Promise<DeleteProjectResult>;
       archiveProject: (projectId: string, isArchived: boolean) => Promise<{ ok: boolean; reason?: string }>;
       updateProjectIcon: (projectId: string, icon: string | null) => Promise<{ ok: boolean; reason?: string }>;

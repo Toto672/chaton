@@ -34,6 +34,25 @@ contextBridge.exposeInMainWorld("chaton", {
     ipcRenderer.invoke("dialog:pickProjectFolder") as Promise<string | null>,
   importProjectFromFolder: (folderPath: string) =>
     ipcRenderer.invoke("projects:importFromFolder", folderPath),
+  connectCloudInstance: (input: { name?: string; baseUrl?: string }) =>
+    ipcRenderer.invoke("cloud:connectInstance", input),
+  updateCloudInstanceStatus: (
+    instanceId: string,
+    status: "connected" | "connecting" | "disconnected" | "error",
+    lastError?: string | null,
+  ) =>
+    ipcRenderer.invoke(
+      "cloud:updateInstanceStatus",
+      instanceId,
+      status,
+      lastError,
+    ),
+  createCloudProject: (params: {
+    cloudInstanceId: string;
+    name: string;
+    organizationId: string;
+    organizationName: string;
+  }) => ipcRenderer.invoke("projects:createCloud", params),
   deleteProject: (projectId: string) =>
     ipcRenderer.invoke("projects:delete", projectId),
   archiveProject: (projectId: string, isArchived: boolean) =>

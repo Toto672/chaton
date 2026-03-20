@@ -16,6 +16,7 @@
     "build:electron": "tsc -p tsconfig.electron.json && npm run copy:electron-assets",
     "copy:electron-assets": "node scripts/copy-electron-assets.js",
     "lint": "eslint .",
+    "test": "vitest run",
     "preview": "vite preview",
     "version": "node scripts/version.js",
     "version:test": "node scripts/test-version.js",
@@ -97,6 +98,7 @@
   "devDependencies": {
     "@electron/rebuild": "^4.0.3",
     "@eslint/js": "^9.25.1",
+    "@testing-library/react": "^16.3.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/electron": "^1.6.12",
     "@types/follow-redirects": "^1.14.4",
@@ -115,11 +117,13 @@
     "globals": "^17.4.0",
     "lint-staged": "^16.4.0",
     "postcss": "^8.5.8",
+    "jsdom": "^26.1.0",
     "tailwindcss": "^4.2.1",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.57.1",
     "vite": "^8.0.0",
+    "vitest": "^3.2.4",
     "wait-on": "^9.0.4"
   },
   "optionalDependencies": {

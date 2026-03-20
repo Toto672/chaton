@@ -1,4 +1,4 @@
-import { FolderPlus, Plus, Search, SlidersHorizontal } from 'lucide-react'
+import { Cloud, FolderPlus, Plus, Search, SlidersHorizontal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { useWorkspace } from '@/features/workspace/store'
@@ -7,7 +7,7 @@ import { SortFilterPopover } from './SortFilterPopover'
 
 export function SidebarHeaderActions() {
   const { t } = useTranslation()
-  const { importProject, createConversationGlobal, toggleSidebarSearch, state } = useWorkspace()
+  const { importProject, connectCloudInstance, createCloudProject, createConversationGlobal, toggleSidebarSearch, state } = useWorkspace()
 
   return (
     <div className="flex w-full shrink-0 items-center justify-center gap-2 px-3 pb-3">
@@ -45,6 +45,22 @@ export function SidebarHeaderActions() {
         }}
       >
         <FolderPlus className="h-4 w-4" />
+      </button>
+
+      <button
+        type="button"
+        className="sidebar-icon-button"
+        aria-label={t("Connecter ou ajouter un projet cloud")}
+        title={t("Connecter ou ajouter un projet cloud")}
+        onClick={() => {
+          if (state.cloudInstances.length === 0) {
+            void connectCloudInstance()
+            return
+          }
+          void createCloudProject()
+        }}
+      >
+        <Cloud className="h-4 w-4" />
       </button>
 
       <SortFilterPopover>

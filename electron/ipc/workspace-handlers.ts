@@ -61,7 +61,14 @@ import {
   listProjects,
   updateProjectIcon,
   updateProjectIsArchived,
+  updateProjectCloudStatus,
 } from "../db/repos/projects.js";
+import {
+  findCloudInstanceByBaseUrl,
+  findCloudInstanceById,
+  insertCloudInstance,
+  updateCloudInstanceStatus,
+} from "../db/repos/cloud-instances.js";
 import {
   emitHostEvent,
   enrichExtensionsWithRuntimeFields,
@@ -239,6 +246,7 @@ type RegisterWorkspaceHandlersDeps = {
   isGitRepo: (folderPath: string) => Promise<boolean>;
   removeConversationWorktree: (
     worktreePath: string | null | undefined,
+    projectRepoPath?: string | null,
   ) => Promise<void>;
   hasWorkingTreeChanges: (repoPath: string) => Promise<boolean>;
   hasStagedChanges: (repoPath: string) => Promise<boolean>;
@@ -281,7 +289,7 @@ type RegisterWorkspaceHandlersDeps = {
       conversationId: string,
       response: RpcExtensionUiResponse,
     ) => Promise<unknown>;
-    subscribe: (listener: (event: PiRendererEvent) => void) => void;
+    subscribe: (listener: (event: PiRendererEvent) => void) => () => void;
     runChannelSubagent: (
       conversationId: string,
       message: string,
@@ -307,6 +315,7 @@ type RegisterWorkspaceHandlersDeps = {
 let extensionQueueWorker: NodeJS.Timeout | null = null;
 let extensionQueueWorkerInFlight = false;
 let memoryConsolidationWorker: NodeJS.Timeout | null = null;
+let unsubscribePiRuntimeEvents: (() => void) | null = null;
 
 // Track which conversations have already had memory context injected
 const memoryInjectedConversations = new Set<string>();
@@ -720,7 +729,8 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
     );
   }, CONSOLIDATION_INTERVAL_MS);
 
-  deps.piRuntimeManager.subscribe((event: PiRendererEvent) => {
+  unsubscribePiRuntimeEvents?.();
+  unsubscribePiRuntimeEvents = deps.piRuntimeManager.subscribe((event: PiRendererEvent) => {
     if (event.event.type === "agent_start") {
       emitHostEvent("conversation.agent.started", {
         conversationId: event.conversationId,
@@ -845,6 +855,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       return {
         projects: [],
         conversations: [],
+        cloudInstances: [],
         settings: {
           organizeBy: "project",
           sortBy: "updated",
@@ -942,6 +953,138 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       }
 
       return settings;
+    },
+  );
+
+  ipcMain.handle(
+    "cloud:connectInstance",
+    async (
+      _event,
+      input: { name?: string; baseUrl?: string } | null | undefined,
+    ) => {
+      const rawBaseUrl =
+        typeof input?.baseUrl === "string" ? input.baseUrl.trim() : "";
+      if (!rawBaseUrl) {
+        return {
+          ok: false as const,
+          reason: "invalid_base_url" as const,
+          message: "Cloud base URL is required",
+        };
+      }
+
+      let normalizedBaseUrl = rawBaseUrl.replace(/\/+$/, "");
+      try {
+        normalizedBaseUrl = new URL(normalizedBaseUrl).toString().replace(/\/+$/, "");
+      } catch {
+        return {
+          ok: false as const,
+          reason: "invalid_base_url" as const,
+          message: "Cloud base URL is invalid",
+        };
+      }
+
+      const db = getDb();
+      const existing = findCloudInstanceByBaseUrl(db, normalizedBaseUrl);
+      if (existing) {
+        updateCloudInstanceStatus(db, existing.id, "connected", null);
+        return { ok: true as const, duplicate: true, id: existing.id };
+      }
+
+      const id = crypto.randomUUID();
+      const derivedName =
+        typeof input?.name === "string" && input.name.trim().length > 0
+          ? input.name.trim()
+          : new URL(normalizedBaseUrl).host;
+      insertCloudInstance(db, {
+        id,
+        name: derivedName,
+        baseUrl: normalizedBaseUrl,
+        authMode: "oauth",
+        connectionStatus: "connected",
+      });
+      return { ok: true as const, duplicate: false, id };
+    },
+  );
+
+  ipcMain.handle(
+    "cloud:updateInstanceStatus",
+    async (
+      _event,
+      instanceId: string,
+      status: "connected" | "connecting" | "disconnected" | "error",
+      lastError?: string | null,
+    ) => {
+      const db = getDb();
+      const updated = updateCloudInstanceStatus(db, instanceId, status, lastError);
+      if (!updated) {
+        return { ok: false as const, reason: "instance_not_found" as const };
+      }
+      return { ok: true as const };
+    },
+  );
+
+  ipcMain.handle(
+    "projects:createCloud",
+    async (
+      _event,
+      params: {
+        cloudInstanceId: string;
+        name: string;
+        organizationId: string;
+        organizationName: string;
+      },
+    ) => {
+      const db = getDb();
+      const instance = findCloudInstanceById(db, params.cloudInstanceId);
+      if (!instance) {
+        return {
+          ok: false as const,
+          reason: "cloud_instance_not_found" as const,
+        };
+      }
+
+      const trimmedName = params.name.trim();
+      if (!trimmedName) {
+        return { ok: false as const, reason: "invalid_name" as const };
+      }
+
+      const projectId = crypto.randomUUID();
+      insertProject(db, {
+        id: projectId,
+        name: trimmedName,
+        repoPath: null,
+        repoName: params.organizationName.trim() || instance.name,
+        location: "cloud",
+        cloudInstanceId: instance.id,
+        organizationId: params.organizationId.trim() || null,
+        organizationName: params.organizationName.trim() || null,
+        cloudStatus: instance.connection_status,
+      });
+
+      const project = findProjectById(db, projectId);
+      if (!project) {
+        return { ok: false as const, reason: "unknown" as const };
+      }
+
+      return {
+        ok: true as const,
+        project: {
+          id: project.id,
+          name: project.name,
+          repoPath: project.repo_path,
+          repoName: project.repo_name,
+          location: project.location,
+          cloudInstanceId: project.cloud_instance_id,
+          organizationId: project.organization_id,
+          organizationName: project.organization_name,
+          cloudStatus: project.cloud_status,
+          isArchived: project.is_archived === 1,
+          isHidden: project.is_hidden === 1,
+          icon: project.icon,
+          createdAt: project.created_at,
+          updatedAt: project.updated_at,
+        },
+      };
     },
   );
 
@@ -1669,6 +1812,12 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         return { ok: false as const, reason: "project_not_found" as const };
       }
       try {
+        if (project.location === "cloud" || !project.repo_path) {
+          return {
+            ok: false as const,
+            message: "Cloud projects do not expose a local folder on this desktop.",
+          };
+        }
         // Check if the path exists first
         if (!fs.existsSync(project.repo_path)) {
           return {
@@ -1819,6 +1968,15 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       if (!project) {
         return { ok: false as const, reason: "project_not_found" as const };
       }
+      if (project.location === "cloud" || !project.repo_path) {
+        return {
+          ok: false as const,
+          reason: "project_not_found" as const,
+          message: project.location === "cloud"
+            ? "Worktrees are not available for cloud projects."
+            : "Project has no repository path.",
+        };
+      }
 
       if (
         conversation.worktree_path &&
@@ -1896,7 +2054,13 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         };
       }
 
-      await deps.removeConversationWorktree(conversation.worktree_path);
+      const project = listProjects(db).find(
+        (item) => item.id === conversation.project_id,
+      );
+      await deps.removeConversationWorktree(
+        conversation.worktree_path,
+        project?.repo_path ?? null,
+      );
       clearConversationWorktreePath(db, conversationId);
       const payload = {
         conversationId,
@@ -2025,7 +2189,13 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         };
       }
       if (conversation.worktree_path && conversation.worktree_path.trim()) {
-        await deps.removeConversationWorktree(conversation.worktree_path);
+        const project = conversation.project_id
+          ? listProjects(db).find((item) => item.id === conversation.project_id)
+          : null;
+        await deps.removeConversationWorktree(
+          conversation.worktree_path,
+          project?.repo_path ?? null,
+        );
       }
       emitHostEvent("conversation.updated", {
         conversationId,
@@ -2050,7 +2220,10 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
     );
     await Promise.all(
       projectConversations.map((conversation) =>
-        deps.removeConversationWorktree(conversation.worktree_path),
+        deps.removeConversationWorktree(
+          conversation.worktree_path,
+          project.repo_path,
+        ),
       ),
     );
 
@@ -2111,6 +2284,9 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       }
 
       const repoPath = project.repo_path;
+      if (!repoPath) {
+        return { ok: false as const, reason: "project_not_found" as const, images: [] as string[] };
+      }
       const imageExtensions = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico"]);
       const images: string[] = [];
       const maxDepth = 3;
@@ -2829,6 +3005,10 @@ export async function stopWorkspaceHandlers(piRuntimeManager: {
   if (memoryConsolidationWorker) {
     clearInterval(memoryConsolidationWorker);
     memoryConsolidationWorker = null;
+  }
+  if (unsubscribePiRuntimeEvents) {
+    unsubscribePiRuntimeEvents();
+    unsubscribePiRuntimeEvents = null;
   }
   // Terminate all sandboxed extension workers
   shutdownExtensionWorkers();

@@ -153,7 +153,7 @@ export function useComposerAutocomplete(
         } else {
           setSuggestion(null);
         }
-      } catch (err) {
+      } catch {
         // Fail silently - autocomplete is a bonus feature
         setError(null);
         setSuggestion(null);

@@ -1,56 +1,188 @@
-import { Star } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { PiSettingsJson } from '@/features/workspace/types'
+import { ProvidersModelsSection } from './ProvidersModelsSection'
+import { MemoryModelPicker } from '@/components/model/MemoryModelPicker'
+import { TitleModelPicker } from '@/components/model/TitleModelPicker'
+import { AutocompleteModelPicker } from '@/components/model/AutocompleteModelPicker'
+import { workspaceIpc } from '@/services/ipc/workspace'
+
+type ModelTab = 'providers' | 'memory' | 'autocomplete' | 'title'
 
 type PiModel = { id: string; provider: string; key: string; scoped: boolean }
 
 export function ModelsSection({
-  settings,
-  models,
-  setSettings,
-  onToggle,
-  onSave,
+  modelsJson,
+  setModelsJson,
+  onProviderConnected,
 }: {
-  settings: PiSettingsJson
-  models: PiModel[]
-  setSettings: (next: PiSettingsJson) => void
-  onToggle: (provider: string, id: string, scoped: boolean) => void
-  onSave: () => void
+  modelsJson: Parameters<typeof ProvidersModelsSection>[0]['modelsJson']
+  setModelsJson: Parameters<typeof ProvidersModelsSection>[0]['setModelsJson']
+  onProviderConnected?: () => void
 }) {
   const { t } = useTranslation()
-  const enabled = Array.isArray(settings.enabledModels) ? settings.enabledModels.filter((x): x is string => typeof x === 'string') : []
+  const [activeTab, setActiveTab] = useState<ModelTab>('providers')
+  const [models, setModels] = useState<PiModel[]>([])
+  const [memoryModelKey, setMemoryModelKey] = useState<string | null>(null)
+  const [titleModelKey, setTitleModelKey] = useState<string | null>(null)
+  const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
+  const [autocompleteModelKey, setAutocompleteModelKey] = useState<string | null>(null)
+  const [loaded, setLoaded] = useState(false)
+
+  // Load model lists and preferences
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [modelsResult, memoryResult, titleResult, autocompleteResult] = await Promise.all([
+          workspaceIpc.listPiModels(),
+          workspaceIpc.getMemoryModelPreference(),
+          workspaceIpc.getTitleModelPreference(),
+          workspaceIpc.getAutocompleteModelPreference(),
+        ])
+        
+        if (modelsResult.ok) {
+          setModels(modelsResult.models)
+        }
+        if (memoryResult.ok) {
+          setMemoryModelKey(memoryResult.modelKey)
+        }
+        if (titleResult.ok) {
+          setTitleModelKey(titleResult.modelKey)
+        }
+        if (autocompleteResult.ok) {
+          setAutocompleteEnabled(autocompleteResult.enabled)
+          setAutocompleteModelKey(autocompleteResult.modelKey)
+        }
+      } catch {
+        // Ignore
+      } finally {
+        setLoaded(true)
+      }
+    })()
+  }, [])
+
+  const tabs: { id: ModelTab; label: string }[] = [
+    { id: 'providers', label: t('Providers') },
+    { id: 'memory', label: t('Mémoire') },
+    { id: 'autocomplete', label: t('Auto-complete') },
+    { id: 'title', label: t('Titres') },
+  ]
 
   return (
     <section className="settings-card">
-      <label className="settings-row-wrap">
-        <span className="settings-label">enabledModels (CSV)</span>
-        <input
-          className="settings-input"
-          value={enabled.join(',')}
-          onChange={(e) => {
-            const values = e.target.value
-              .split(',')
-              .map((item) => item.trim())
-              .filter(Boolean)
-            setSettings({ ...settings, enabledModels: values })
-          }}
-        />
-      </label>
-      <div className="settings-list">
-        {models.map((model) => (
-          <div key={model.key} className="settings-list-row">
-            <div>
-              <div>{model.id}</div>
-              <div className="settings-muted">{model.provider}</div>
-            </div>
-            <button type="button" className="settings-icon-action" onClick={() => onToggle(model.provider, model.id, model.scoped)}>
-              <Star className={`h-4 w-4 ${model.scoped ? 'fill-current' : ''}`} />
-            </button>
-          </div>
+      {/* Tab navigation */}
+      <div className="settings-tab-nav">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`settings-tab-btn ${activeTab === tab.id ? 'settings-tab-btn-active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
         ))}
       </div>
-      <button type="button" className="settings-action" onClick={onSave}>{t('Sauvegarder')}</button>
+
+      {/* Providers tab */}
+      {activeTab === 'providers' && (
+        <div className="settings-tab-content">
+          <ProvidersModelsSection
+            modelsJson={modelsJson}
+            setModelsJson={setModelsJson}
+            models={models}
+            onProviderConnected={onProviderConnected}
+            onToggleScope={async (model) => {
+              const result = await workspaceIpc.setPiModelScoped(
+                model.provider,
+                model.id,
+                !model.scoped,
+              )
+              if (!result.ok) {
+                return
+              }
+              // Trigger re-render by updating parent
+              await onProviderConnected?.()
+            }}
+          />
+        </div>
+      )}
+
+      {/* Memory model tab */}
+      {activeTab === 'memory' && (
+        <div className="settings-tab-content">
+          <h4 className="settings-subtitle">{t('settings.memory.title')}</h4>
+          <div className="settings-card-note" style={{ marginBottom: '12px' }}>
+            {t('settings.memory.desc')}
+          </div>
+          <div className="settings-row-wrap">
+            <span className="settings-label">{t('settings.memory.modelLabel')}</span>
+            {loaded ? (
+              <MemoryModelPicker
+                modelKey={memoryModelKey}
+                onChange={(modelKey) => {
+                  setMemoryModelKey(modelKey)
+                  void workspaceIpc.setMemoryModelPreference(modelKey)
+                }}
+              />
+            ) : (
+              <div className="text-sm text-[#9ca3af]">{t('Chargement...')}</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Autocomplete model tab */}
+      {activeTab === 'autocomplete' && (
+        <div className="settings-tab-content">
+          <h4 className="settings-subtitle">{t('settings.autocomplete.title')}</h4>
+          <div className="settings-card-note" style={{ marginBottom: '12px' }}>
+            {t('settings.autocomplete.desc')}
+          </div>
+          <div className="settings-row-wrap">
+            {loaded ? (
+              <AutocompleteModelPicker
+                enabled={autocompleteEnabled}
+                modelKey={autocompleteModelKey}
+                onEnabledChange={(enabled) => {
+                  setAutocompleteEnabled(enabled)
+                  void workspaceIpc.setAutocompleteModelPreference(enabled, autocompleteModelKey)
+                }}
+                onModelChange={(modelKey) => {
+                  setAutocompleteModelKey(modelKey)
+                  void workspaceIpc.setAutocompleteModelPreference(autocompleteEnabled, modelKey)
+                }}
+              />
+            ) : (
+              <div className="text-sm text-[#9ca3af]">{t('Chargement...')}</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Title model tab */}
+      {activeTab === 'title' && (
+        <div className="settings-tab-content">
+          <h4 className="settings-subtitle">{t('settings.title.title')}</h4>
+          <div className="settings-card-note" style={{ marginBottom: '12px' }}>
+            {t('settings.title.desc')}
+          </div>
+          <div className="settings-row-wrap">
+            <span className="settings-label">{t('settings.title.modelLabel')}</span>
+            {loaded ? (
+              <TitleModelPicker
+                modelKey={titleModelKey}
+                onChange={(modelKey) => {
+                  setTitleModelKey(modelKey)
+                  void workspaceIpc.setTitleModelPreference(modelKey)
+                }}
+              />
+            ) : (
+              <div className="text-sm text-[#9ca3af]">{t('Chargement...')}</div>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   )
 }
