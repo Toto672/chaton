@@ -59,10 +59,13 @@ import {
   findProjectByRepoPath,
   insertProject,
   listProjects,
+  upsertCloudProject,
+  updateCloudProjectsStatusByInstance,
   updateProjectIcon,
   updateProjectIsArchived,
 } from "../db/repos/projects.js";
 import {
+  listCloudInstances,
   findCloudInstanceByBaseUrl,
   findCloudInstanceById,
   findCloudInstanceByOauthState,
@@ -119,6 +122,7 @@ import type { DbSidebarSettings } from "../db/repos/settings.js";
 import crypto from "node:crypto";
 import electron from "electron";
 import fs from "node:fs";
+import WebSocket from "ws";
 import { getDb } from "../db/index.js";
 import { getSentryTelemetry } from "../lib/telemetry/sentry.js";
 import { OAuthProvider } from "@mariozechner/pi-ai";
@@ -150,6 +154,156 @@ type ProjectTerminalRun = {
   }>;
   process: import("node:child_process").ChildProcess | null;
 };
+
+type CloudBootstrapResponse = {
+  user: {
+    id: string;
+    email: string;
+    displayName: string;
+  };
+  organizations: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    role: "owner" | "admin" | "member" | "billing_viewer";
+  }>;
+  cloudInstances: Array<{
+    id: string;
+    name: string;
+    baseUrl: string;
+    authMode: "oauth";
+    connectionStatus: "connected" | "connecting" | "disconnected" | "error";
+    lastError: string | null;
+  }>;
+  projects: Array<{
+    id: string;
+    organizationId: string;
+    organizationName: string;
+    name: string;
+    repoName: string;
+    location: "cloud";
+    cloudStatus: "connected" | "connecting" | "disconnected" | "error";
+  }>;
+  conversations: Array<{
+    id: string;
+    projectId: string;
+    runtimeLocation: "cloud";
+    title: string;
+    status: "active" | "done" | "archived";
+    modelProvider: string | null;
+    modelId: string | null;
+  }>;
+};
+
+async function postJson<TResponse>(
+  url: string,
+  payload: unknown,
+): Promise<TResponse> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(
+      `HTTP ${response.status} ${response.statusText}: ${text || "request failed"}`,
+    );
+  }
+  return (await response.json()) as TResponse;
+}
+
+async function getJson<TResponse>(
+  url: string,
+  headers?: Record<string, string>,
+): Promise<TResponse> {
+  const response = await fetch(url, {
+    method: "GET",
+    headers,
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(
+      `HTTP ${response.status} ${response.statusText}: ${text || "request failed"}`,
+    );
+  }
+  return (await response.json()) as TResponse;
+}
+
+async function syncCloudInstanceBootstrap(
+  instanceId: string,
+): Promise<
+  | { ok: true; syncedProjects: number }
+  | {
+      ok: false;
+      reason: "instance_not_found" | "missing_session" | "unknown";
+      message?: string;
+    }
+> {
+  const db = getDb();
+  const instance = findCloudInstanceById(db, instanceId);
+  if (!instance) {
+    return { ok: false, reason: "instance_not_found" };
+  }
+
+  if (!instance.access_token) {
+    return {
+      ok: false,
+      reason: "missing_session",
+      message: "Missing cloud access token",
+    };
+  }
+
+  try {
+    const bootstrap = await getJson<CloudBootstrapResponse>(
+      new URL("/v1/bootstrap", instance.base_url).toString(),
+      {
+        authorization: `Bearer ${instance.access_token}`,
+      },
+    );
+
+    for (const project of bootstrap.projects) {
+      upsertCloudProject(db, {
+        id: project.id,
+        name: project.name,
+        repoName: project.repoName,
+        cloudInstanceId: instance.id,
+        organizationId: project.organizationId,
+        organizationName: project.organizationName,
+        cloudStatus: project.cloudStatus,
+      });
+    }
+
+    saveCloudInstanceSession(db, instance.id, {
+      userEmail: bootstrap.user.email ?? instance.user_email,
+      accessToken: instance.access_token,
+      refreshToken: instance.refresh_token,
+      tokenExpiresAt: instance.token_expires_at,
+      oauthState: null,
+      connectionStatus: "connected",
+      lastError: null,
+    });
+
+    return { ok: true, syncedProjects: bootstrap.projects.length };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    updateCloudInstanceStatus(db, instance.id, "error", message);
+    return { ok: false, reason: "unknown", message };
+  }
+}
+
+async function syncConnectedCloudInstances(): Promise<void> {
+  const db = getDb();
+  const instances = listCloudInstances(db).filter((instance) =>
+    Boolean(instance.access_token),
+  );
+
+  for (const instance of instances) {
+    await syncCloudInstanceBootstrap(instance.id);
+  }
+}
 
 type RegisterWorkspaceHandlersDeps = {
   toWorkspacePayload: () => Record<string, unknown>;
@@ -318,6 +472,7 @@ let extensionQueueWorker: NodeJS.Timeout | null = null;
 let extensionQueueWorkerInFlight = false;
 let memoryConsolidationWorker: NodeJS.Timeout | null = null;
 let unsubscribePiRuntimeEvents: (() => void) | null = null;
+const cloudRealtimeSockets = new Map<string, WebSocket>();
 
 // Track which conversations have already had memory context injected
 const memoryInjectedConversations = new Set<string>();
@@ -846,6 +1001,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
 
   ipcMain.handle("workspace:getInitialState", async () => {
     try {
+      await syncConnectedCloudInstances();
       const payload = deps.toWorkspacePayload();
       const updatesResult = await checkForExtensionUpdates();
       return {
@@ -1124,18 +1280,79 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         };
       }
 
-      const accessToken = typeof payload.code === "string" ? `desktop-token:${payload.code}` : null;
-      const refreshToken = typeof payload.code === "string" ? `desktop-refresh:${payload.code}` : null;
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const code =
+        typeof payload.code === "string" && payload.code.trim().length > 0
+          ? payload.code.trim()
+          : "";
+      if (!code) {
+        updateCloudInstanceStatus(db, instance.id, "error", "Missing auth code");
+        return {
+          ok: false as const,
+          reason: "unknown" as const,
+          message: "Missing cloud auth code",
+        };
+      }
+
+      const exchangeUrl = new URL("/v1/auth/desktop/exchange", instance.base_url).toString();
+      let exchange:
+        | {
+            user: {
+              id: string;
+              email: string;
+              displayName: string;
+            };
+            session: {
+              accessToken: string;
+              refreshToken: string;
+              expiresAt: string;
+            };
+          }
+        | null = null;
+      try {
+        exchange = await postJson(exchangeUrl, {
+          code,
+          state,
+          redirectUri: "chatons://cloud/auth/callback",
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error);
+        updateCloudInstanceStatus(db, instance.id, "error", message);
+        return {
+          ok: false as const,
+          reason: "unknown" as const,
+          message,
+        };
+      }
+
+      if (!exchange) {
+        updateCloudInstanceStatus(db, instance.id, "error", "Missing cloud session payload");
+        return {
+          ok: false as const,
+          reason: "unknown" as const,
+          message: "Missing cloud session payload",
+        };
+      }
+
       saveCloudInstanceSession(db, instance.id, {
-        userEmail: "connected@cloud.chatons.ai",
-        accessToken,
-        refreshToken,
-        tokenExpiresAt: expiresAt,
+        userEmail: exchange.user.email,
+        accessToken: exchange.session.accessToken,
+        refreshToken: exchange.session.refreshToken,
+        tokenExpiresAt: exchange.session.expiresAt,
         oauthState: null,
         connectionStatus: "connected",
         lastError: null,
       });
+
+      const syncResult = await syncCloudInstanceBootstrap(instance.id);
+      if (!syncResult.ok) {
+        return {
+          ok: false as const,
+          reason: syncResult.reason,
+          message: syncResult.message,
+        };
+      }
+
       return {
         ok: true as const,
         instanceId: instance.id,
@@ -2897,26 +3114,30 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         });
       }
 
-      // Inject memory context by appending it to the END of the first prompt message.
-      // This is more reliable than using followUp() which can race with the initial
-      // prompt on some providers and cause conversation breakage.
+      // Inject memory context as a separate steer before the first user prompt.
+      // Appending memory to the user's message pollutes intent and can make the
+      // agent treat stale memories as if they came from the user.
       if (command.type === "prompt") {
         // Check both in-memory cache and database to handle app restarts
         const conversation = findConversationById(getDb(), conversationId);
         const alreadyInjected = memoryInjectedConversations.has(conversationId) ||
           conversation?.memory_injected === 1;
         if (!alreadyInjected) {
-          memoryInjectedConversations.add(conversationId);
           try {
             const memoryContext = buildMemoryContextMessage(
               conversationId,
               command.message,
             );
             if (memoryContext) {
-              // Append memory context to the END of the user's first message
-              // so it's part of the same message, not a separate followUp.
-              command.message = command.message + "\n\n" + memoryContext;
-              console.log("[Memory] Appended memory context to first prompt for conversation:", conversationId);
+              const steerResponse = await deps.piRuntimeManager.sendCommand(conversationId, {
+                type: "steer",
+                message: memoryContext,
+              });
+              if (!steerResponse.success) {
+                throw new Error(steerResponse.error || "Failed to steer memory context");
+              }
+              console.log("[Memory] Injected memory context as steer for conversation:", conversationId);
+              memoryInjectedConversations.add(conversationId);
               // Mark conversation as having memory injected
               const db = getDb();
               db.prepare(

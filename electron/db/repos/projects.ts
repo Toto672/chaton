@@ -64,6 +64,66 @@ export function insertProject(
   )
 }
 
+export function upsertCloudProject(
+  db: Database.Database,
+  params: {
+    id: string
+    name: string
+    repoName: string
+    cloudInstanceId: string
+    organizationId: string
+    organizationName: string
+    cloudStatus: 'connected' | 'connecting' | 'disconnected' | 'error' | null
+  },
+): void {
+  const existing = findProjectById(db, params.id)
+  const now = new Date().toISOString()
+
+  if (existing) {
+    db.prepare(
+      `UPDATE projects
+       SET
+         name = ?,
+         repo_path = NULL,
+         repo_name = ?,
+         location = 'cloud',
+         cloud_instance_id = ?,
+         organization_id = ?,
+         organization_name = ?,
+         cloud_status = ?,
+         updated_at = ?
+       WHERE id = ?`,
+    ).run(
+      params.name,
+      params.repoName,
+      params.cloudInstanceId,
+      params.organizationId,
+      params.organizationName,
+      params.cloudStatus,
+      now,
+      params.id,
+    )
+    return
+  }
+
+  db.prepare(
+    `INSERT INTO projects(
+      id, name, repo_path, repo_name, is_archived, is_hidden, icon, location, cloud_instance_id,
+      organization_id, organization_name, cloud_status, created_at, updated_at
+    ) VALUES (?, ?, NULL, ?, 0, 0, NULL, 'cloud', ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    params.id,
+    params.name,
+    params.repoName,
+    params.cloudInstanceId,
+    params.organizationId,
+    params.organizationName,
+    params.cloudStatus,
+    now,
+    now,
+  )
+}
+
 export function updateProjectIcon(db: Database.Database, id: string, icon: string | null): boolean {
   const now = new Date().toISOString()
   const normalizedIcon = icon && icon.trim().length > 0 ? icon.trim() : null
@@ -93,6 +153,22 @@ export function updateProjectCloudStatus(
     .prepare('UPDATE projects SET cloud_status = ?, updated_at = ? WHERE id = ?')
     .run(cloudStatus, now, id)
   return result.changes > 0
+}
+
+export function updateCloudProjectsStatusByInstance(
+  db: Database.Database,
+  cloudInstanceId: string,
+  cloudStatus: 'connected' | 'connecting' | 'disconnected' | 'error' | null,
+): number {
+  const now = new Date().toISOString()
+  const result = db
+    .prepare(
+      `UPDATE projects
+       SET cloud_status = ?, updated_at = ?
+       WHERE cloud_instance_id = ? AND location = 'cloud'`,
+    )
+    .run(cloudStatus, now, cloudInstanceId)
+  return result.changes
 }
 
 export function deleteProjectById(db: Database.Database, id: string): boolean {

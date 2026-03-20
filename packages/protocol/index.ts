@@ -41,7 +41,38 @@ export type ConnectInstanceRequest = {
   baseUrl: string
 }
 
+export type CloudDesktopAuthExchangeRequest = {
+  code: string
+  state: string
+  redirectUri: string
+}
+
+export type CloudDesktopAuthExchangeResponse = {
+  user: {
+    id: string
+    email: string
+    displayName: string
+  }
+  session: {
+    accessToken: string
+    refreshToken: string
+    expiresAt: string
+  }
+}
+
+export type RealtimeTokenResponse = {
+  token: string
+  expiresAt: string
+  websocketUrl: string
+}
+
 export type RuntimeStatusPayload = {
+  status: CloudConnectionStatus
+  message?: string
+}
+
+export type CloudInstanceStatusPayload = {
+  cloudInstanceId: string
   status: CloudConnectionStatus
   message?: string
 }
@@ -54,4 +85,5 @@ export type RealtimeServerEvent =
   | EventEnvelope<{ project: CloudProjectRecord }>
   | EventEnvelope<{ conversation: CloudConversationRecord }>
   | EventEnvelope<RuntimeStatusPayload>
+  | EventEnvelope<CloudInstanceStatusPayload>
   | EventEnvelope<ConversationChunkPayload>

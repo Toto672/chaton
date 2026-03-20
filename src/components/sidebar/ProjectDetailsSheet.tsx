@@ -152,6 +152,11 @@ export function ProjectDetailsSheet({ project, open, onClose, onProjectUpdated, 
     return availableSubFolders.find(f => f.projectIds.includes(project?.id || ''))?.id || null
   }, [availableSubFolders, project?.id])
 
+  const cloudInstance = useMemo(() => {
+    if (!project?.cloudInstanceId) return null
+    return state.cloudInstances.find((instance) => instance.id === project.cloudInstanceId) ?? null
+  }, [project?.cloudInstanceId, state.cloudInstances])
+
   const handleSaveIcon = useCallback(async (iconValue?: string) => {
     if (!project || isSaving) return
     const value = iconValue ?? iconDraft
@@ -272,6 +277,12 @@ export function ProjectDetailsSheet({ project, open, onClose, onProjectUpdated, 
                         <dt>{t('Etat cloud')}</dt>
                         <dd>{project.cloudStatus || 'unknown'}</dd>
                       </div>
+                      {cloudInstance?.userEmail ? (
+                        <div>
+                          <dt>{t('Compte cloud')}</dt>
+                          <dd>{cloudInstance.userEmail}</dd>
+                        </div>
+                      ) : null}
                       {project.cloudInstanceId ? (
                         <div>
                           <dt>{t('Instance')}</dt>
