@@ -26,6 +26,8 @@ After that browser callback, the desktop uses the stored cloud session for two d
 - authenticated HTTP bootstrap against `cloud-api`
 - short-lived websocket token minting plus a persistent websocket session against `cloud-realtime`
 
+The realtime token request is now bound to the desktop's persisted cloud-instance id and is verified by `cloud-api` before `cloud-realtime` mints a websocket token. This keeps websocket routing stable across reconnects, avoids inferring the target instance from token string suffixes, and prevents bearer-presence-only websocket access.
+
 This separation is intentional for Kubernetes:
 
 - `cloud-api` scales on HTTP and CRUD load
@@ -72,16 +74,81 @@ Included resources:
 
 - The current manifests assume an ingress controller such as NGINX.
 - Websocket traffic is routed through the dedicated `cloud-realtime` service.
+- `cloud-realtime` now supports Redis-backed Pub/Sub fan-out so multiple realtime pods can serve the same logical cloud instance without relying on in-process memory only.
+- `cloud-api` now supports a PostgreSQL-backed control plane for users, cloud workspaces, projects, conversations, transcripts, durable plan definitions, and stateful desktop auth requests, while still keeping an in-memory fallback for local development when `DATABASE_URL` is absent.
+- `runtime-headless` now also supports PostgreSQL-backed runtime-session persistence and cross-pod parallel-session accounting when `DATABASE_URL` is configured, with an in-memory fallback for local development.
+- `runtime-headless` now reuses an active session for a given cloud conversation instead of blindly creating a second one, which reduces duplicate runtimes when multiple requests or pods race on the same thread.
+- `runtime-headless` now also stamps each active conversation session with an owner id and lease expiration so a dead pod can eventually be superseded instead of blocking the conversation indefinitely.
+- `runtime-headless`, `cloud-realtime`, and `cloud-api` now share an internal service token. `runtime-headless` uses it to ask `cloud-api` for the authoritative user, project, conversation, instance, and quota grant before creating or serving a remote runtime session, and `cloud-realtime` uses it to authorize websocket token minting and event publication.
+- `cloud-realtime` no longer accepts anonymous `POST /v1/realtime/events`; only trusted internal callers with the shared service token may publish events. Websocket token maps are also reaped periodically, and per-instance socket counts are capped.
+- the base Kubernetes manifests now include topology spread constraints, ingress TLS, ingress rate limits, pod disruption budgets, and a default namespace network policy. These are still baseline controls, not a complete production security posture.
+- the desktop main process now treats a missing remote runtime session as recoverable state: if a stored `cloud_runtime_session_id` returns `404`, it clears that stale id locally and reacquires a fresh runtime session from the cloud service.
 - Secrets are represented by an example manifest and should be managed through your real secret workflow.
 - The runtime service should later be extended with queue-driven orchestration, worker heartbeats, and per-conversation ownership.
 
 ---
 
+## GitHub Push Deployment
+
+The repository includes a GitHub Actions workflow for continuous deployment to a Kubernetes cluster on every push to `main`.
+
+Workflow file:
+
+- `.github/workflows/deploy-cloud.yml`
+
+Deployment flow:
+
+- build and push `cloud-api`, `cloud-realtime`, and `runtime-headless` images to GHCR
+- tag each image with both `latest` and the Git commit SHA
+- decode a base64 kubeconfig from GitHub Actions secrets
+- apply the Kubernetes base manifests with Kustomize image overrides pinned to the pushed SHA
+- wait for the three deployments to finish their rollout
+
+Required GitHub repository secrets:
+
+- `KUBE_CONFIG` -- base64-encoded kubeconfig for the target cluster
+- `CHATONS_CLOUD_SECRETS_YAML` -- optional full Kubernetes Secret manifest for `chatons-cloud-secrets`
+
+Recommended bootstrap command for the kubeconfig secret:
+
+```bash
+base64 -i /path/to/kubeconfig | pbcopy
+```
+
+Then store the clipboard value in the `KUBE_CONFIG` GitHub Actions secret.
+
+Important operational detail:
+
+- the workflow pushes images to `ghcr.io/<github-owner>/chaton/...`
+- the workflow also creates or refreshes a `ghcr-auth` image pull secret in the `chatons-cloud` namespace
+- if you prefer public container images, you can make the GHCR package public and remove the pull-secret step later
+
+If you use `CHATONS_CLOUD_SECRETS_YAML`, store the complete manifest as a GitHub secret, for example:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: chatons-cloud-secrets
+  namespace: chatons-cloud
+type: Opaque
+stringData:
+  DATABASE_URL: "postgres://..."
+  REDIS_URL: "redis://..."
+  CHATONS_INTERNAL_SERVICE_TOKEN: "..."
+  OIDC_CLIENT_ID: "..."
+  OIDC_CLIENT_SECRET: "..."
+  OIDC_ISSUER_URL: "https://..."
+  JWT_SIGNING_KEY: "..."
+```
+
+---
+
 ## Next Infrastructure Steps
 
-- Add PostgreSQL and Redis manifests or managed-service bindings
-- Add cert-manager or equivalent TLS automation
-- Add network policies
-- Add pod disruption budgets
+- Replace the in-cluster PostgreSQL and Redis manifests with managed services or stateful production storage
 - Add observability stack integration
+- Add memory and connection-count based autoscaling signals in addition to CPU
+- Move desktop cloud sessions out of local plaintext SQLite and into an OS-backed secret store
+- Replace the current demo desktop auth flow with a real OIDC/PKCE exchange backed by the configured issuer
 - Add rollout strategy and canary policy

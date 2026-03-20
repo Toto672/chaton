@@ -109,6 +109,17 @@ The desktop app remains important, but its role changes for cloud projects:
 - maintain local cache and UX state
 - surface connection and permission failures clearly
 
+### 4.5 Quotas and permissions are server-derived
+
+Cloud subscription, session quota, project membership, and conversation ownership must be resolved by cloud services from durable server state.
+
+That means:
+
+- the desktop client may display quota information, but must not tell the server what the effective quota is
+- runtime admission must be checked against the cloud account and active cloud sessions stored server-side
+- websocket token minting must verify that the presented desktop session is authorized for the target cloud instance
+- service-to-service event publishing must require internal service authentication instead of trusting network reachability alone
+
 ---
 
 ## 5. User Experience Model

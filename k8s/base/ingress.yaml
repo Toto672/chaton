@@ -7,8 +7,15 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/websocket-services: "cloud-realtime"
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.chatons.example.com
+        - realtime.chatons.example.com
+      secretName: chatons-cloud-tls
   rules:
     - host: api.chatons.example.com
       http:

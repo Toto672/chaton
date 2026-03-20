@@ -1,0 +1,32 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cloud-api
+  namespace: chatons-cloud
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cloud-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cloud-realtime
+  namespace: chatons-cloud
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cloud-realtime
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: runtime-headless
+  namespace: chatons-cloud
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: runtime-headless

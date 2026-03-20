@@ -184,7 +184,8 @@ For full details, see [Pi Integration](/pi-integration).
 
 `PiSessionRuntimeManager` in `electron/pi-sdk-runtime.ts` creates one `PiSdkRuntime` per conversation.
 
-This local runtime lifecycle applies only to local conversations. Cloud conversations may appear in the same workspace state, but they must not start a local Pi runtime. Their source of truth is the connected cloud instance plus its authenticated bootstrap payload. The authenticated cloud account now also carries a subscription tier and current usage counters, which the desktop exposes in Settings and the remote runtime enforces for concurrent cloud sessions.
+This local runtime lifecycle applies only to local conversations. Cloud conversations may appear in the same workspace state, but they must not start a local Pi runtime. Their source of truth is the connected cloud instance plus its authenticated bootstrap payload. The authenticated cloud account now also carries a subscription tier and current usage counters, which the desktop exposes in Settings while the cloud control plane remains the only authority for quota enforcement and session admission.
+Cloud projects, cloud conversations, and cloud message history are all owned by the cloud control plane. The Electron main process can mirror them into local SQLite for startup hydration and renderer compatibility, but cloud creation and transcript persistence must go through `cloud-api` rather than being synthesized locally.
 
 ### Working Directory Selection
 

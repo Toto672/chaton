@@ -6,6 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
 COPY apps/runtime-headless ./apps/runtime-headless
+COPY packages ./packages
 
 EXPOSE 4002
 

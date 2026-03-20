@@ -13,6 +13,13 @@ spec:
       labels:
         app: runtime-headless
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: runtime-headless
       containers:
         - name: runtime-headless
           image: ghcr.io/chatons/runtime-headless:latest
@@ -31,6 +38,20 @@ spec:
                 configMapKeyRef:
                   name: chatons-cloud-config
                   key: CHATONS_CLOUD_VERSION
+            - name: CHATONS_RUNTIME_LEASE_TTL_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: chatons-cloud-config
+                  key: CHATONS_RUNTIME_LEASE_TTL_SECONDS
+            - name: CHATONS_CLOUD_MAX_JSON_BODY_BYTES
+              valueFrom:
+                configMapKeyRef:
+                  name: chatons-cloud-config
+                  key: CHATONS_CLOUD_MAX_JSON_BODY_BYTES
+            - name: CHATONS_CLOUD_API_URL
+              value: "http://cloud-api.chatons-cloud.svc.cluster.local"
+            - name: CHATONS_REALTIME_PUBLISH_URL
+              value: "http://cloud-realtime.chatons-cloud.svc.cluster.local/v1/realtime/events"
           envFrom:
             - secretRef:
                 name: chatons-cloud-secrets

@@ -4,8 +4,12 @@ namespace: chatons-cloud
 resources:
   - namespace.yaml
   - configmap.yaml
+  - postgres.yaml
+  - redis.yaml
   - cloud-api.yaml
   - cloud-realtime.yaml
   - runtime-headless.yaml
+  - pdb.yaml
+  - network-policy.yaml
   - ingress.yaml
   - hpa.yaml

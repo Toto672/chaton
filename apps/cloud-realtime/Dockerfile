@@ -6,6 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
 COPY apps/cloud-realtime ./apps/cloud-realtime
+COPY packages ./packages
 
 EXPOSE 4001
 

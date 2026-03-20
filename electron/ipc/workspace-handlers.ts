@@ -237,11 +237,13 @@ type RuntimeSessionSnapshot = {
 async function postJson<TResponse>(
   url: string,
   payload: unknown,
+  headers?: Record<string, string>,
 ): Promise<TResponse> {
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      ...(headers ?? {}),
     },
     body: JSON.stringify(payload),
   });
@@ -274,6 +276,22 @@ async function getJson<TResponse>(
 async function deleteRequest(url: string): Promise<void> {
   const response = await fetch(url, {
     method: "DELETE",
+  });
+  if (!response.ok && response.status !== 404) {
+    const text = await response.text();
+    throw new Error(
+      `HTTP ${response.status} ${response.statusText}: ${text || "request failed"}`,
+    );
+  }
+}
+
+async function deleteRequestWithHeaders(
+  url: string,
+  headers?: Record<string, string>,
+): Promise<void> {
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers,
   });
   if (!response.ok && response.status !== 404) {
     const text = await response.text();
@@ -438,7 +456,10 @@ async function connectCloudRealtime(instanceId: string): Promise<void> {
 
   try {
     tokenResponse = await getAuthJson(
-      new URL("/v1/realtime/token", realtimeBaseUrl).toString(),
+      new URL(
+        `/v1/realtime/token?cloudInstanceId=${encodeURIComponent(instance.id)}`,
+        realtimeBaseUrl,
+      ).toString(),
       instance.access_token,
     );
   } catch (error) {
@@ -645,13 +666,6 @@ async function ensureCloudRuntimeSession(
   }
 
   try {
-    const account = await getJson<CloudAccountResponse>(
-      new URL("/v1/account", instance.base_url).toString(),
-      {
-        authorization: `Bearer ${instance.access_token}`,
-      },
-    );
-
     const createdResponse = await fetch(
       new URL("/v1/runtime/sessions", getRuntimeHeadlessBaseUrl(instance.base_url)).toString(),
       {
@@ -659,7 +673,6 @@ async function ensureCloudRuntimeSession(
         headers: {
           "content-type": "application/json",
           authorization: `Bearer ${instance.access_token}`,
-          "x-chatons-subscription-plan": account.user.subscription.id,
         },
         body: JSON.stringify({
           conversationId: conversation.id,
@@ -668,8 +681,6 @@ async function ensureCloudRuntimeSession(
           modelProvider: conversation.model_provider,
           modelId: conversation.model_id,
           thinkingLevel: conversation.thinking_level,
-          subscriptionLabel: account.user.subscription.label,
-          parallelSessionsLimit: account.user.subscription.parallelSessionsLimit,
         }),
       },
     );
@@ -735,12 +746,37 @@ async function getCloudRuntimeSnapshot(
     };
   }
 
-  return getJson<RuntimeSessionSnapshot>(
-    new URL(
-      `/v1/runtime/sessions/${encodeURIComponent(session.sessionId)}`,
-      getRuntimeHeadlessBaseUrl(instance.base_url),
-    ).toString(),
-  );
+  try {
+    return await getJson<RuntimeSessionSnapshot>(
+      new URL(
+        `/v1/runtime/sessions/${encodeURIComponent(session.sessionId)}`,
+        getRuntimeHeadlessBaseUrl(instance.base_url),
+      ).toString(),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("404")) {
+      await resetExpiredCloudRuntimeSession(conversationId);
+      const retried = await ensureCloudRuntimeSession(conversationId);
+      if (!retried.ok) {
+        return { status: "error", state: null, messages: [] };
+      }
+      return getJson<RuntimeSessionSnapshot>(
+        new URL(
+          `/v1/runtime/sessions/${encodeURIComponent(retried.sessionId)}`,
+          getRuntimeHeadlessBaseUrl(instance.base_url),
+        ).toString(),
+      );
+    }
+    return { status: "error", state: null, messages: [] };
+  }
+}
+
+async function resetExpiredCloudRuntimeSession(conversationId: string): Promise<void> {
+  const db = getDb();
+  saveConversationPiRuntime(db, conversationId, {
+    cloudRuntimeSessionId: null,
+  });
 }
 
 type RegisterWorkspaceHandlersDeps = {
@@ -3788,11 +3824,14 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
           : null;
 
       if (instance && conversation.cloud_runtime_session_id) {
-        await deleteRequest(
+        await deleteRequestWithHeaders(
           new URL(
             `/v1/runtime/sessions/${encodeURIComponent(conversation.cloud_runtime_session_id)}`,
             getRuntimeHeadlessBaseUrl(instance.base_url),
           ).toString(),
+          {
+            authorization: `Bearer ${instance.access_token}`,
+          },
         ).catch(() => undefined);
       }
 
@@ -3849,13 +3888,42 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
             getRuntimeHeadlessBaseUrl(instance.base_url),
           ).toString(),
           command,
-        ).catch((error) => ({
-          id: command.id,
-          type: "response" as const,
-          command: command.type,
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        }));
+          {
+            authorization: `Bearer ${instance.access_token}`,
+          },
+        ).catch(async (error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          if (message.includes("404")) {
+            await resetExpiredCloudRuntimeSession(conversationId);
+            const retried = await ensureCloudRuntimeSession(conversationId);
+            if (retried.ok) {
+              return postJson<RpcResponse>(
+                new URL(
+                  `/v1/runtime/sessions/${encodeURIComponent(retried.sessionId)}/commands`,
+                  getRuntimeHeadlessBaseUrl(instance.base_url),
+                ).toString(),
+                command,
+                {
+                  authorization: `Bearer ${instance.access_token}`,
+                },
+              ).catch((retryError) => ({
+                id: command.id,
+                type: "response" as const,
+                command: command.type,
+                success: false,
+                error:
+                  retryError instanceof Error ? retryError.message : String(retryError),
+              }));
+            }
+          }
+          return {
+            id: command.id,
+            type: "response" as const,
+            command: command.type,
+            success: false,
+            error: message,
+          };
+        });
 
           return response;
         }

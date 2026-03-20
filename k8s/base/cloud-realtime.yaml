@@ -13,6 +13,13 @@ spec:
       labels:
         app: cloud-realtime
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: cloud-realtime
       containers:
         - name: cloud-realtime
           image: ghcr.io/chatons/cloud-realtime:latest
@@ -31,6 +38,28 @@ spec:
                 configMapKeyRef:
                   name: chatons-cloud-config
                   key: CHATONS_CLOUD_VERSION
+            - name: CHATONS_REALTIME_CHANNEL_PREFIX
+              valueFrom:
+                configMapKeyRef:
+                  name: chatons-cloud-config
+                  key: CHATONS_REALTIME_CHANNEL_PREFIX
+            - name: CHATONS_REALTIME_TOKEN_TTL_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: chatons-cloud-config
+                  key: CHATONS_REALTIME_TOKEN_TTL_SECONDS
+            - name: CHATONS_REALTIME_MAX_SOCKETS_PER_INSTANCE
+              valueFrom:
+                configMapKeyRef:
+                  name: chatons-cloud-config
+                  key: CHATONS_REALTIME_MAX_SOCKETS_PER_INSTANCE
+            - name: CHATONS_CLOUD_MAX_JSON_BODY_BYTES
+              valueFrom:
+                configMapKeyRef:
+                  name: chatons-cloud-config
+                  key: CHATONS_CLOUD_MAX_JSON_BODY_BYTES
+            - name: CHATONS_CLOUD_API_URL
+              value: "http://cloud-api.chatons-cloud.svc.cluster.local"
           envFrom:
             - secretRef:
                 name: chatons-cloud-secrets

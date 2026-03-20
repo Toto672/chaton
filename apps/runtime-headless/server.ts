@@ -1,40 +1,41 @@
 import http from 'node:http'
 import crypto from 'node:crypto'
-import type { CloudSubscriptionPlan, CloudUsageRecord } from '../../packages/domain/index.js'
-import type { CloudRuntimeSessionCreateResponse } from '../../packages/protocol/index.js'
+import type { CloudRuntimeAccessGrant } from '../../packages/domain/index.js'
+import type {
+  CloudConversationMessageRecord,
+  CloudRuntimeSessionCreateResponse,
+} from '../../packages/protocol/index.js'
+import { createRuntimeStore, type RuntimeMessage, type RuntimeSession } from './store.js'
 
 const port = Number.parseInt(process.env.PORT ?? '4002', 10)
 const version = process.env.CHATONS_CLOUD_VERSION ?? '0.1.0'
 const realtimePublishUrl =
   process.env.CHATONS_REALTIME_PUBLISH_URL ?? 'http://127.0.0.1:4001/v1/realtime/events'
+const cloudApiBaseUrl =
+  process.env.CHATONS_CLOUD_API_URL ?? 'http://127.0.0.1:4000'
+const runtimeOwnerId =
+  process.env.CHATONS_RUNTIME_OWNER_ID?.trim() || `runtime-${crypto.randomUUID()}`
+const leaseTtlSeconds = Number.parseInt(process.env.CHATONS_RUNTIME_LEASE_TTL_SECONDS ?? '60', 10)
+const leaseHeartbeatIntervalMs = Math.max(5_000, Math.floor((leaseTtlSeconds * 1000) / 2))
+const maxJsonBodyBytes = Number.parseInt(
+  process.env.CHATONS_CLOUD_MAX_JSON_BODY_BYTES ?? '1048576',
+  10,
+)
+const internalServiceToken = process.env.CHATONS_INTERNAL_SERVICE_TOKEN?.trim() ?? ''
 
-type RuntimeMessage = {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: number
+const runtimeStore = createRuntimeStore()
+
+function buildLeaseExpiresAt(): string {
+  return new Date(Date.now() + leaseTtlSeconds * 1000).toISOString()
 }
 
-type RuntimeSession = {
-  id: string
-  conversationId: string
-  projectId: string | null
-  cloudInstanceId: string
-  status: 'starting' | 'ready' | 'streaming' | 'stopped' | 'error'
-  modelProvider: string | null
-  modelId: string | null
-  thinkingLevel: string | null
-  messages: RuntimeMessage[]
-  createdAt: string
-  updatedAt: string
-  accessToken: string
-  subscriptionPlan: CloudSubscriptionPlan
-  subscriptionLabel: string
-  parallelSessionsLimit: number
+async function refreshOwnedSessionLeases(): Promise<void> {
+  const sessions = await runtimeStore.listSessionsByOwner(runtimeOwnerId)
+  const nextLease = buildLeaseExpiresAt()
+  for (const session of sessions) {
+    await runtimeStore.touchSessionLease(session.id, runtimeOwnerId, nextLease).catch(() => null)
+  }
 }
-
-const sessions = new Map<string, RuntimeSession>()
-const sessionIdsByAccessToken = new Map<string, Set<string>>()
 
 function getBearerToken(request: http.IncomingMessage): string | null {
   const header = request.headers.authorization
@@ -61,49 +62,85 @@ function json(
 
 async function readJsonBody<T>(request: http.IncomingMessage): Promise<T> {
   const chunks: Buffer[] = []
+  let totalSize = 0
   for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    totalSize += buffer.length
+    if (totalSize > maxJsonBodyBytes) {
+      const error = new Error(`Request body exceeds ${maxJsonBodyBytes} bytes`)
+      ;(error as Error & { statusCode?: number }).statusCode = 413
+      throw error
+    }
+    chunks.push(buffer)
   }
   const text = Buffer.concat(chunks).toString('utf8')
   return JSON.parse(text) as T
 }
 
-function getPlanFromRequest(request: http.IncomingMessage): CloudSubscriptionPlan | null {
-  const raw = request.headers['x-chatons-subscription-plan']
-  const value = Array.isArray(raw) ? raw[0] : raw
-  if (value === 'plus' || value === 'pro' || value === 'max') {
-    return value
+async function fetchAccessGrant(params: {
+  accessToken: string
+  cloudInstanceId: string
+  projectId?: string | null
+  conversationId?: string | null
+}): Promise<CloudRuntimeAccessGrant | null> {
+  if (!internalServiceToken) {
+    throw new Error('Missing CHATONS_INTERNAL_SERVICE_TOKEN')
   }
-  return null
-}
-
-function buildUsage(accessToken: string, parallelSessionsLimit: number): CloudUsageRecord {
-  const activeParallelSessions = sessionIdsByAccessToken.get(accessToken)?.size ?? 0
-  return {
-    activeParallelSessions,
-    parallelSessionsLimit,
-    remainingParallelSessions: Math.max(0, parallelSessionsLimit - activeParallelSessions),
+  const response = await fetch(
+    new URL('/v1/internal/runtime/access', cloudApiBaseUrl).toString(),
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${internalServiceToken}`,
+      },
+      body: JSON.stringify(params),
+    },
+  )
+  if (response.status === 404 || response.status === 401) {
+    return null
   }
+  if (!response.ok) {
+    throw new Error(`Cloud access lookup failed with status ${response.status}`)
+  }
+  return (await response.json()) as CloudRuntimeAccessGrant
 }
 
-function trackSession(session: RuntimeSession): void {
-  const current = sessionIdsByAccessToken.get(session.accessToken) ?? new Set<string>()
-  current.add(session.id)
-  sessionIdsByAccessToken.set(session.accessToken, current)
-}
-
-function untrackSession(session: RuntimeSession | undefined): void {
+async function requireSessionAccess(
+  request: http.IncomingMessage,
+  response: http.ServerResponse,
+  sessionId: string,
+): Promise<{ session: RuntimeSession; grant: CloudRuntimeAccessGrant } | null> {
+  const accessToken = getBearerToken(request)
+  if (!accessToken) {
+    json(response, 401, {
+      error: 'unauthorized',
+      message: 'Missing bearer token',
+    })
+    return null
+  }
+  const session = await runtimeStore.getSession(sessionId)
   if (!session) {
-    return
+    json(response, 404, {
+      error: 'not_found',
+      message: 'Runtime session not found',
+    })
+    return null
   }
-  const current = sessionIdsByAccessToken.get(session.accessToken)
-  if (!current) {
-    return
+  const grant = await fetchAccessGrant({
+    accessToken,
+    cloudInstanceId: session.cloudInstanceId,
+    projectId: session.projectId,
+    conversationId: session.conversationId,
+  })
+  if (!grant || grant.user.id !== session.userId) {
+    json(response, 403, {
+      error: 'forbidden',
+      message: 'Cloud runtime session access denied',
+    })
+    return null
   }
-  current.delete(session.id)
-  if (current.size === 0) {
-    sessionIdsByAccessToken.delete(session.accessToken)
-  }
+  return { session, grant }
 }
 
 async function publishRealtimeEvent(event: {
@@ -124,19 +161,95 @@ async function publishRealtimeEvent(event: {
     payload: event.payload,
   }
 
-  await fetch(realtimePublishUrl, {
+  const response = await fetch(realtimePublishUrl, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
+      authorization: `Bearer ${internalServiceToken}`,
     },
     body: JSON.stringify({
       cloudInstanceId: event.cloudInstanceId,
       event: envelope,
     }),
-  }).catch(() => undefined)
+  })
+  if (!response.ok) {
+    throw new Error(`Realtime publish failed with status ${response.status}`)
+  }
 }
 
-const server = http.createServer(async (request, response) => {
+async function persistConversationMessages(session: RuntimeSession): Promise<void> {
+  const messages: CloudConversationMessageRecord[] = session.messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    timestamp: message.timestamp,
+    content: message.content,
+  }))
+
+  const response = await fetch(
+    new URL(
+      `/v1/conversations/${encodeURIComponent(session.conversationId)}/messages`,
+      cloudApiBaseUrl,
+    ).toString(),
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${session.accessToken}`,
+      },
+      body: JSON.stringify({
+        messages,
+      }),
+    },
+  )
+  if (!response.ok) {
+    throw new Error(`Transcript persistence failed with status ${response.status}`)
+  }
+}
+
+function toSnapshot(session: RuntimeSession): {
+  status: RuntimeSession['status']
+  state: Record<string, unknown>
+  messages: Array<Record<string, unknown>>
+} {
+  return {
+    status: session.status,
+    state: {
+      model:
+        session.modelProvider && session.modelId
+          ? {
+              provider: session.modelProvider,
+              id: session.modelId,
+            }
+          : null,
+      thinkingLevel: session.thinkingLevel ?? 'medium',
+      isStreaming: session.status === 'streaming',
+      isCompacting: false,
+      steeringMode: 'all',
+      followUpMode: 'all',
+      sessionFile: session.id,
+      sessionId: session.id,
+      autoCompactionEnabled: false,
+      messageCount: session.messages.length,
+      pendingMessageCount: 0,
+    },
+    messages: session.messages.map((message) => ({
+      id: message.id,
+      role: message.role,
+      timestamp: message.timestamp,
+      content: message.content,
+      message: {
+        id: message.id,
+        role: message.role,
+        content: message.content,
+      },
+    })),
+  }
+}
+
+async function handleRequest(
+  request: http.IncomingMessage,
+  response: http.ServerResponse,
+): Promise<void> {
   const method = request.method ?? 'GET'
   const url = request.url ?? '/'
 
@@ -146,6 +259,7 @@ const server = http.createServer(async (request, response) => {
       service: 'runtime-headless',
       version,
       timestamp: new Date().toISOString(),
+      store: runtimeStore.mode,
     })
     return
   }
@@ -166,7 +280,6 @@ const server = http.createServer(async (request, response) => {
       return
     }
 
-    const subscriptionPlan = getPlanFromRequest(request)
     const body = await readJsonBody<{
       conversationId: string
       projectId?: string | null
@@ -174,30 +287,42 @@ const server = http.createServer(async (request, response) => {
       modelProvider?: string | null
       modelId?: string | null
       thinkingLevel?: string | null
-      subscriptionLabel?: string
-      parallelSessionsLimit?: number
     }>(request)
-    const parallelSessionsLimit =
-      typeof body.parallelSessionsLimit === 'number' ? Math.max(0, Math.floor(body.parallelSessionsLimit)) : 0
-    const subscriptionLabel =
-      typeof body.subscriptionLabel === 'string' && body.subscriptionLabel.trim()
-        ? body.subscriptionLabel.trim()
-        : subscriptionPlan ?? 'Cloud'
-    const usage = buildUsage(accessToken, parallelSessionsLimit)
-    if (!subscriptionPlan) {
+    if (!body.conversationId || !body.cloudInstanceId) {
+      json(response, 400, {
+        error: 'invalid_request',
+        message: 'conversationId and cloudInstanceId are required',
+      })
+      return
+    }
+
+    const grant = await fetchAccessGrant({
+      accessToken,
+      cloudInstanceId: body.cloudInstanceId,
+      projectId: body.projectId ?? null,
+      conversationId: body.conversationId,
+    })
+    if (!grant) {
+      json(response, 403, {
+        error: 'forbidden',
+        message: 'Cloud runtime access denied',
+      })
+      return
+    }
+    if (!grant.user.subscription.id) {
       const payload: CloudRuntimeSessionCreateResponse = {
         error: 'subscription_required',
         message: 'An active subscription is required to create a cloud runtime session.',
-        usage,
+        usage: grant.usage,
       }
       json(response, 403, payload)
       return
     }
-    if (usage.activeParallelSessions >= usage.parallelSessionsLimit) {
+    if (grant.usage.activeParallelSessions >= grant.usage.parallelSessionsLimit) {
       const payload: CloudRuntimeSessionCreateResponse = {
         error: 'parallel_session_limit_reached',
-        message: `Parallel session limit reached for ${subscriptionLabel}.`,
-        usage,
+        message: `Parallel session limit reached for ${grant.user.subscription.label}.`,
+        usage: grant.usage,
       }
       json(response, 429, payload)
       return
@@ -207,24 +332,40 @@ const server = http.createServer(async (request, response) => {
     const now = new Date().toISOString()
     const session: RuntimeSession = {
       id: sessionId,
+      userId: grant.user.id,
       conversationId: body.conversationId,
-      projectId: body.projectId ?? null,
-      cloudInstanceId: body.cloudInstanceId ?? process.env.CHATONS_CLOUD_INSTANCE_ID ?? 'instance-desktop',
+      projectId: body.projectId ?? grant.project?.id ?? null,
+      cloudInstanceId: grant.cloudInstance.id,
+      ownerId: runtimeOwnerId,
+      leaseExpiresAt: buildLeaseExpiresAt(),
       status: 'ready',
-      modelProvider: body.modelProvider ?? null,
-      modelId: body.modelId ?? null,
+      modelProvider: body.modelProvider ?? grant.conversation?.modelProvider ?? null,
+      modelId: body.modelId ?? grant.conversation?.modelId ?? null,
       thinkingLevel: body.thinkingLevel ?? null,
       messages: [],
       createdAt: now,
       updatedAt: now,
       accessToken,
-      subscriptionPlan,
-      subscriptionLabel,
-      parallelSessionsLimit,
+      subscriptionPlan: grant.user.subscription.id,
+      subscriptionLabel: grant.user.subscription.label,
+      parallelSessionsLimit: grant.user.subscription.parallelSessionsLimit,
     }
-    sessions.set(sessionId, session)
-    trackSession(session)
+    const acquired = await runtimeStore.acquireConversationSession(session)
+    if (!acquired.created) {
+      acquired.session.accessToken = accessToken
+      acquired.session.leaseExpiresAt = buildLeaseExpiresAt()
+      acquired.session.updatedAt = new Date().toISOString()
+      await runtimeStore.updateSession(acquired.session)
+      const payload: CloudRuntimeSessionCreateResponse = {
+        id: acquired.session.id,
+        status: acquired.session.status,
+        usage: grant.usage,
+      }
+      json(response, 200, payload)
+      return
+    }
 
+    await persistConversationMessages(session)
     await publishRealtimeEvent({
       cloudInstanceId: session.cloudInstanceId,
       conversationId: session.conversationId,
@@ -240,7 +381,7 @@ const server = http.createServer(async (request, response) => {
     const payload: CloudRuntimeSessionCreateResponse = {
       id: sessionId,
       status: session.status,
-      usage: buildUsage(accessToken, parallelSessionsLimit),
+      usage: grant.usage,
     }
     json(response, 201, payload)
     return
@@ -250,49 +391,12 @@ const server = http.createServer(async (request, response) => {
     const parsed = new URL(url, `http://127.0.0.1:${port}`)
     const parts = parsed.pathname.split('/').filter(Boolean)
     const sessionId = parts[3] ?? ''
-    const session = sessions.get(sessionId)
-
-    if (!session) {
-      json(response, 404, {
-        error: 'not_found',
-        message: 'Runtime session not found',
-      })
+    const access = await requireSessionAccess(request, response, sessionId)
+    if (!access) {
       return
     }
 
-    json(response, 200, {
-      status: session.status,
-      state: {
-        model:
-          session.modelProvider && session.modelId
-            ? {
-                provider: session.modelProvider,
-                id: session.modelId,
-              }
-            : null,
-        thinkingLevel: session.thinkingLevel ?? 'medium',
-        isStreaming: session.status === 'streaming',
-        isCompacting: false,
-        steeringMode: 'all',
-        followUpMode: 'all',
-        sessionFile: session.id,
-        sessionId: session.id,
-        autoCompactionEnabled: false,
-        messageCount: session.messages.length,
-        pendingMessageCount: 0,
-      },
-      messages: session.messages.map((message) => ({
-        id: message.id,
-        role: message.role,
-        timestamp: message.timestamp,
-        content: message.content,
-        message: {
-          id: message.id,
-          role: message.role,
-          content: message.content,
-        },
-      })),
-    })
+    json(response, 200, toSnapshot(access.session))
     return
   }
 
@@ -300,15 +404,19 @@ const server = http.createServer(async (request, response) => {
     const parsed = new URL(url, `http://127.0.0.1:${port}`)
     const parts = parsed.pathname.split('/').filter(Boolean)
     const sessionId = parts[3] ?? ''
-    const session = sessions.get(sessionId)
-
-    if (!session) {
-      json(response, 404, {
-        error: 'not_found',
-        message: 'Runtime session not found',
-      })
+    const access = await requireSessionAccess(request, response, sessionId)
+    if (!access) {
       return
     }
+    const session = access.session
+
+    await runtimeStore.touchSessionLease(
+      session.id,
+      runtimeOwnerId,
+      buildLeaseExpiresAt(),
+    )
+    session.ownerId = runtimeOwnerId
+    session.leaseExpiresAt = buildLeaseExpiresAt()
 
     const body = await readJsonBody<{
       type: string
@@ -322,6 +430,7 @@ const server = http.createServer(async (request, response) => {
       session.modelProvider = body.provider ?? session.modelProvider
       session.modelId = body.modelId ?? session.modelId
       session.updatedAt = new Date().toISOString()
+      await runtimeStore.updateSession(session)
       await publishRealtimeEvent({
         cloudInstanceId: session.cloudInstanceId,
         conversationId: session.conversationId,
@@ -345,6 +454,7 @@ const server = http.createServer(async (request, response) => {
     if (body.type === 'set_thinking_level') {
       session.thinkingLevel = body.level ?? session.thinkingLevel
       session.updatedAt = new Date().toISOString()
+      await runtimeStore.updateSession(session)
       await publishRealtimeEvent({
         cloudInstanceId: session.cloudInstanceId,
         conversationId: session.conversationId,
@@ -367,6 +477,9 @@ const server = http.createServer(async (request, response) => {
 
     if (body.type === 'prompt' || body.type === 'follow_up' || body.type === 'steer') {
       session.status = 'streaming'
+      session.leaseExpiresAt = buildLeaseExpiresAt()
+      session.updatedAt = new Date().toISOString()
+      await runtimeStore.updateSession(session)
       await publishRealtimeEvent({
         cloudInstanceId: session.cloudInstanceId,
         conversationId: session.conversationId,
@@ -387,15 +500,22 @@ const server = http.createServer(async (request, response) => {
           timestamp: Date.now(),
         }
         session.messages.push(userMessage)
+        session.leaseExpiresAt = buildLeaseExpiresAt()
+        session.updatedAt = new Date().toISOString()
+        await runtimeStore.updateSession(session)
+        await persistConversationMessages(session)
         await publishRealtimeEvent({
           cloudInstanceId: session.cloudInstanceId,
           conversationId: session.conversationId,
           payload: {
             event: {
-              type: 'message',
-              id: userMessage.id,
-              role: userMessage.role,
-              content: [{ type: 'text', text: userMessage.content }],
+              type: 'message_update',
+              message: {
+                id: userMessage.id,
+                role: userMessage.role,
+                timestamp: userMessage.timestamp,
+                content: [{ type: 'text', text: userMessage.content }],
+              },
             },
           },
         })
@@ -427,7 +547,10 @@ const server = http.createServer(async (request, response) => {
       }
       session.messages.push(assistantMessage)
       session.status = 'ready'
+      session.leaseExpiresAt = buildLeaseExpiresAt()
       session.updatedAt = new Date().toISOString()
+      await runtimeStore.updateSession(session)
+      await persistConversationMessages(session)
 
       await publishRealtimeEvent({
         cloudInstanceId: session.cloudInstanceId,
@@ -449,10 +572,23 @@ const server = http.createServer(async (request, response) => {
         conversationId: session.conversationId,
         payload: {
           event: {
-            type: 'message',
-            id: assistantMessage.id,
-            role: assistantMessage.role,
-            content: [{ type: 'text', text: assistantMessage.content }],
+            type: 'message_update',
+            message: {
+              id: assistantMessage.id,
+              role: assistantMessage.role,
+              timestamp: assistantMessage.timestamp,
+              content: [{ type: 'text', text: assistantMessage.content }],
+            },
+          },
+        },
+      })
+
+      await publishRealtimeEvent({
+        cloudInstanceId: session.cloudInstanceId,
+        conversationId: session.conversationId,
+        payload: {
+          event: {
+            type: 'agent_end',
           },
         },
       })
@@ -492,9 +628,16 @@ const server = http.createServer(async (request, response) => {
     const parsed = new URL(url, `http://127.0.0.1:${port}`)
     const parts = parsed.pathname.split('/').filter(Boolean)
     const sessionId = parts[3] ?? ''
-    const session = sessions.get(sessionId)
-    sessions.delete(sessionId)
-    untrackSession(session)
+    const access = await requireSessionAccess(request, response, sessionId)
+    if (!access) {
+      return
+    }
+    const session = access.session
+    session.status = 'stopped'
+    session.leaseExpiresAt = new Date().toISOString()
+    session.updatedAt = new Date().toISOString()
+    await runtimeStore.updateSession(session)
+    await runtimeStore.deleteSession(sessionId)
     response.writeHead(204)
     response.end()
     return
@@ -504,7 +647,33 @@ const server = http.createServer(async (request, response) => {
     error: 'not_found',
     message: `No route for ${method} ${url}`,
   })
+}
+
+const server = http.createServer((request, response) => {
+  void handleRequest(request, response).catch((error) => {
+    const statusCode =
+      typeof (error as { statusCode?: unknown })?.statusCode === 'number'
+        ? (error as { statusCode: number }).statusCode
+        : 500
+    json(response, statusCode, {
+      error: statusCode >= 500 ? 'internal_error' : 'invalid_request',
+      message: error instanceof Error ? error.message : String(error),
+    })
+  })
 })
+
+void runtimeStore.init().catch((error) => {
+  console.error('[runtime-headless] failed to initialize store', error)
+  process.exitCode = 1
+})
+
+const leaseHeartbeat = setInterval(() => {
+  void refreshOwnedSessionLeases().catch((error) => {
+    console.warn('[runtime-headless] failed to refresh session leases', error)
+  })
+}, leaseHeartbeatIntervalMs)
+
+leaseHeartbeat.unref?.()
 
 server.listen(port, '0.0.0.0', () => {
   console.log(`runtime-headless listening on :${port}`)

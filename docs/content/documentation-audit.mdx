@@ -7,6 +7,133 @@ description: Verified documentation changes and rationale for Chatons features a
 
 ## 2026-03-20 (Latest)
 
+### Hardened cloud auth, quota enforcement, runtime ownership, and Kubernetes safeguards
+
+**Change:** Reworked the cloud services so plan definitions and desktop-auth request state are now durable in `cloud-api`, added internal control-plane access endpoints for runtime/realtime authorization, moved cloud runtime quota enforcement to server-derived grants instead of client-supplied headers, required bearer ownership on runtime session reads/commands/deletes, protected realtime event publishing behind the shared internal service token, added bounded request-body handling and websocket/token cleanup, and extended the Kubernetes base with TLS, ingress rate limits, topology spread, pod disruption budgets, and a baseline network policy.
+
+**Why:** The earlier cloud implementation still trusted the desktop client for quota values, allowed unauthenticated realtime event injection, and exposed runtime-session APIs without validating that the caller owned the session. That was not safe for multi-tenant cloud usage and also left the manifests behind the runtime assumptions. The hardening changes move authorization back to the control plane and make the deployment model match the code.
+
+**Verified files:**
+- `apps/cloud-api/store.ts` -- Added durable subscription plans, stateful desktop auth requests, active-session usage lookup, and authoritative access-grant resolution
+- `apps/cloud-api/server.ts` -- Added internal authz endpoints, durable desktop-auth state, bounded request bodies, and plan persistence
+- `apps/runtime-headless/store.ts` -- Added user-owned runtime-session accounting for authoritative parallel-session enforcement
+- `apps/runtime-headless/server.ts` -- Added server-derived access grants, bearer-bound session authorization, strict transcript/realtime write handling, and bounded request bodies
+- `apps/cloud-realtime/server.ts` -- Added control-plane-backed websocket authorization, internal-token-protected event publishing, bounded request bodies, token reaping, and per-instance socket caps
+- `electron/ipc/workspace-handlers.ts` -- Stopped sending client-derived cloud quota headers and added authenticated remote runtime command/delete calls
+- `k8s/base/configmap.yaml` -- Added cloud body-size, websocket-cap, and desktop-auth TTL configuration
+- `k8s/base/secrets.example.yaml` -- Added the shared internal service token secret
+- `k8s/base/cloud-api.yaml` -- Injects the new cloud-api config and adds topology spread
+- `k8s/base/cloud-realtime.yaml` -- Injects cloud-api URL, websocket/body limits, and topology spread
+- `k8s/base/runtime-headless.yaml` -- Injects cloud-api/realtime URLs, body limits, and topology spread
+- `k8s/base/ingress.yaml` -- Added ingress TLS and rate limiting
+- `k8s/base/pdb.yaml` -- Added pod disruption budgets
+- `k8s/base/network-policy.yaml` -- Added a baseline namespace network policy
+- `k8s/base/kustomization.yaml` -- Includes the new operational resources
+- `docs/content/cloud-kubernetes.mdx` -- Documented the hardened control-plane/realtime/runtime contract and cluster requirements
+- `docs/content/cloud-architecture.mdx` -- Added the rule that quotas and permissions are server-derived
+- `docs/content/pi-integration.mdx` -- Clarified that cloud runtime quotas are enforced by the control plane, not the desktop
+- `docs/content/developer-guide.mdx` -- Clarified control-plane ownership of cloud quota enforcement
+
+### Made cloud realtime multi-replica aware for Kubernetes
+
+**Change:** Reworked `cloud-realtime` so websocket tokens are now bound explicitly to the desktop cloud-instance id, and added optional Redis-backed Pub/Sub fan-out for realtime events. The desktop main process now includes the local cloud instance id when minting a realtime token, and the Kubernetes base manifests now include a Redis deployment plus realtime channel configuration.
+
+**Why:** The previous realtime implementation derived the target cloud instance from the bearer token suffix and only fanned out events from in-process memory. That breaks down once `cloud-realtime` runs with multiple replicas behind Kubernetes because the websocket connection and the event-ingesting pod are no longer guaranteed to be the same process.
+
+**Verified files:**
+- `apps/cloud-realtime/server.ts` -- Added explicit cloud-instance token binding and Redis-backed Pub/Sub fan-out with in-memory fallback
+- `electron/ipc/workspace-handlers.ts` -- Passes the persisted desktop cloud-instance id when requesting realtime tokens
+- `k8s/base/redis.yaml` -- Added Redis deployment and service for realtime fan-out
+- `k8s/base/cloud-realtime.yaml` -- Added realtime Redis/channel configuration
+- `k8s/base/configmap.yaml` -- Added realtime channel and token TTL configuration
+- `k8s/base/kustomization.yaml` -- Included Redis in the base package
+- `docs/content/cloud-kubernetes.mdx` -- Documented Redis-backed realtime fan-out and explicit cloud-instance token binding
+
+### Added PostgreSQL-backed cloud control-plane storage
+
+**Change:** Introduced a dedicated cloud store layer for `cloud-api` with a PostgreSQL backend and an in-memory fallback. The control plane can now persist cloud users, desktop sessions, cloud workspace metadata, projects, conversations, and conversation transcripts in PostgreSQL when `DATABASE_URL` is configured. The Kubernetes base manifests now include a PostgreSQL deployment for the scaffolded cluster topology.
+
+**Why:** The cloud control plane could not scale safely on Kubernetes while user, project, conversation, and transcript state lived only in process memory. Durable storage is required so cloud projects survive pod restarts, rollout events, and horizontal scaling.
+
+**Verified files:**
+- `apps/cloud-api/store.ts` -- Added cloud store abstraction with memory and PostgreSQL implementations
+- `apps/cloud-api/server.ts` -- Switched control-plane routes to the new cloud store
+- `k8s/base/postgres.yaml` -- Added PostgreSQL deployment and service
+- `k8s/base/kustomization.yaml` -- Included PostgreSQL in the base package
+- `docs/content/cloud-kubernetes.mdx` -- Documented PostgreSQL-backed cloud control-plane storage
+
+### Added PostgreSQL-backed runtime session storage
+
+**Change:** Introduced a dedicated runtime store for `runtime-headless` with memory and PostgreSQL backends. Active remote runtime sessions, snapshots, message state, and parallel-session counting can now be backed by PostgreSQL when `DATABASE_URL` is configured. The cloud service Dockerfiles were also updated so shared packages are copied into the container images.
+
+**Why:** The runtime service previously tracked active sessions and quota consumption in process memory only. That broke down under Kubernetes rollouts and horizontal scaling because session existence and parallel limits were only accurate inside a single pod.
+
+**Verified files:**
+- `apps/runtime-headless/store.ts` -- Added runtime store abstraction with memory and PostgreSQL implementations
+- `apps/runtime-headless/server.ts` -- Switched runtime session lifecycle and quota counting to the runtime store
+- `apps/runtime-headless/Dockerfile` -- Copies shared packages into the runtime image
+- `apps/cloud-realtime/Dockerfile` -- Copies shared packages into the realtime image
+- `docs/content/cloud-kubernetes.mdx` -- Documented PostgreSQL-backed runtime session storage
+
+### Reused active runtime sessions per cloud conversation
+
+**Change:** Updated `runtime-headless` to look up an already-active session for the same `(conversationId, accessToken)` before creating a new one. If such a session exists, the service now returns it instead of allocating a duplicate runtime.
+
+**Why:** Once runtime session state became shared across pods, the next failure mode was duplicate runtime creation for the same conversation when the desktop retried quickly or multiple pods handled overlapping requests. Reusing the existing active session is a pragmatic first ownership rule and prevents accidental double-counting against parallel-session quotas.
+
+**Verified files:**
+- `apps/runtime-headless/store.ts` -- Added lookup of active runtime sessions by conversation and access token
+- `apps/runtime-headless/server.ts` -- Reuses an existing active runtime session before creating a new one
+- `docs/content/cloud-kubernetes.mdx` -- Documented active-session reuse for cloud conversations
+
+### Added runtime session lease ownership for cloud conversations
+
+**Change:** Extended runtime sessions with an owner id and lease expiration, configured a lease TTL for `runtime-headless`, and renewed that lease during cloud runtime activity. Active-session lookups now ignore expired leases, allowing a new pod to reclaim a conversation after the old owner disappears.
+
+**Why:** Reusing an existing session is not enough if the owning pod crashes without cleanup. A server-side lease is the minimum mechanism needed so conversation ownership can eventually recover instead of getting stuck behind stale active-session records.
+
+**Verified files:**
+- `apps/runtime-headless/store.ts` -- Added owner and lease fields plus lease-aware active-session queries
+- `apps/runtime-headless/server.ts` -- Assigns, refreshes, and expires conversation session leases
+- `k8s/base/configmap.yaml` -- Added runtime lease TTL configuration
+- `k8s/base/runtime-headless.yaml` -- Injects runtime lease TTL into the deployment
+- `docs/content/cloud-kubernetes.mdx` -- Documented runtime session lease ownership
+
+### Added lease heartbeats and desktop recovery for expired cloud runtime sessions
+
+**Change:** `runtime-headless` now refreshes leases periodically for sessions owned by the current pod, and the desktop main process now clears and reacquires a cloud runtime session if the stored remote session id returns `404` during snapshot or command execution.
+
+**Why:** A lease without heartbeats still expires during healthy long-lived sessions, and desktop state without recovery still gets stuck on stale `cloud_runtime_session_id` values after a pod restart or reclaimed lease. The combination of periodic lease renewal plus client-side reacquisition closes that gap.
+
+**Verified files:**
+- `apps/runtime-headless/store.ts` -- Added listing of sessions by owner for lease refresh cycles
+- `apps/runtime-headless/server.ts` -- Added periodic lease renewal for owned sessions
+- `electron/ipc/workspace-handlers.ts` -- Clears stale cloud runtime session ids and reacquires remote sessions after `404`
+- `docs/content/cloud-kubernetes.mdx` -- Documented desktop recovery from stale cloud runtime session ids
+
+### Realigned cloud control-plane ownership after cloud-api rewrite
+
+**Change:** Reworked `cloud-api` to own per-user cloud workspace state again after the account/subscription rewrite, restoring server-backed create/read flows for cloud projects, cloud conversations, and cloud conversation messages. `runtime-headless` now persists its transcript back to `cloud-api` and emits `message_update` plus `agent_end` events so the existing desktop Pi event pipeline can consume cloud runtime output without a separate renderer contract.
+
+**Why:** The cloud account rewrite changed authentication and subscription handling, but it also regressed the earlier control-plane endpoints that the desktop already depended on. Without restoring those routes and the expected event shapes, connected cloud projects could authenticate successfully while project creation, conversation creation, transcript fetch, and incremental cloud message rendering silently broke.
+
+**Verified files:**
+- `apps/cloud-api/server.ts` -- Restored per-user cloud workspace state plus project, conversation, and message endpoints behind authenticated cloud sessions
+- `apps/runtime-headless/server.ts` -- Persists transcript state to `cloud-api` and emits `message_update`/`agent_end` events compatible with the desktop Pi reducer
+- `docs/content/pi-integration.mdx` -- Clarified that cloud transcript state is server-owned
+- `docs/content/developer-guide.mdx` -- Clarified cloud control-plane ownership of cloud entities and transcripts
+- `AGENTS.md` -- Added maintainer guidance that cloud message history remains cloud-owned
+
+### Added GitHub Actions continuous deployment for Kubernetes
+
+**Change:** Added a dedicated GitHub Actions workflow that builds the three cloud service images on pushes to `main`, publishes them to GHCR, loads a kubeconfig from repository secrets, applies the Kubernetes base manifests with commit-SHA image tags, refreshes a GHCR pull secret in-cluster, and waits for deployment rollout. The Kubernetes deployment reference page was also updated with the required GitHub secrets and bootstrap flow.
+
+**Why:** The repository already contained Dockerfiles and Kubernetes base manifests for the cloud services, but there was no continuous delivery path from GitHub to the target Kubernetes cluster. Without that automation, every deployment required manual image publishing and manual `kubectl` application, which is error-prone and not aligned with deploying on every push to `main`.
+
+**Verified files:**
+- `.github/workflows/deploy-cloud.yml` -- Added build, push, and deploy automation for Kubernetes
+- `docs/content/cloud-kubernetes.mdx` -- Documented the GitHub Actions deployment workflow, required secrets, and kubeconfig bootstrap
+
 ### Added cloud subscriptions, per-user cloud quotas, and an admin account panel
 
 **Change:** Added cloud-account subscription state, required an active subscription for cloud bootstrap/runtime access, enforced concurrent remote-session quotas server-side, and exposed a new Cloud settings panel in the desktop app with account details, usage, editable plan parameters, and an admin-only user management view. The first created cloud user is now marked admin by default.

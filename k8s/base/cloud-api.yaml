@@ -13,6 +13,13 @@ spec:
       labels:
         app: cloud-api
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: cloud-api
       containers:
         - name: cloud-api
           image: ghcr.io/chatons/cloud-api:latest
@@ -31,6 +38,16 @@ spec:
                 configMapKeyRef:
                   name: chatons-cloud-config
                   key: CHATONS_CLOUD_VERSION
+            - name: CHATONS_DESKTOP_AUTH_REQUEST_TTL_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: chatons-cloud-config
+                  key: CHATONS_DESKTOP_AUTH_REQUEST_TTL_SECONDS
+            - name: CHATONS_CLOUD_MAX_JSON_BODY_BYTES
+              valueFrom:
+                configMapKeyRef:
+                  name: chatons-cloud-config
+                  key: CHATONS_CLOUD_MAX_JSON_BODY_BYTES
           envFrom:
             - secretRef:
                 name: chatons-cloud-secrets
