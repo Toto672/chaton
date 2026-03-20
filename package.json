@@ -1,7 +1,7 @@
 {
   "name": "chaton",
   "private": true,
-  "version": "0.182.0",
+  "version": "0.183.0",
   "description": "Electron + React + TypeScript + shadcn UI skeleton",
   "main": "dist-electron/main.js",
   "type": "module",
@@ -23,8 +23,7 @@
     "dist": "npm run build && electron-builder --mac dmg",
     "package:prod:dmg": "node scripts/package-prod-dmg.js",
     "dist:win": "npm run build && electron-builder --win --publish never",
-    "dist:linux": "npm run build && electron-builder --linux --publish never"
-    ,
+    "dist:linux": "npm run build && electron-builder --linux --publish never",
     "dev:cloud-api": "node apps/cloud-api/server.ts",
     "dev:cloud-realtime": "node apps/cloud-realtime/server.ts",
     "dev:runtime-headless": "node apps/runtime-headless/server.ts",
