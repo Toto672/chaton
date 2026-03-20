@@ -119,11 +119,12 @@ The desktop app should allow the user to connect a Chatons Cloud instance throug
 
 1. User clicks `Connect Cloud Instance`
 2. Desktop opens system browser to the cloud auth URL
-3. User authenticates with the cloud identity provider
-4. Cloud redirects back to the desktop through `chatons://...`
-5. Desktop exchanges the auth result for a durable desktop session
-6. Desktop fetches organizations and accessible projects
-7. Desktop opens a persistent WebSocket connection for live updates
+3. Browser navigates to `cloud.chatons.ai`
+4. User authenticates with the cloud identity provider
+5. Cloud redirects back to the desktop through `chatons://cloud/auth/callback?...`
+6. Desktop validates the callback and stores a durable local cloud session
+7. Desktop fetches organizations and accessible projects
+8. Desktop opens a persistent WebSocket connection for live updates
 
 ### 5.2 Sidebar treatment
 

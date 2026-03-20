@@ -7,6 +7,24 @@ description: Verified documentation changes and rationale for Chatons features a
 
 ## 2026-03-20 (Latest)
 
+### Added desktop cloud browser-auth callback flow
+
+**Change:** Wired the desktop cloud connection flow to launch the system browser, receive a `chatons://cloud/auth/callback` deep link, complete the cloud session locally, and refresh the desktop cloud state. The cloud docs were updated to reflect this browser-based desktop auth model.
+
+**Why:** The intended UX is not a manual URL prompt or in-app embedded login. Desktop Chatons should open `cloud.chatons.ai` in the user browser, detect the callback when login finishes, and keep the session locally for future cloud use.
+
+**Verified files:**
+- `electron/main.ts` -- Added deep-link handling for `chatons://cloud/auth/callback`
+- `electron/preload.ts` -- Exposed cloud auth start/complete APIs and cloud auth callback listener
+- `electron/ipc/workspace-handlers.ts` -- Added `cloud:startAuth` and `cloud:completeAuth`
+- `electron/db/migrations/024_cloud_instance_sessions.sql` -- Added persisted cloud session fields
+- `electron/db/repos/cloud-instances.ts` -- Added OAuth state and desktop session persistence helpers
+- `src/features/workspace/store/provider.tsx` -- Switched cloud connection to browser-based auth completion flow
+- `docs/content/cloud-architecture.mdx` -- Clarified the browser-to-desktop callback flow
+- `docs/content/cloud-kubernetes.mdx` -- Clarified the desktop auth entry/callback model in the Kubernetes deployment notes
+
+## 2026-03-20
+
 ### Added Kubernetes-oriented cloud service scaffold
 
 **Change:** Added an initial cloud service scaffold for `cloud-api`, `cloud-realtime`, and `runtime-headless`, plus shared domain/protocol packages, Dockerfiles, Kubernetes base manifests, and a Kubernetes deployment reference page.

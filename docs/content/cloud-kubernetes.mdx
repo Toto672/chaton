@@ -19,6 +19,8 @@ The cloud stack is split into three primary services:
 - `cloud-realtime`
 - `runtime-headless`
 
+The desktop login flow is expected to open the user browser to `cloud.chatons.ai`, then return to the desktop app through the custom `chatons://cloud/auth/callback` protocol.
+
 This separation is intentional for Kubernetes:
 
 - `cloud-api` scales on HTTP and CRUD load

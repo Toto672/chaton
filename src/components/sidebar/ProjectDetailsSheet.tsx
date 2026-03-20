@@ -272,6 +272,12 @@ export function ProjectDetailsSheet({ project, open, onClose, onProjectUpdated, 
                         <dt>{t('Etat cloud')}</dt>
                         <dd>{project.cloudStatus || 'unknown'}</dd>
                       </div>
+                      {project.cloudInstanceId ? (
+                        <div>
+                          <dt>{t('Instance')}</dt>
+                          <dd>{project.cloudInstanceId}</dd>
+                        </div>
+                      ) : null}
                     </>
                   ) : (
                     <div>
