@@ -1,5 +1,23 @@
 import http from 'node:http'
 import crypto from 'node:crypto'
+import { execFile } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { promisify } from 'node:util'
+import {
+  AuthStorage,
+  createAgentSession,
+  createBashTool,
+  createEditTool,
+  createReadTool,
+  createWriteTool,
+  DefaultResourceLoader,
+  ModelRegistry,
+  SessionManager,
+  SettingsManager,
+  type AgentSession,
+} from '@mariozechner/pi-coding-agent'
 import type { CloudRuntimeAccessGrant } from '../../packages/domain/index.js'
 import type {
   CloudConversationMessageRecord,
@@ -22,8 +40,602 @@ const maxJsonBodyBytes = Number.parseInt(
   10,
 )
 const internalServiceToken = process.env.CHATONS_INTERNAL_SERVICE_TOKEN?.trim() ?? ''
+const runtimeRootDir =
+  process.env.CHATONS_RUNTIME_ROOT_DIR?.trim() ||
+  path.join(os.tmpdir(), 'chatons-cloud-runtime')
+const execFileAsync = promisify(execFile)
 
 const runtimeStore = createRuntimeStore()
+const agentRuntimeBySessionId = new Map<string, RuntimeAgentState>()
+
+type RuntimeAgentState = {
+  sessionId: string
+  conversationId: string
+  organizationId: string
+  projectId: string | null
+  cloudInstanceId: string
+  agentDir: string
+  cwd: string
+  piSessionFile: string
+  session: AgentSession
+  projectSourceDir: string | null
+  worktreePath: string | null
+}
+
+type RuntimeCommandBody = {
+  type: string
+  message?: string
+  provider?: string
+  modelId?: string
+  level?: string
+}
+
+function ensureDir(dirPath: string): void {
+  fs.mkdirSync(dirPath, { recursive: true })
+}
+
+function sanitizeSegment(input: string): string {
+  return input.replace(/[^a-zA-Z0-9._-]/g, '-')
+}
+
+function writeJson(filePath: string, value: unknown): void {
+  ensureDir(path.dirname(filePath))
+  fs.writeFileSync(filePath, JSON.stringify(value, null, 2))
+}
+
+function removeDirIfExists(targetPath: string): void {
+  if (!targetPath.trim() || !fs.existsSync(targetPath)) {
+    return
+  }
+  fs.rmSync(targetPath, { recursive: true, force: true })
+}
+
+function buildGitAuthenticatedUrl(
+  cloneUrl: string,
+  accessToken: string | null,
+  authMode: CloudRuntimeAccessGrant['repository'] extends infer T
+    ? T extends { authMode: infer U }
+      ? U
+      : never
+    : never,
+): string {
+  if (authMode !== 'token' || !accessToken?.trim()) {
+    return cloneUrl
+  }
+  const parsed = new URL(cloneUrl)
+  if (parsed.protocol !== 'https:') {
+    throw new Error('Repository token auth currently requires an HTTPS clone URL')
+  }
+  parsed.username = 'x-access-token'
+  parsed.password = accessToken
+  return parsed.toString()
+}
+
+async function execGit(args: string[], cwd?: string): Promise<void> {
+  try {
+    await execFileAsync('git', cwd ? ['-C', cwd, ...args] : args, {
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: '0',
+      },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`git ${args.join(' ')} failed: ${message}`)
+  }
+}
+
+async function ensureProjectSourceCheckout(
+  projectSourceDir: string,
+  grant: CloudRuntimeAccessGrant,
+): Promise<void> {
+  if (grant.project?.kind !== 'repository' || !grant.repository?.cloneUrl) {
+    ensureDir(projectSourceDir)
+    return
+  }
+
+  const cloneUrl = buildGitAuthenticatedUrl(
+    grant.repository.cloneUrl,
+    grant.repository.accessToken,
+    grant.repository.authMode,
+  )
+  const defaultBranch = grant.repository.defaultBranch?.trim() || ''
+  const gitDir = path.join(projectSourceDir, '.git')
+
+  if (!fs.existsSync(gitDir)) {
+    ensureDir(path.dirname(projectSourceDir))
+    removeDirIfExists(projectSourceDir)
+    const cloneArgs = ['clone']
+    if (defaultBranch) {
+      cloneArgs.push('--branch', defaultBranch, '--single-branch')
+    }
+    cloneArgs.push(cloneUrl, projectSourceDir)
+    try {
+      await execGit(cloneArgs)
+      await execGit(['config', 'core.logAllRefUpdates', 'true'], projectSourceDir)
+    } catch (error) {
+      removeDirIfExists(projectSourceDir)
+      throw error
+    }
+    return
+  }
+
+  await execGit(['remote', 'set-url', 'origin', cloneUrl], projectSourceDir)
+  await execGit(['fetch', '--prune', 'origin'], projectSourceDir)
+
+  const targetRef = defaultBranch ? `origin/${defaultBranch}` : 'origin/HEAD'
+  try {
+    await execGit(['checkout', '--force', targetRef], projectSourceDir)
+  } catch {
+    if (defaultBranch) {
+      await execGit(['checkout', '--force', defaultBranch], projectSourceDir)
+    }
+  }
+  await execGit(['reset', '--hard', targetRef], projectSourceDir).catch(async () => {
+    if (defaultBranch) {
+      await execGit(['reset', '--hard', `origin/${defaultBranch}`], projectSourceDir)
+    }
+  })
+  await execGit(['clean', '-fdx'], projectSourceDir)
+}
+
+async function ensureConversationWorktree(
+  projectSourceDir: string,
+  worktreePath: string,
+  conversationId: string,
+): Promise<void> {
+  if (fs.existsSync(path.join(worktreePath, '.git'))) {
+    return
+  }
+
+  ensureDir(path.dirname(worktreePath))
+  const branchName = `chatons/cloud-${sanitizeSegment(conversationId).slice(0, 32)}`
+
+  try {
+    await execGit(
+      ['worktree', 'add', '-B', branchName, worktreePath, 'HEAD'],
+      projectSourceDir,
+    )
+  } catch (error) {
+    removeDirIfExists(worktreePath)
+    throw error
+  }
+}
+
+async function ensureRepositoryWorkspace(
+  runtimeSession: RuntimeSession,
+  grant: CloudRuntimeAccessGrant,
+): Promise<{ cwd: string; projectSourceDir: string | null; worktreePath: string | null }> {
+  const sessionRoot = path.join(runtimeRootDir, sanitizeSegment(runtimeSession.id))
+  if (grant.project?.kind !== 'repository' || !grant.repository?.cloneUrl || !grant.project?.id) {
+    const chatOnlyDir = path.join(sessionRoot, 'chat-only')
+    ensureDir(chatOnlyDir)
+    return {
+      cwd: chatOnlyDir,
+      projectSourceDir: null,
+      worktreePath: null,
+    }
+  }
+
+  const repoRoot = path.join(
+    runtimeRootDir,
+    'projects',
+    sanitizeSegment(grant.organization.id),
+    sanitizeSegment(grant.project.id),
+  )
+  const projectSourceDir = path.join(repoRoot, 'source')
+  const worktreePath = path.join(repoRoot, 'worktrees', sanitizeSegment(runtimeSession.conversationId))
+
+  await ensureProjectSourceCheckout(projectSourceDir, grant)
+  await ensureConversationWorktree(projectSourceDir, worktreePath, runtimeSession.conversationId)
+
+  if (!fs.existsSync(path.join(worktreePath, '.git'))) {
+    throw new Error(`Worktree created without git metadata at ${worktreePath}`)
+  }
+
+  return {
+    cwd: worktreePath,
+    projectSourceDir,
+    worktreePath,
+  }
+}
+
+async function removeRuntimeWorkspace(agentState: RuntimeAgentState): Promise<void> {
+  try {
+    if (agentState.projectSourceDir && agentState.worktreePath) {
+      await execGit(['worktree', 'remove', '--force', agentState.worktreePath], agentState.projectSourceDir)
+      return
+    }
+  } catch (error) {
+    console.warn('[runtime-headless] failed to remove git worktree cleanly', error)
+  }
+
+  if (agentState.worktreePath) {
+    removeDirIfExists(agentState.worktreePath)
+  } else {
+    removeDirIfExists(path.dirname(agentState.agentDir))
+  }
+}
+
+function getProviderApi(kind: CloudRuntimeAccessGrant['providers'][number]['kind']): string {
+  switch (kind) {
+    case 'openai':
+    case 'anthropic':
+    case 'google':
+      return 'openai-completions'
+    case 'github-copilot':
+      return 'anthropic-messages'
+    default:
+      return 'openai-completions'
+  }
+}
+
+function toModelsJson(grant: CloudRuntimeAccessGrant): Record<string, unknown> {
+  const providers = Object.fromEntries(
+    grant.providers
+      .filter((provider) => provider.supportsCloudRuntime && provider.secret.trim().length > 0)
+      .map((provider) => [
+        provider.kind,
+        {
+          name: provider.label,
+          api: getProviderApi(provider.kind),
+          baseUrl: provider.baseUrl,
+          models: provider.models.map((model) => ({
+            id: model.id,
+            name: model.label,
+          })),
+        },
+      ]),
+  )
+  return { providers }
+}
+
+function toAuthJson(grant: CloudRuntimeAccessGrant): Record<string, unknown> {
+  return Object.fromEntries(
+    grant.providers
+      .filter((provider) => provider.supportsCloudRuntime && provider.secret.trim().length > 0)
+      .map((provider) => [
+        provider.kind,
+        {
+          type: provider.credentialType === 'oauth' ? 'oauth' : 'api-key',
+          key: provider.secret,
+        },
+      ]),
+  )
+}
+
+function toSettingsJson(session: RuntimeSession): Record<string, unknown> {
+  const defaultProvider = session.modelProvider ?? null
+  const defaultModel = session.modelId ?? null
+  const enabledModels =
+    defaultProvider && defaultModel ? [`${defaultProvider}/${defaultModel}`] : []
+  return {
+    enabledModels,
+    defaultProvider,
+    defaultModel,
+    theme: 'dark',
+    editor: 'vscode',
+  }
+}
+
+function toRealtimeContentText(text: string): Array<{ type: 'text'; text: string }> {
+  return [{ type: 'text', text }]
+}
+
+function extractTextContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content
+  }
+  if (!Array.isArray(content)) {
+    return ''
+  }
+  return content
+    .map((part) => {
+      if (!part || typeof part !== 'object') return ''
+      const record = part as Record<string, unknown>
+      return record.type === 'text' && typeof record.text === 'string' ? record.text : ''
+    })
+    .filter((part) => part.trim().length > 0)
+    .join('\n\n')
+}
+
+function syncRuntimeMessagesFromPi(runtimeSession: RuntimeSession, piSession: AgentSession): void {
+  runtimeSession.messages = (piSession.messages as Array<Record<string, unknown>>)
+    .map((message) => {
+      const role =
+        message.role === 'assistant' || message.role === 'user'
+          ? message.role
+          : null
+      if (!role) {
+        return null
+      }
+      const id =
+        typeof message.id === 'string'
+          ? message.id
+          : `${role}-${crypto.randomUUID()}`
+      const timestamp =
+        typeof message.timestamp === 'number'
+          ? message.timestamp
+          : Date.now()
+      const content = extractTextContent(message.content)
+      return {
+        id,
+        role,
+        content,
+        timestamp,
+      } satisfies RuntimeMessage
+    })
+    .filter((message): message is RuntimeMessage => message !== null)
+}
+
+function toSnapshotFromPi(
+  runtimeSession: RuntimeSession,
+  agentState: RuntimeAgentState | null,
+): {
+  status: RuntimeSession['status']
+  state: Record<string, unknown>
+  messages: Array<Record<string, unknown>>
+} {
+  if (!agentState) {
+    return toSnapshot(runtimeSession)
+  }
+  syncRuntimeMessagesFromPi(runtimeSession, agentState.session)
+  return {
+    status: runtimeSession.status,
+    state: {
+      model:
+        runtimeSession.modelProvider && runtimeSession.modelId
+          ? {
+              provider: runtimeSession.modelProvider,
+              id: runtimeSession.modelId,
+            }
+          : null,
+      thinkingLevel: runtimeSession.thinkingLevel ?? agentState.session.thinkingLevel ?? 'medium',
+      isStreaming: runtimeSession.status === 'streaming',
+      isCompacting: false,
+      steeringMode: 'all',
+      followUpMode: 'all',
+      sessionFile: agentState.piSessionFile,
+      sessionId: runtimeSession.id,
+      autoCompactionEnabled: false,
+      messageCount: runtimeSession.messages.length,
+      pendingMessageCount: 0,
+    },
+    messages: (agentState.session.messages as Array<Record<string, unknown>>).map((message) => ({
+      ...message,
+      content: Array.isArray(message.content)
+        ? message.content
+        : toRealtimeContentText(extractTextContent(message.content)),
+      message: {
+        id:
+          typeof message.id === 'string'
+            ? message.id
+            : `${String(message.role ?? 'message')}-${crypto.randomUUID()}`,
+        role: typeof message.role === 'string' ? message.role : 'assistant',
+        content: Array.isArray(message.content)
+          ? message.content
+          : toRealtimeContentText(extractTextContent(message.content)),
+      },
+    })),
+  }
+}
+
+async function createRuntimeAgent(
+  runtimeSession: RuntimeSession,
+  grant: CloudRuntimeAccessGrant,
+): Promise<RuntimeAgentState> {
+  ensureDir(runtimeRootDir)
+  const sessionRoot = path.join(runtimeRootDir, sanitizeSegment(runtimeSession.id))
+  const agentDir = path.join(sessionRoot, 'agent')
+  const workspace = await ensureRepositoryWorkspace(runtimeSession, grant)
+  const workingDir = workspace.cwd
+  ensureDir(agentDir)
+  ensureDir(path.join(agentDir, 'sessions'))
+
+  writeJson(path.join(agentDir, 'models.json'), toModelsJson(grant))
+  writeJson(path.join(agentDir, 'auth.json'), toAuthJson(grant))
+  writeJson(path.join(agentDir, 'settings.json'), toSettingsJson(runtimeSession))
+
+  const authStorage = AuthStorage.create(path.join(agentDir, 'auth.json'))
+  const modelRegistry = new ModelRegistry(authStorage, path.join(agentDir, 'models.json'))
+  const settingsManager = await SettingsManager.create(workingDir, agentDir)
+  const resourceLoader = new DefaultResourceLoader({
+    cwd: workingDir,
+    agentDir,
+    settingsManager,
+  })
+  await resourceLoader.reload()
+  const piSessionFile = path.join(agentDir, 'sessions', `${sanitizeSegment(runtimeSession.id)}.jsonl`)
+  const sessionManager = fs.existsSync(piSessionFile)
+    ? SessionManager.open(piSessionFile, path.dirname(piSessionFile))
+    : SessionManager.create(workingDir, path.dirname(piSessionFile))
+
+  const tools =
+    grant.project?.workspaceCapability === 'full_tools'
+      ? [
+          createReadTool(workingDir),
+          createBashTool(workingDir),
+          createEditTool(workingDir),
+          createWriteTool(workingDir),
+        ]
+      : []
+
+  const defaultProvider =
+    runtimeSession.modelProvider ??
+    grant.providers.find((provider) => provider.defaultModel)?.kind ??
+    grant.providers[0]?.kind ??
+    null
+  const defaultModelId =
+    runtimeSession.modelId ??
+    grant.providers.find((provider) => provider.kind === defaultProvider)?.defaultModel ??
+    grant.providers.find((provider) => provider.defaultModel)?.defaultModel ??
+    grant.providers[0]?.models[0]?.id ??
+    null
+
+  const model =
+    defaultProvider && defaultModelId
+      ? modelRegistry.find(defaultProvider, defaultModelId)
+      : null
+
+  const { session } = await createAgentSession({
+    cwd: workingDir,
+    agentDir,
+    authStorage,
+    modelRegistry,
+    settingsManager,
+    resourceLoader,
+    sessionManager,
+    tools,
+    ...(model ? { model } : {}),
+    thinkingLevel: (runtimeSession.thinkingLevel ?? 'medium') as never,
+  })
+
+  runtimeSession.modelProvider = session.model?.provider ?? runtimeSession.modelProvider
+  runtimeSession.modelId = session.model?.id ?? runtimeSession.modelId
+  runtimeSession.thinkingLevel = session.thinkingLevel ?? runtimeSession.thinkingLevel
+
+  return {
+    sessionId: runtimeSession.id,
+    conversationId: runtimeSession.conversationId,
+    organizationId: grant.organization.id,
+    projectId: runtimeSession.projectId ?? grant.project?.id ?? null,
+    cloudInstanceId: runtimeSession.cloudInstanceId,
+    agentDir,
+    cwd: workingDir,
+    piSessionFile,
+    session,
+    projectSourceDir: workspace.projectSourceDir,
+    worktreePath: workspace.worktreePath,
+  }
+}
+
+function attachAgentRealtimeBridge(
+  runtimeSession: RuntimeSession,
+  agentState: RuntimeAgentState,
+): void {
+  agentState.session.subscribe((event) => {
+    if (event.type === 'agent_start') {
+      runtimeSession.status = 'streaming'
+      runtimeSession.updatedAt = new Date().toISOString()
+      void runtimeStore.updateSession(runtimeSession)
+      void publishRealtimeEvent({
+        cloudInstanceId: runtimeSession.cloudInstanceId,
+        organizationId: agentState.organizationId,
+        projectId: agentState.projectId,
+        conversationId: runtimeSession.conversationId,
+        payload: {
+          event: {
+            type: 'runtime_status',
+            status: 'streaming',
+            message: 'Cloud runtime streaming',
+          },
+        },
+      })
+      return
+    }
+
+    if (event.type === 'tool_execution_start') {
+      void publishRealtimeEvent({
+        cloudInstanceId: runtimeSession.cloudInstanceId,
+        organizationId: agentState.organizationId,
+        projectId: agentState.projectId,
+        conversationId: runtimeSession.conversationId,
+        payload: {
+          event: {
+            type: 'tool_execution_start',
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+          },
+        },
+      })
+      return
+    }
+
+    if (event.type === 'tool_execution_end') {
+      void publishRealtimeEvent({
+        cloudInstanceId: runtimeSession.cloudInstanceId,
+        organizationId: agentState.organizationId,
+        projectId: agentState.projectId,
+        conversationId: runtimeSession.conversationId,
+        payload: {
+          event: {
+            type: 'tool_execution_end',
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            result: (event as Record<string, unknown>).result ?? null,
+          },
+        },
+      })
+      return
+    }
+
+    if (event.type === 'message_update') {
+      syncRuntimeMessagesFromPi(runtimeSession, agentState.session)
+      runtimeSession.updatedAt = new Date().toISOString()
+      void runtimeStore.updateSession(runtimeSession)
+      void persistConversationMessages(runtimeSession)
+      void publishRealtimeEvent({
+        cloudInstanceId: runtimeSession.cloudInstanceId,
+        organizationId: agentState.organizationId,
+        projectId: agentState.projectId,
+        conversationId: runtimeSession.conversationId,
+        payload: {
+          event: {
+            type: 'message_update',
+            ...(event as Record<string, unknown>),
+          },
+        },
+      })
+      return
+    }
+
+    if (event.type === 'agent_end') {
+      syncRuntimeMessagesFromPi(runtimeSession, agentState.session)
+      runtimeSession.status = 'ready'
+      runtimeSession.updatedAt = new Date().toISOString()
+      void runtimeStore.updateSession(runtimeSession)
+      void persistConversationMessages(runtimeSession)
+      void publishRealtimeEvent({
+        cloudInstanceId: runtimeSession.cloudInstanceId,
+        organizationId: agentState.organizationId,
+        projectId: agentState.projectId,
+        conversationId: runtimeSession.conversationId,
+        payload: {
+          event: {
+            type: 'agent_end',
+          },
+        },
+      })
+      void publishRealtimeEvent({
+        cloudInstanceId: runtimeSession.cloudInstanceId,
+        organizationId: agentState.organizationId,
+        projectId: agentState.projectId,
+        conversationId: runtimeSession.conversationId,
+        payload: {
+          event: {
+            type: 'runtime_status',
+            status: 'ready',
+            message: 'Cloud runtime ready',
+          },
+        },
+      })
+    }
+  })
+}
+
+async function getOrCreateRuntimeAgent(
+  runtimeSession: RuntimeSession,
+  grant: CloudRuntimeAccessGrant,
+): Promise<RuntimeAgentState> {
+  const existing = agentRuntimeBySessionId.get(runtimeSession.id)
+  if (existing) {
+    return existing
+  }
+  const created = await createRuntimeAgent(runtimeSession, grant)
+  attachAgentRealtimeBridge(runtimeSession, created)
+  agentRuntimeBySessionId.set(runtimeSession.id, created)
+  return created
+}
 
 function buildLeaseExpiresAt(): string {
   return new Date(Date.now() + leaseTtlSeconds * 1000).toISOString()
@@ -145,6 +757,8 @@ async function requireSessionAccess(
 
 async function publishRealtimeEvent(event: {
   cloudInstanceId: string
+  organizationId: string
+  projectId?: string | null
   conversationId?: string
   payload: {
     event: {
@@ -157,6 +771,8 @@ async function publishRealtimeEvent(event: {
     id: crypto.randomUUID(),
     type: 'conversation.event',
     ts: new Date().toISOString(),
+    organizationId: event.organizationId,
+    projectId: event.projectId ?? undefined,
     conversationId: event.conversationId,
     payload: event.payload,
   }
@@ -338,7 +954,7 @@ async function handleRequest(
       cloudInstanceId: grant.cloudInstance.id,
       ownerId: runtimeOwnerId,
       leaseExpiresAt: buildLeaseExpiresAt(),
-      status: 'ready',
+      status: 'starting',
       modelProvider: body.modelProvider ?? grant.conversation?.modelProvider ?? null,
       modelId: body.modelId ?? grant.conversation?.modelId ?? null,
       thinkingLevel: body.thinkingLevel ?? null,
@@ -356,6 +972,7 @@ async function handleRequest(
       acquired.session.leaseExpiresAt = buildLeaseExpiresAt()
       acquired.session.updatedAt = new Date().toISOString()
       await runtimeStore.updateSession(acquired.session)
+      await getOrCreateRuntimeAgent(acquired.session, grant)
       const payload: CloudRuntimeSessionCreateResponse = {
         id: acquired.session.id,
         status: acquired.session.status,
@@ -365,9 +982,16 @@ async function handleRequest(
       return
     }
 
+    const agentState = await getOrCreateRuntimeAgent(session, grant)
+    syncRuntimeMessagesFromPi(session, agentState.session)
+    session.status = 'ready'
+    session.updatedAt = new Date().toISOString()
+    await runtimeStore.updateSession(session)
     await persistConversationMessages(session)
     await publishRealtimeEvent({
       cloudInstanceId: session.cloudInstanceId,
+      organizationId: grant.organization.id,
+      projectId: session.projectId,
       conversationId: session.conversationId,
       payload: {
         event: {
@@ -396,7 +1020,8 @@ async function handleRequest(
       return
     }
 
-    json(response, 200, toSnapshot(access.session))
+    const agentState = agentRuntimeBySessionId.get(access.session.id) ?? null
+    json(response, 200, toSnapshotFromPi(access.session, agentState))
     return
   }
 
@@ -409,6 +1034,7 @@ async function handleRequest(
       return
     }
     const session = access.session
+    const agentState = await getOrCreateRuntimeAgent(session, access.grant)
 
     await runtimeStore.touchSessionLease(
       session.id,
@@ -429,10 +1055,27 @@ async function handleRequest(
     if (body.type === 'set_model') {
       session.modelProvider = body.provider ?? session.modelProvider
       session.modelId = body.modelId ?? session.modelId
+      if (session.modelProvider && session.modelId) {
+        const model = agentState.session.modelRegistry.find(session.modelProvider, session.modelId)
+        if (!model) {
+          json(response, 400, {
+            id: crypto.randomUUID(),
+            type: 'response',
+            command: 'set_model',
+            success: false,
+            error: `Model not found: ${session.modelProvider}/${session.modelId}`,
+          })
+          return
+        }
+        await agentState.session.setModel(model)
+      }
       session.updatedAt = new Date().toISOString()
+      syncRuntimeMessagesFromPi(session, agentState.session)
       await runtimeStore.updateSession(session)
       await publishRealtimeEvent({
         cloudInstanceId: session.cloudInstanceId,
+        organizationId: access.grant.organization.id,
+        projectId: session.projectId,
         conversationId: session.conversationId,
         payload: {
           event: {
@@ -453,10 +1096,15 @@ async function handleRequest(
 
     if (body.type === 'set_thinking_level') {
       session.thinkingLevel = body.level ?? session.thinkingLevel
+      if (session.thinkingLevel) {
+        agentState.session.setThinkingLevel(session.thinkingLevel as never)
+      }
       session.updatedAt = new Date().toISOString()
       await runtimeStore.updateSession(session)
       await publishRealtimeEvent({
         cloudInstanceId: session.cloudInstanceId,
+        organizationId: access.grant.organization.id,
+        projectId: session.projectId,
         conversationId: session.conversationId,
         payload: {
           event: {
@@ -476,139 +1124,42 @@ async function handleRequest(
     }
 
     if (body.type === 'prompt' || body.type === 'follow_up' || body.type === 'steer') {
-      session.status = 'streaming'
-      session.leaseExpiresAt = buildLeaseExpiresAt()
-      session.updatedAt = new Date().toISOString()
-      await runtimeStore.updateSession(session)
-      await publishRealtimeEvent({
-        cloudInstanceId: session.cloudInstanceId,
-        conversationId: session.conversationId,
-        payload: {
-          event: {
-            type: 'runtime_status',
-            status: 'streaming',
-            message: 'Cloud runtime streaming',
-          },
-        },
-      })
-
       if (typeof body.message === 'string' && body.message.trim()) {
-        const userMessage: RuntimeMessage = {
-          id: `user-${crypto.randomUUID()}`,
-          role: 'user',
-          content: body.message,
-          timestamp: Date.now(),
+        if (body.type === 'prompt') {
+          await agentState.session.prompt(body.message)
+        } else if (body.type === 'follow_up') {
+          await agentState.session.followUp(body.message)
+        } else {
+          await agentState.session.steer(body.message)
         }
-        session.messages.push(userMessage)
-        session.leaseExpiresAt = buildLeaseExpiresAt()
-        session.updatedAt = new Date().toISOString()
-        await runtimeStore.updateSession(session)
-        await persistConversationMessages(session)
-        await publishRealtimeEvent({
-          cloudInstanceId: session.cloudInstanceId,
-          conversationId: session.conversationId,
-          payload: {
-            event: {
-              type: 'message_update',
-              message: {
-                id: userMessage.id,
-                role: userMessage.role,
-                timestamp: userMessage.timestamp,
-                content: [{ type: 'text', text: userMessage.content }],
-              },
-            },
-          },
-        })
       }
 
-      const assistantText =
-        body.type === 'steer'
-          ? 'Steering updated for remote cloud runtime.'
-          : `Cloud runtime reply: ${body.message ?? ''}`.trim()
-      const toolCallId = `cloud-tool-${crypto.randomUUID()}`
-
-      await publishRealtimeEvent({
-        cloudInstanceId: session.cloudInstanceId,
-        conversationId: session.conversationId,
-        payload: {
-          event: {
-            type: 'tool_execution_start',
-            toolCallId,
-            toolName: 'cloud_runtime_echo',
-          },
-        },
-      })
-
-      const assistantMessage: RuntimeMessage = {
-        id: `assistant-${crypto.randomUUID()}`,
-        role: 'assistant',
-        content: assistantText,
-        timestamp: Date.now(),
-      }
-      session.messages.push(assistantMessage)
+      syncRuntimeMessagesFromPi(session, agentState.session)
       session.status = 'ready'
       session.leaseExpiresAt = buildLeaseExpiresAt()
       session.updatedAt = new Date().toISOString()
       await runtimeStore.updateSession(session)
       await persistConversationMessages(session)
 
-      await publishRealtimeEvent({
-        cloudInstanceId: session.cloudInstanceId,
-        conversationId: session.conversationId,
-        payload: {
-          event: {
-            type: 'tool_execution_end',
-            toolCallId,
-            toolName: 'cloud_runtime_echo',
-            result: {
-              runtime: 'cloud',
-            },
-          },
-        },
-      })
-
-      await publishRealtimeEvent({
-        cloudInstanceId: session.cloudInstanceId,
-        conversationId: session.conversationId,
-        payload: {
-          event: {
-            type: 'message_update',
-            message: {
-              id: assistantMessage.id,
-              role: assistantMessage.role,
-              timestamp: assistantMessage.timestamp,
-              content: [{ type: 'text', text: assistantMessage.content }],
-            },
-          },
-        },
-      })
-
-      await publishRealtimeEvent({
-        cloudInstanceId: session.cloudInstanceId,
-        conversationId: session.conversationId,
-        payload: {
-          event: {
-            type: 'agent_end',
-          },
-        },
-      })
-
-      await publishRealtimeEvent({
-        cloudInstanceId: session.cloudInstanceId,
-        conversationId: session.conversationId,
-        payload: {
-          event: {
-            type: 'runtime_status',
-            status: 'ready',
-            message: 'Cloud runtime ready',
-          },
-        },
-      })
-
       json(response, 200, {
         id: crypto.randomUUID(),
         type: 'response',
         command: body.type,
+        success: true,
+      })
+      return
+    }
+
+    if (body.type === 'abort') {
+      await agentState.session.abort()
+      syncRuntimeMessagesFromPi(session, agentState.session)
+      session.status = 'ready'
+      session.updatedAt = new Date().toISOString()
+      await runtimeStore.updateSession(session)
+      json(response, 200, {
+        id: crypto.randomUUID(),
+        type: 'response',
+        command: 'abort',
         success: true,
       })
       return
@@ -633,6 +1184,12 @@ async function handleRequest(
       return
     }
     const session = access.session
+    const agentState = agentRuntimeBySessionId.get(sessionId)
+    if (agentState) {
+      agentState.session.dispose()
+      await removeRuntimeWorkspace(agentState)
+      agentRuntimeBySessionId.delete(sessionId)
+    }
     session.status = 'stopped'
     session.leaseExpiresAt = new Date().toISOString()
     session.updatedAt = new Date().toISOString()

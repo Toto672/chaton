@@ -11,7 +11,6 @@ import {
   emailVerificationTtlSeconds,
   passwordResetTtlSeconds,
   webBaseUrl,
-} from './config.js'
 } from './config.ts'
 import { issueCloudWebSessionResponse, store } from './context.ts'
 import { json, readJsonBody } from './http.ts'

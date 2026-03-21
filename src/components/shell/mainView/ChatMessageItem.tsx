@@ -530,8 +530,8 @@ export const ChatMessageItem = memo(function ChatMessageItem({
             )}
           </VirtualHeightMessage>
         ) : null}
-        {hasAttachments(renderedText) && (
-          <MessageAttachments attachments={parseAttachmentsFromText(renderedText)} />
+        {hasAttachmentsInText && (
+          <MessageAttachments attachments={parseAttachmentsFromText(text)} />
         )}
         {hasAssistantMeta && assistantMeta ? (
           <div className="chat-assistant-meta">

@@ -336,7 +336,6 @@ function safeReadRegistry(): RegistryFile {
             health: 'ok',
           })
         }
-
         registry = {
           version: typeof parsed.version === 'number' ? parsed.version : 1,
           extensions: parsed.extensions.filter(

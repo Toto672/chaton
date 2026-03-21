@@ -458,7 +458,6 @@ async function handleRequest(
     }
 
     const body = await readJsonBody<CreateCloudProjectRequest>(request)
-    const workspace = await store.getWorkspaceState(auth.user)
     const trimmedName = body.name?.trim()
     if (!trimmedName) {
       json(response, 400, {
@@ -467,18 +466,22 @@ async function handleRequest(
       })
       return
     }
-    if (body.organizationId !== workspace.organization.id) {
-      json(response, 400, {
-        error: 'invalid_request',
-        message: 'Unknown organization',
+    let project: Awaited<ReturnType<typeof store.createProject>>
+    try {
+      project = await store.createProject(auth.user, {
+        ...body,
+        name: trimmedName,
       })
-      return
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Unknown organization') {
+        json(response, 400, {
+          error: 'invalid_request',
+          message: 'Unknown organization',
+        })
+        return
+      }
+      throw error
     }
-
-    const project = await store.createProject(auth.user, {
-      ...body,
-      name: trimmedName,
-    })
     const payload: CreateCloudProjectResponse = {
       project,
     }

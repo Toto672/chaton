@@ -184,8 +184,9 @@ For full details, see [Pi Integration](/pi-integration).
 
 `PiSessionRuntimeManager` in `electron/pi-sdk-runtime.ts` creates one `PiSdkRuntime` per conversation.
 
-This local runtime lifecycle applies only to local conversations. Cloud conversations may appear in the same workspace state, but they must not start a local Pi runtime. Their source of truth is the connected cloud instance plus its authenticated bootstrap payload. The authenticated cloud account now also carries a subscription tier and current usage counters, which the desktop exposes in Settings while the cloud control plane remains the only authority for quota enforcement and session admission.
+This local runtime lifecycle applies only to local conversations. Cloud conversations may appear in the same workspace state, but they must not start a local Pi runtime. Their source of truth is the connected cloud instance plus its authenticated bootstrap payload. Remote execution now lives in `apps/runtime-headless/server.ts`, which materializes a managed Pi agent directory from the internal control-plane access grant and runs a real Pi session server-side. For repository-backed cloud projects, that remote runtime now maintains a shared project source checkout and a per-conversation Git worktree instead of a session-local clone. The authenticated cloud account now also carries a subscription tier and current usage counters, which the desktop exposes in Settings while the cloud control plane remains the only authority for quota enforcement and session admission.
 Cloud projects, cloud conversations, and cloud message history are all owned by the cloud control plane. The Electron main process can mirror them into local SQLite for startup hydration and renderer compatibility, but cloud creation and transcript persistence must go through `cloud-api` rather than being synthesized locally.
+The Postgres-backed cloud control plane now also stores normalized organization, membership, and provider rows alongside the older compatibility workspace blob. Access checks for the main project/conversation/message paths have started moving to membership-based joins, and the main cloud entity tables now also persist explicit `organization_id` values, but the full shared-organization data model migration is still in progress.
 The browser-facing `cloud.chatons.ai` surface follows the same rule: signup, login, organization setup, provider setup, and desktop handoff are now implemented inside the `landing/` app, but they still call back into `cloud-api` as the source of truth. The landing app is presentation and browser-session glue, not a second control plane.
 The web auth surface now also owns password-based login, email verification, and password reset initiation, but those flows remain server-driven by `cloud-api`, including token issuance and SMTP-backed mail delivery.
 Cloud subscription enforcement is also now split between the durable paid/default plan on the user record and an optional admin-granted complimentary subscription window. When such a grant is active, it becomes the effective plan used by account responses, UI display, quota checks, and runtime admission until it expires or is replaced.
@@ -372,7 +373,7 @@ Full documentation: [Extensions](/extensions), [Extensions API](/extensions/api)
 ### Architecture
 
 - Extensions live in `~/.chaton/extensions/<extension-id>/`
-- Built-in extensions (`@chaton/automation`, `@chaton/memory`) are bundled in `electron/extensions/builtin/`
+- Built-in extensions (`@chaton/automation`, `@chaton/memory`, etc.) are bundled in `electron/extensions/builtin/`
 - Extension manifest: `chaton.extension.json`
 - Runtime: `electron/extensions/runtime/` (host, storage, types, capabilities, UI bridge, automation, memory)
 - API surface: `window.chaton.*` (not `window.chatonExtension.api.*`)
@@ -386,6 +387,10 @@ Extensions can now also contribute `ui.topbarItems` for lightweight topbar actio
 ### Channel Extensions
 
 Extensions with `kind: "channel"` appear under the **Channels** sidebar entry. They bridge external messaging platforms into Chatons global threads. See [Channels](/extensions/channels).
+
+The local `@thibautrey/chatons-channel-even-realities` channel exposes a local HTTP server on `http://127.0.0.1:42619/messages` for Even Realities glasses, routes incoming POST payloads into global channel conversations, and ignores the incoming transport `model` field so the Chatons conversation model remains the source of truth.
+
+Conversations created by that channel also receive a dedicated Pi runtime prompt section telling the agent it is replying for smart glasses and should keep answers very short and quick by default.
 
 ---
 

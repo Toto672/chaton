@@ -183,6 +183,7 @@ For each conversation, Chatons creates a Pi session with these steps:
    - Access mode constraints
    - Suggested actions available in the UI
    - How to explain limitations to the user
+   - Channel-specific delivery constraints when the conversation is owned by a channel extension (for example the local Even Realities glasses channel requires very short, fast replies optimized for on-glasses display)
 
 5. **Start Pi session** and expose commands like `get_access_mode` for the model to query live state
 
@@ -216,6 +217,7 @@ Current examples:
 
 - **Memory summarization/consolidation** via `electron/extensions/runtime/memory-lifecycle.ts`
 - **Conversation auto-title refinement** via `electron/ipc/workspace-title.ts`
+- **Channel ingestion subagents** via `channels.ingestMessage`, including local channel extensions such as the Even Realities glasses bridge
 
 These tasks should prefer the runtime-session pattern (`start` -> optional `set_model` -> `prompt` -> inspect snapshot -> `stop`) instead of shelling out to the Pi CLI for one-off prompts. This keeps model resolution, OAuth/API-key handling, registry reload behavior, and packaged-app runtime semantics aligned with regular conversations.
 

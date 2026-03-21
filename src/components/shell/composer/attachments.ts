@@ -1,8 +1,8 @@
 import type { PendingAttachment } from "./types";
 
-const MAX_TEXT_FILE_BYTES = 200_000;
-// Increased to allow larger binary file previews (was 100KB, now 500KB)
-const MAX_BINARY_PREVIEW_BYTES = 500_000;
+const MAX_TEXT_FILE_BYTES = 500_000;
+// Increased to allow larger binary file previews (was 500KB, now 1MB)
+const MAX_BINARY_PREVIEW_BYTES = 1_000_000;
 
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) {
@@ -135,6 +135,10 @@ export async function buildAttachment(file: File): Promise<PendingAttachment> {
   const truncated = buffer.byteLength > MAX_BINARY_PREVIEW_BYTES;
   const previewBuffer = truncated ? buffer.slice(0, MAX_BINARY_PREVIEW_BYTES) : buffer;
   const previewBase64 = toBase64(previewBuffer);
+  const truncationNote = truncated
+    ? `\n[ATTENTION: Fichier tronqué. Seuls les premiers ${formatBytes(MAX_BINARY_PREVIEW_BYTES)} sont inclus. Le fichier complet est disponible dans le workspace si nécessaire.]`
+    : "";
+
   return {
     id,
     name: file.name,
@@ -148,7 +152,7 @@ export async function buildAttachment(file: File): Promise<PendingAttachment> {
       data: previewBase64,
       size: file.size,
     },
-    textForPrompt: `Nom: ${file.name}\nType: ${mimeType}\nTaille: ${formatBytes(file.size)}\nAperçu base64${truncated ? " (tronqué)" : ""}:\n${previewBase64}`,
+    textForPrompt: `Nom: ${file.name}\nType: ${mimeType}\nTaille: ${formatBytes(file.size)}\nAperçu base64 (fichier binaire)${truncated ? " - TRONQUÉ" : ""}:${truncationNote}\n${previewBase64}`,
   };
 }
 

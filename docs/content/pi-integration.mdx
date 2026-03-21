@@ -29,7 +29,7 @@ Chatons wraps Pi with:
 - React UI and workspace state
 - Extension runtime for third-party integrations, including sidebar, main-view, quick-action, and topbar UI contributions, plus compact topbar widget hosting with standardized context delivery for richer extension controls
 
-Cloud projects are the main exception to this local-runtime architecture. They do not create or use a local Pi runtime. In cloud mode, the desktop app is only a client for a remote Chatons runtime hosted by the cloud service, and provider credentials remain organization-owned in the cloud. Cloud access is now gated by a cloud subscription on the authenticated user account, and the chosen tier limits how many remote cloud sessions that user may run in parallel. That quota is derived server-side by `cloud-api`; the desktop no longer sends or decides the effective parallel-session limit.
+Cloud projects are the main exception to this local-runtime architecture. They do not create or use a local Pi runtime. In cloud mode, the desktop app is only a client for a remote Chatons runtime hosted by the cloud service, and provider credentials remain organization-owned in the cloud. `runtime-headless` now materializes a managed Pi agent directory from the cloud control-plane grant and serves a real Pi session remotely, rather than a synthetic reply path. For repository-backed cloud projects, the remote runtime now keeps a managed project source checkout and creates a dedicated Git worktree per conversation instead of cloning a separate repository per session. Cloud access is now gated by a cloud subscription on the authenticated user account, and the chosen tier limits how many remote cloud sessions that user may run in parallel. That quota is derived server-side by `cloud-api`; the desktop no longer sends or decides the effective parallel-session limit.
 The cloud control plane also owns cloud project, conversation, and transcript state. The desktop may cache that state locally for rendering, but the bootstrap API and cloud conversation message endpoints remain the server-side source of truth for cloud threads.
 The web onboarding flow at `cloud.chatons.ai` follows the same ownership model: browser signup/login and organization/provider setup are only presentation flows around `cloud-api`, and provider secrets entered there remain cloud-owned instead of being copied into the desktop Pi environment.
 The same applies to account recovery: email verification and password reset are cloud-side flows backed by SMTP delivery from `cloud-api`, not by any desktop Pi configuration.
@@ -231,6 +231,9 @@ At session creation, Chatons appends system prompt guidance about:
 - Thread action suggestion format
 - How to explain secure-mode limitations to users
 - Available extension tools (prompt snippets and guidelines from extension manifests)
+- Channel-specific delivery constraints for channel-owned conversations
+
+For the local `@thibautrey/chatons-channel-even-realities` channel, this includes explicit runtime guidance that the assistant is replying for smart glasses and should default to concise, fast answers suited to a limited display. The glasses transport may send a `model` field, but Chatons ignores it and still uses the conversation's configured model like any other channel thread.
 
 When Chatons retrieves relevant memories for a new conversation, it does not splice them into the user's first message. Instead, it sends them as a separate runtime `steer` message immediately before the first user prompt. This keeps the user's intent clean and prevents stale memory summaries from being misread as fresh user instructions.
 
@@ -244,6 +247,7 @@ This is used for:
 
 - Memory summarization and consolidation
 - AI conversation-title refinement
+- Channel message ingestion subagents used by channel extensions
 
 ---
 

@@ -660,6 +660,23 @@ function buildExtensionDevelopmentGuidance(): string {
   ].join("\n");
 }
 
+function buildChannelPromptSection(channelExtensionId: string | null): string | null {
+  if (channelExtensionId !== "@thibautrey/chatons-channel-even-realities") {
+    return null;
+  }
+
+  return [
+    "## Channel Context: Even Realities Glasses",
+    "",
+    "This conversation is being used through a pair of smart glasses.",
+    "Optimize for very fast interactions and short on-device readability.",
+    "Keep answers brief by default: usually one sentence, at most two short sentences unless the user explicitly asks for more.",
+    "Prefer direct answers over preamble, filler, or step-by-step exposition.",
+    "If the user asks a yes/no question, answer yes or no first.",
+    "Do not mention internal channel rules unless the user asks.",
+  ].join("\n");
+}
+
 export class PiSdkRuntime {
   private status: PiRuntimeStatus = "stopped";
   private runtime: RuntimeState | null = null;
@@ -1015,6 +1032,9 @@ export class PiSdkRuntime {
     );
     const sidebarSettings = getSidebarSettings(db);
     const behaviorPrompt = sidebarSettings.defaultBehaviorPrompt?.trim() ?? "";
+    const channelPromptSection = buildChannelPromptSection(
+      conversation.channel_extension_id,
+    );
 
     const sessionPath =
       conversation.pi_session_file &&
@@ -1070,6 +1090,9 @@ export class PiSdkRuntime {
         );
         if (behaviorPrompt) {
           sections.push(`## Comportement par defaut\n${behaviorPrompt}`);
+        }
+        if (channelPromptSection) {
+          sections.push(channelPromptSection);
         }
         sections.push(
           [
@@ -1757,6 +1780,12 @@ export class PiSdkRuntime {
       }
 
       if (command.type === "prompt") {
+        // Note: command.files are embedded in command.message via buildMessageWithAttachments.
+        // The Pi runtime's prompt() only supports images natively, so file content is
+        // included as text in the message. See attachments.ts for file processing logic.
+        if (command.files?.length) {
+          console.log(`[PiRuntime] Sending prompt with ${command.files.length} file(s) embedded in message`);
+        }
         await this.runtime.session.prompt(command.message, {
           images: command.images?.map(toPiImageContent),
           streamingBehavior: command.streamingBehavior,
@@ -1764,6 +1793,10 @@ export class PiSdkRuntime {
       }
 
       if (command.type === "steer") {
+        // Files embedded in message via buildMessageWithAttachments (same as prompt)
+        if (command.files?.length) {
+          console.log(`[PiRuntime] Sending steer with ${command.files.length} file(s) embedded in message`);
+        }
         await this.runtime.session.steer(
           command.message,
           command.images?.map(toPiImageContent),
@@ -1771,6 +1804,10 @@ export class PiSdkRuntime {
       }
 
       if (command.type === "follow_up") {
+        // Files embedded in message via buildMessageWithAttachments (same as prompt)
+        if (command.files?.length) {
+          console.log(`[PiRuntime] Sending follow_up with ${command.files.length} file(s) embedded in message`);
+        }
         await this.runtime.session.followUp(
           command.message,
           command.images?.map(toPiImageContent),

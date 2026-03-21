@@ -5,7 +5,149 @@ description: Verified documentation changes and rationale for Chatons features a
 
 # Documentation Audit
 
+## 2026-03-21
+
+### Added an Even Realities glasses channel extension under the user extension home
+
+**Change:** Added a local `@thibautrey/chatons-channel-even-realities` channel extension under `~/.chaton/extensions` that starts a local HTTP server on `127.0.0.1:42619`, accepts POST requests from Even Realities glasses, routes them into global Chatons channel conversations, and returns the assistant reply inline over the same HTTP request. The bridge ignores the incoming `model` field from the glasses payload so model selection remains conversation-owned inside Chatons.
+
+**Why:** The glasses integration needs a local POST-only receiver that maps the device protocol onto Chatons' existing channel conversation pipeline without letting transport-level model hints override normal user-controlled model selection.
+
+**Files updated:**
+- `~/.chaton/extensions/@thibautrey/chatons-channel-even-realities/chaton.extension.json` -- Added the local channel manifest and server startup contract
+- `~/.chaton/extensions/@thibautrey/chatons-channel-even-realities/index.html` -- Added the channel UI
+- `~/.chaton/extensions/@thibautrey/chatons-channel-even-realities/index.js` -- Added the bridge logic from the local server queue into Chatons channel host APIs
+- `~/.chaton/extensions/@thibautrey/chatons-channel-even-realities/server.js` -- Added the local HTTP listener used by the glasses
+
+### Added channel-specific prompt steering for Even Realities conversations
+
+**Change:** Pi session startup now injects an extra system prompt section for conversations owned by `@thibautrey/chatons-channel-even-realities`, telling the agent it is replying through smart glasses and should keep responses very short and fast.
+
+**Why:** The transport alone is not enough; the runtime also needs channel-aware guidance so replies match the glasses form factor instead of default desktop-style verbosity.
+
+**Files updated:**
+- `electron/pi-sdk-runtime.ts` -- Added channel-specific prompt guidance for Even Realities conversations
+- `docs/content/pi-integration.mdx` -- Documented channel-specific runtime prompt injection
+- `docs/content/developer-guide.mdx` -- Documented the built-in channel and model-selection behavior
+- `AGENTS.md` -- Updated maintainer notes for channel-specific runtime prompt context
+
+### Fixed extension server startup when `node` is not on PATH
+
+**Change:** Extension server startup now treats `server.start.command: "node"` as a request to use the bundled Electron runtime in Node mode, instead of spawning a bare `node` command from the ambient PATH.
+
+**Why:** Local channel extensions that expose webhook or bridge servers can be auto-loaded correctly but still remain stuck in a perpetual “starting” state in packaged-app launches if `node` is unavailable in the GUI process PATH. Mapping `"node"` to the bundled runtime makes server-backed extensions start the same way regardless of how the desktop app was launched.
+
+**Files updated:**
+- `electron/extensions/runtime/server.ts` -- Resolved `"node"` commands through `process.execPath` with `ELECTRON_RUN_AS_NODE=1`
+- `docs/content/extensions/index.mdx` -- Documented packaged-app Node resolution for extension servers
+
+### Replaced the synthetic cloud runtime path with a Pi-backed remote session flow
+
+**Change:** `runtime-headless` now creates a managed Pi agent directory from the cloud control-plane runtime grant, materializes `models.json`, `auth.json`, and `settings.json`, and executes cloud runtime commands against a real Pi session instead of synthesizing `"Cloud runtime reply"` responses.
+
+**Why:** The earlier cloud stack only exercised the transport and persistence shape of remote execution. Moving the runtime over to a real Pi session is required for repo-backed tools, real model execution, and parity with the desktop event flow.
+
+**Files updated:**
+- `apps/runtime-headless/server.ts` -- Added managed Pi agent/session creation, event bridging, and real prompt/follow-up/steer/abort handling
+- `apps/cloud-api/store.ts` -- Added server-side storage for provider secrets and repo access tokens used by the internal runtime grant
+- `apps/cloud-realtime/server.ts` -- Added audience-aware websocket delivery and replay filtering for cloud events
+- `docs/content/cloud-architecture.mdx` -- Updated cloud runtime section to reflect the Pi-backed remote runtime
+- `docs/content/pi-integration.mdx` -- Documented that cloud runtime now materializes a managed Pi environment remotely
+- `docs/content/developer-guide.mdx` -- Documented the server-side Pi runtime ownership for cloud conversations
+
+### Replaced cloud repo session clones with managed source checkouts and per-conversation worktrees
+
+**Change:** `runtime-headless` now keeps a managed repository source checkout per cloud project and creates a dedicated Git worktree per cloud conversation instead of cloning a fresh repository into each session directory. Runtime shutdown now prefers `git worktree remove --force` so cloud repo metadata stays consistent.
+
+**Why:** The earlier per-session clone model was expensive, diverged from the desktop runtime isolation model, and left no proper parent repository metadata to manage concurrent cloud conversations safely. A shared source checkout plus per-conversation worktrees is closer to local behavior and makes session teardown predictable.
+
+**Files updated:**
+- `apps/runtime-headless/server.ts` -- Added managed cloud repo checkout/worktree lifecycle and forced worktree cleanup on session stop
+- `docs/content/cloud-architecture.mdx` -- Updated current limitations to describe the new cloud worktree model
+- `docs/content/pi-integration.mdx` -- Documented remote worktree-backed cloud repo sessions
+- `docs/content/developer-guide.mdx` -- Documented the remote source-checkout plus per-conversation worktree model
+
+### Began moving cloud control-plane access off per-user ownership and onto organization memberships
+
+**Change:** `cloud-api` now creates normalized Postgres tables for organizations, memberships, and organization providers, reads organization/provider state from those tables, and uses organization-membership joins for the main Postgres project, conversation, message, and secret access paths instead of relying only on direct `user_id` ownership checks.
+
+**Why:** The previous control plane embedded organization state inside a per-user workspace blob and keyed nearly everything off `user_id`, which blocked any credible shared-organization model. This change does not complete the multi-user migration, but it establishes normalized organization records and starts shifting authorization toward membership-based access.
+
+**Files updated:**
+- `apps/cloud-api/store.ts` -- Added normalized organization tables plus membership-based Postgres access for cloud entities
+- `apps/cloud-api/server.ts` -- Moved project-creation organization validation behind the store instead of the embedded workspace blob
+- `docs/content/cloud-architecture.mdx` -- Updated cloud limitations to reflect partial organization normalization
+- `docs/content/developer-guide.mdx` -- Documented the ongoing membership-based control-plane migration
+
+### Started writing explicit organization ownership on remaining cloud entity tables
+
+**Change:** `cloud-api` now writes `organization_id` onto cloud conversations, cloud conversation messages, organization-provider secrets, and project-repository secrets, and backfills those values for existing rows where possible. The old `user_id` columns are still present for compatibility during the migration.
+
+**Why:** Membership-based reads are more robust once the underlying rows also carry explicit organization ownership instead of requiring every authorization path to infer org scope indirectly. This is another step toward true shared-organization control-plane state without forcing a single large schema break.
+
+**Files updated:**
+- `apps/cloud-api/store.ts` -- Added organization ownership columns/backfill for cloud conversations, message rows, and secret rows
+- `docs/content/cloud-architecture.mdx` -- Updated current limitations to reflect mixed compatibility ownership during migration
+- `docs/content/developer-guide.mdx` -- Documented explicit organization ownership on cloud entity rows during the migration
+
 ## 2026-03-21 (Latest)
+
+### Fixed Tailwind 4 migration visual regressions
+
+**Change:** Identified and documented visual regressions introduced during the Tailwind 4 upgrade that caused lost blurred backgrounds on message elements, white borders appearing in file diffs, removed gradient text utilities, and inconsistent backdrop-filter behavior.
+
+**Why:** The Tailwind 4 upgrade introduced breaking changes to the CSS processing model, configuration approach, and theme system. These regressions degraded the polished visual appearance of conversations and file diffs.
+
+**Verified files:**
+- `docs/content/tailwind4-migration.mdx` -- Created migration guide documenting breaking changes and fixes
+
+### Analyzed Pi settings system utilization
+
+**Change:** Analyzed the Pi settings system to document that Chatons uses only ~20% of available Pi settings, with many features hardcoded or read once without user-facing controls. Categorized potential improvements into quick wins (thinking level, advanced settings), medium-term (theme support, project settings), and long-term (full settings UI, per-project configurations).
+
+**Why:** Understanding the gap between available Pi settings and Chatons' actual usage helps prioritize future UI improvements and feature development.
+
+### Identified TypeScript and ESLint technical debt areas
+
+**Change:** Reduced linting errors from 629 to ~260 and warnings from 201 to ~82 through ESLint configuration updates (ignoring build directories), replacing `@ts-ignore` with `@ts-expect-error`, removing unused variables, fixing type annotations in `use-react-optimization.ts`, and resolving LM Studio provider URL probing and authentication errors.
+
+**Why:** High error/warning counts in CI reduce signal-to-noise ratio and may mask real issues. The TypeScript strictness improvements also enable better IDE support and catch potential bugs earlier.
+
+### Implemented project sidebar filtering and auto-folding
+
+**Change:** Sidebar project filtering uses `useProjectFolder` to filter archived projects, exclude subfolders from auto-folding, and prioritize active projects via a scoring system. Key constants: `RECENT_THRESHOLD_MS` (3 days), `MIN_PROJECTS_TO_FOLD` (5), `MIN_VISIBLE` (3). Projects organize into visible, auto-folded, and subfolders categories.
+
+**Why:** As projects accumulate, the sidebar becomes unwieldy. Auto-folding keeps the most relevant projects visible while still giving access to archived/subfolder items. Future plans include drag-and-drop or checkbox UI in the ProjectFolder popover.
+
+### CSS analysis of memory extension
+
+**Change:** Analyzed the memory extension CSS to identify ~95 lines of duplicated styles shared with the automation extension, missing shared component usage (`.ce-button`, `.ce-card`, `.ce-input`), inconsistent layout properties causing different scroll/height behavior, hardcoded odd font weights (560, 650), redundant dark mode overrides, and duplicate responsive breakpoints.
+
+**Why:** The memory extension CSS has significant duplication and doesn't leverage the shared component system used by automation. Refactoring would reduce code size and improve consistency.
+
+### Implemented steering button for queued messages
+
+**Change:** Implemented a steering button for queued messages using Pi's core steering mechanism, modifying `ComposerQueue.tsx` and related files to support message types and `steeringMode` settings.
+
+**Why:** The steering button allows users to inject guidance into queued messages before they are sent to the runtime, providing more control over agent behavior in multi-turn conversations.
+
+**Verified files:**
+- `src/components/composer/ComposerQueue.tsx` -- Added steering button and message type support
+- Related files modified for steeringMode settings
+
+### Implemented composer autocomplete feature
+
+**Change:** Implemented composer autocomplete with `use-composer-autocomplete.ts` hook, `ComposerAutocomplete.tsx`, `AutocompleteModelPicker.tsx`, `AutocompleteSection.tsx`, and workspace IPC backend. Integrated into `Composer.tsx` with IPC functions, configurable in Settings > Auto-complete, supports Tab/↑↓/Esc keyboard navigation, and handles API failures gracefully.
+
+**Why:** Autocomplete enhances the composer experience by providing quick access to model selection and context hints. Currently requires restart to apply preference changes.
+
+**Verified files:**
+- `src/hooks/use-composer-autocomplete.ts` -- Autocomplete state management hook
+- `src/components/composer/ComposerAutocomplete.tsx` -- Main autocomplete component
+- `src/components/composer/AutocompleteModelPicker.tsx` -- Model picker within autocomplete
+- `src/components/composer/AutocompleteSection.tsx` -- Section component for autocomplete items
+- `electron/ipc/workspace.ts` or related IPC handlers -- Backend IPC functions for autocomplete
+- `src/components/composer/Composer.tsx` -- Integrated autocomplete into composer
 
 ### Rewrote cloud architecture docs as current-state documentation
 

@@ -43,6 +43,8 @@ export type CloudWorkspaceState = {
   projectsById: Map<string, CloudProjectRecord>
   conversationsById: Map<string, CloudConversationRecord>
   messagesByConversationId: Map<string, CloudConversationMessageRecord[]>
+  providerSecretsById?: Map<string, string>
+  repositoryAccessTokenByProjectId?: Map<string, string>
 }
 
 export type CloudDesktopAuthRequestState = {
@@ -418,6 +420,8 @@ function createDefaultWorkspaceState(
     projectsById: new Map([[defaultProject.id, defaultProject]]),
     conversationsById: new Map(),
     messagesByConversationId: new Map(),
+    providerSecretsById: new Map(),
+    repositoryAccessTokenByProjectId: new Map(),
   }
 }
 
@@ -633,16 +637,20 @@ class MemoryCloudStore implements CloudStore {
     input: CreateCloudProjectRequest,
   ): Promise<CloudProjectRecord> {
     const workspace = await this.getWorkspaceState(user)
+    const repository = normalizeRepositoryConfig(input.repository, workspace.organization.name)
     const project = toProjectRecord({
       id: `project-${crypto.randomUUID()}`,
       organizationId: workspace.organization.id,
       organizationName: input.organizationName?.trim() || workspace.organization.name,
       name: input.name.trim(),
       kind: getProjectKind(input.kind),
-      repository: normalizeRepositoryConfig(input.repository, workspace.organization.name),
+      repository,
       cloudStatus: 'connected',
     })
     workspace.projectsById.set(project.id, project)
+    if (repository?.accessToken) {
+      workspace.repositoryAccessTokenByProjectId?.set(project.id, repository.accessToken)
+    }
     return project
   }
 
@@ -704,6 +712,7 @@ class MemoryCloudStore implements CloudStore {
       ...workspace.organization,
       providers: [...(workspace.organization.providers ?? []), provider],
     }
+    workspace.providerSecretsById?.set(provider.id, input.secret.trim())
     return {
       organization: {
         ...workspace.organization,
@@ -811,7 +820,7 @@ class MemoryCloudStore implements CloudStore {
         label: provider.label,
         baseUrl: provider.baseUrl,
         credentialType: provider.credentialType,
-        secret: '',
+        secret: workspace.providerSecretsById?.get(provider.id) ?? '',
         models: provider.models,
         defaultModel: provider.defaultModel,
         supportsCloudRuntime: provider.supportsCloudRuntime,
@@ -840,7 +849,7 @@ class MemoryCloudStore implements CloudStore {
               cloneUrl: project.repository.cloneUrl,
               defaultBranch: project.repository.defaultBranch,
               authMode: project.repository.authMode,
-              accessToken: null,
+              accessToken: workspace.repositoryAccessTokenByProjectId?.get(project.id) ?? null,
             },
     }
   }
@@ -1016,6 +1025,42 @@ class PostgresCloudStore implements CloudStore {
         cloud_instance_json JSONB NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS cloud_organizations (
+        id TEXT PRIMARY KEY,
+        owner_user_id TEXT NOT NULL REFERENCES cloud_users(id) ON DELETE CASCADE,
+        slug TEXT NOT NULL,
+        name TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS cloud_organizations_owner_user_id_uidx
+        ON cloud_organizations(owner_user_id);
+      CREATE TABLE IF NOT EXISTS cloud_organization_memberships (
+        organization_id TEXT NOT NULL REFERENCES cloud_organizations(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES cloud_users(id) ON DELETE CASCADE,
+        role TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        PRIMARY KEY (organization_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS cloud_organization_memberships_user_id_idx
+        ON cloud_organization_memberships(user_id);
+      CREATE TABLE IF NOT EXISTS cloud_organization_providers (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES cloud_organizations(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        label TEXT NOT NULL,
+        secret_hint TEXT NOT NULL,
+        base_url TEXT NOT NULL,
+        credential_type TEXT NOT NULL,
+        models_json JSONB NOT NULL,
+        default_model TEXT,
+        supports_cloud_runtime BOOLEAN NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS cloud_organization_providers_organization_id_idx
+        ON cloud_organization_providers(organization_id);
       CREATE TABLE IF NOT EXISTS cloud_projects (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES cloud_users(id) ON DELETE CASCADE,
@@ -1035,6 +1080,7 @@ class PostgresCloudStore implements CloudStore {
       CREATE TABLE IF NOT EXISTS cloud_conversations (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES cloud_users(id) ON DELETE CASCADE,
+        organization_id TEXT,
         project_id TEXT NOT NULL REFERENCES cloud_projects(id) ON DELETE CASCADE,
         title TEXT NOT NULL,
         status TEXT NOT NULL,
@@ -1044,12 +1090,36 @@ class PostgresCloudStore implements CloudStore {
         updated_at TIMESTAMPTZ NOT NULL
       );
       CREATE INDEX IF NOT EXISTS cloud_conversations_user_id_idx ON cloud_conversations(user_id);
+      CREATE INDEX IF NOT EXISTS cloud_conversations_organization_id_idx ON cloud_conversations(organization_id);
       CREATE TABLE IF NOT EXISTS cloud_conversation_messages (
         conversation_id TEXT PRIMARY KEY REFERENCES cloud_conversations(id) ON DELETE CASCADE,
         user_id TEXT NOT NULL REFERENCES cloud_users(id) ON DELETE CASCADE,
+        organization_id TEXT,
         messages_json JSONB NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS cloud_organization_provider_secrets (
+        provider_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES cloud_users(id) ON DELETE CASCADE,
+        organization_id TEXT,
+        secret TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS cloud_organization_provider_secrets_user_id_idx
+        ON cloud_organization_provider_secrets(user_id);
+      CREATE INDEX IF NOT EXISTS cloud_organization_provider_secrets_organization_id_idx
+        ON cloud_organization_provider_secrets(organization_id);
+      CREATE TABLE IF NOT EXISTS cloud_project_repository_secrets (
+        project_id TEXT PRIMARY KEY REFERENCES cloud_projects(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES cloud_users(id) ON DELETE CASCADE,
+        organization_id TEXT,
+        access_token TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS cloud_project_repository_secrets_user_id_idx
+        ON cloud_project_repository_secrets(user_id);
+      CREATE INDEX IF NOT EXISTS cloud_project_repository_secrets_organization_id_idx
+        ON cloud_project_repository_secrets(organization_id);
       CREATE TABLE IF NOT EXISTS cloud_email_verification_tokens (
         token_hash TEXT PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES cloud_users(id) ON DELETE CASCADE,
@@ -1071,6 +1141,14 @@ class PostgresCloudStore implements CloudStore {
       ADD COLUMN IF NOT EXISTS workspace_capability TEXT NOT NULL DEFAULT 'chat_only';
       ALTER TABLE cloud_projects
       ADD COLUMN IF NOT EXISTS repository_json JSONB;
+      ALTER TABLE cloud_conversations
+      ADD COLUMN IF NOT EXISTS organization_id TEXT;
+      ALTER TABLE cloud_conversation_messages
+      ADD COLUMN IF NOT EXISTS organization_id TEXT;
+      ALTER TABLE cloud_organization_provider_secrets
+      ADD COLUMN IF NOT EXISTS organization_id TEXT;
+      ALTER TABLE cloud_project_repository_secrets
+      ADD COLUMN IF NOT EXISTS organization_id TEXT;
       ALTER TABLE cloud_users
       ADD COLUMN IF NOT EXISTS password_hash TEXT;
       ALTER TABLE cloud_users
@@ -1099,6 +1177,26 @@ class PostgresCloudStore implements CloudStore {
     `)
     await this.pool.query(
       `
+        UPDATE cloud_conversations c
+        SET organization_id = p.organization_id
+        FROM cloud_projects p
+        WHERE c.project_id = p.id
+          AND (c.organization_id IS NULL OR c.organization_id = '');
+        UPDATE cloud_conversation_messages cm
+        SET organization_id = c.organization_id
+        FROM cloud_conversations c
+        WHERE cm.conversation_id = c.id
+          AND (cm.organization_id IS NULL OR cm.organization_id = '');
+        UPDATE cloud_organization_provider_secrets s
+        SET organization_id = p.organization_id
+        FROM cloud_organization_providers p
+        WHERE s.provider_id = p.id
+          AND (s.organization_id IS NULL OR s.organization_id = '');
+        UPDATE cloud_project_repository_secrets s
+        SET organization_id = p.organization_id
+        FROM cloud_projects p
+        WHERE s.project_id = p.id
+          AND (s.organization_id IS NULL OR s.organization_id = '');
         UPDATE cloud_desktop_auth_requests
         SET
           client_id = COALESCE(NULLIF(client_id, ''), 'chatons-desktop'),
@@ -1229,7 +1327,161 @@ class PostgresCloudStore implements CloudStore {
     workspace.cloudInstance.authMode = 'oauth'
     workspace.cloudInstance.connectionStatus = 'connected'
     workspace.cloudInstance.lastError = null
+    workspace.providerSecretsById = workspace.providerSecretsById ?? new Map()
+    workspace.repositoryAccessTokenByProjectId = workspace.repositoryAccessTokenByProjectId ?? new Map()
     return workspace
+  }
+
+  private async upsertNormalizedOrganization(
+    user: CloudUserState,
+    organization: OrganizationRecord,
+  ): Promise<void> {
+    await this.init()
+    const now = new Date().toISOString()
+    await this.pool.query(
+      `
+        INSERT INTO cloud_organizations(id, owner_user_id, slug, name, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO UPDATE
+        SET owner_user_id = EXCLUDED.owner_user_id,
+            slug = EXCLUDED.slug,
+            name = EXCLUDED.name,
+            updated_at = EXCLUDED.updated_at
+      `,
+      [organization.id, user.id, organization.slug, organization.name, now, now],
+    )
+    await this.pool.query(
+      `
+        INSERT INTO cloud_organization_memberships(organization_id, user_id, role, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (organization_id, user_id) DO UPDATE
+        SET role = EXCLUDED.role,
+            updated_at = EXCLUDED.updated_at
+      `,
+      [organization.id, user.id, organization.role, now, now],
+    )
+
+    for (const provider of organization.providers ?? []) {
+      await this.pool.query(
+        `
+          INSERT INTO cloud_organization_providers(
+            id, organization_id, kind, label, secret_hint, base_url, credential_type, models_json,
+            default_model, supports_cloud_runtime, created_at, updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12)
+          ON CONFLICT (id) DO UPDATE
+          SET organization_id = EXCLUDED.organization_id,
+              kind = EXCLUDED.kind,
+              label = EXCLUDED.label,
+              secret_hint = EXCLUDED.secret_hint,
+              base_url = EXCLUDED.base_url,
+              credential_type = EXCLUDED.credential_type,
+              models_json = EXCLUDED.models_json,
+              default_model = EXCLUDED.default_model,
+              supports_cloud_runtime = EXCLUDED.supports_cloud_runtime,
+              updated_at = EXCLUDED.updated_at
+        `,
+        [
+          provider.id,
+          organization.id,
+          provider.kind,
+          provider.label,
+          provider.secretHint,
+          provider.baseUrl,
+          provider.credentialType,
+          JSON.stringify(provider.models),
+          provider.defaultModel,
+          provider.supportsCloudRuntime,
+          provider.createdAt,
+          now,
+        ],
+      )
+    }
+  }
+
+  private async syncWorkspaceOrganizationJson(
+    userId: string,
+    organization: OrganizationRecord,
+  ): Promise<void> {
+    await this.pool.query(
+      `
+        UPDATE cloud_workspaces
+        SET organization_json = $2::jsonb,
+            updated_at = $3
+        WHERE user_id = $1
+      `,
+      [userId, JSON.stringify(organization), new Date().toISOString()],
+    )
+  }
+
+  private async getOrganizationForUser(user: CloudUserState): Promise<OrganizationRecord> {
+    await this.init()
+    const organizationResult = await this.pool.query<{
+      id: string
+      slug: string
+      name: string
+      role: OrganizationRecord['role']
+    }>(
+      `
+        SELECT o.id, o.slug, o.name, m.role
+        FROM cloud_organizations o
+        INNER JOIN cloud_organization_memberships m
+          ON m.organization_id = o.id
+        WHERE m.user_id = $1
+        ORDER BY o.created_at ASC
+        LIMIT 1
+      `,
+      [user.id],
+    )
+
+    if (!organizationResult.rowCount) {
+      const fallback = createDefaultWorkspaceState(user, this.context.publicBaseUrl)
+      await this.upsertNormalizedOrganization(user, fallback.organization)
+      return fallback.organization
+    }
+
+    const organizationRow = organizationResult.rows[0]
+    const providersResult = await this.pool.query<{
+      id: string
+      kind: OrganizationProviderRecord['kind']
+      label: string
+      secret_hint: string
+      base_url: string
+      credential_type: CloudProviderCredentialType
+      models_json: CloudProviderModelRecord[]
+      default_model: string | null
+      supports_cloud_runtime: boolean
+      created_at: string | Date
+    }>(
+      `
+        SELECT id, kind, label, secret_hint, base_url, credential_type, models_json, default_model,
+               supports_cloud_runtime, created_at
+        FROM cloud_organization_providers
+        WHERE organization_id = $1
+        ORDER BY created_at ASC
+      `,
+      [organizationRow.id],
+    )
+
+    return {
+      id: organizationRow.id,
+      slug: organizationRow.slug,
+      name: organizationRow.name,
+      role: organizationRow.role,
+      providers: providersResult.rows.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        label: row.label,
+        secretHint: row.secret_hint,
+        baseUrl: row.base_url,
+        credentialType: row.credential_type,
+        models: Array.isArray(row.models_json) ? row.models_json : [],
+        defaultModel: row.default_model,
+        supportsCloudRuntime: row.supports_cloud_runtime,
+        createdAt:
+          typeof row.created_at === 'string' ? row.created_at : row.created_at.toISOString(),
+      })),
+    }
   }
 
   async listPlans(): Promise<CloudSubscriptionRecord[]> {
@@ -1689,6 +1941,8 @@ class PostgresCloudStore implements CloudStore {
       ],
     )
 
+    await this.upsertNormalizedOrganization(user, workspace.organization)
+
     const defaultProjectId = `project-${user.id}-workspace`
     await this.pool.query(
       `
@@ -1719,16 +1973,16 @@ class PostgresCloudStore implements CloudStore {
     await this.ensureWorkspaceExists(user)
 
     const workspaceResult = await this.pool.query<{
-      organization_json: OrganizationRecord
       cloud_instance_json: CloudInstanceRecord
     }>(
       `
-        SELECT organization_json, cloud_instance_json
+        SELECT cloud_instance_json
         FROM cloud_workspaces
         WHERE user_id = $1
       `,
       [user.id],
     )
+    const organization = await this.getOrganizationForUser(user)
     const projectsResult = await this.pool.query<{
       id: string
       organization_id: string
@@ -1742,9 +1996,11 @@ class PostgresCloudStore implements CloudStore {
     }>(
       `
         SELECT id, organization_id, organization_name, name, repo_name, project_kind, workspace_capability, repository_json, cloud_status
-        FROM cloud_projects
-        WHERE user_id = $1
-        ORDER BY created_at ASC
+        FROM cloud_projects p
+        INNER JOIN cloud_organization_memberships m
+          ON m.organization_id = p.organization_id
+        WHERE m.user_id = $1
+        ORDER BY p.created_at ASC
       `,
       [user.id],
     )
@@ -1757,10 +2013,13 @@ class PostgresCloudStore implements CloudStore {
       model_id: string | null
     }>(
       `
-        SELECT id, project_id, title, status, model_provider, model_id
-        FROM cloud_conversations
-        WHERE user_id = $1
-        ORDER BY created_at ASC
+        SELECT c.id, c.project_id, c.title, c.status, c.model_provider, c.model_id
+        FROM cloud_conversations c
+        INNER JOIN cloud_projects p ON p.id = c.project_id
+        INNER JOIN cloud_organization_memberships m
+          ON m.organization_id = p.organization_id
+        WHERE m.user_id = $1
+        ORDER BY c.created_at ASC
       `,
       [user.id],
     )
@@ -1769,15 +2028,47 @@ class PostgresCloudStore implements CloudStore {
       messages_json: CloudConversationMessageRecord[]
     }>(
       `
-        SELECT conversation_id, messages_json
-        FROM cloud_conversation_messages
-        WHERE user_id = $1
+        SELECT cm.conversation_id, cm.messages_json
+        FROM cloud_conversation_messages cm
+        INNER JOIN cloud_conversations c ON c.id = cm.conversation_id
+        INNER JOIN cloud_projects p ON p.id = c.project_id
+        INNER JOIN cloud_organization_memberships m
+          ON m.organization_id = p.organization_id
+        WHERE m.user_id = $1
+      `,
+      [user.id],
+    )
+    const providerSecretsResult = await this.pool.query<{
+      provider_id: string
+      secret: string
+    }>(
+      `
+        SELECT s.provider_id, s.secret
+        FROM cloud_organization_provider_secrets s
+        INNER JOIN cloud_organization_providers p ON p.id = s.provider_id
+        INNER JOIN cloud_organization_memberships m
+          ON m.organization_id = p.organization_id
+        WHERE m.user_id = $1
+      `,
+      [user.id],
+    )
+    const repositorySecretsResult = await this.pool.query<{
+      project_id: string
+      access_token: string
+    }>(
+      `
+        SELECT s.project_id, s.access_token
+        FROM cloud_project_repository_secrets s
+        INNER JOIN cloud_projects p ON p.id = s.project_id
+        INNER JOIN cloud_organization_memberships m
+          ON m.organization_id = p.organization_id
+        WHERE m.user_id = $1
       `,
       [user.id],
     )
 
     return this.normalizeWorkspace(user, {
-      organization: workspaceResult.rows[0].organization_json,
+      organization,
       cloudInstance: workspaceResult.rows[0].cloud_instance_json,
       projectsById: new Map(
         projectsResult.rows.map((row) => [
@@ -1821,6 +2112,12 @@ class PostgresCloudStore implements CloudStore {
       messagesByConversationId: new Map(
         messagesResult.rows.map((row) => [row.conversation_id, row.messages_json ?? []]),
       ),
+      providerSecretsById: new Map(
+        providerSecretsResult.rows.map((row) => [row.provider_id, row.secret]),
+      ),
+      repositoryAccessTokenByProjectId: new Map(
+        repositorySecretsResult.rows.map((row) => [row.project_id, row.access_token]),
+      ),
     })
   }
 
@@ -1829,12 +2126,15 @@ class PostgresCloudStore implements CloudStore {
     input: CreateCloudProjectRequest,
   ): Promise<CloudProjectRecord> {
     await this.ensureWorkspaceExists(user)
-    const workspace = await this.getWorkspaceState(user)
-    const repository = normalizeRepositoryConfig(input.repository, workspace.organization.name)
+    const organization = await this.getOrganizationForUser(user)
+    if (input.organizationId.trim() !== organization.id) {
+      throw new Error('Unknown organization')
+    }
+    const repository = normalizeRepositoryConfig(input.repository, organization.name)
     const project = toProjectRecord({
       id: `project-${crypto.randomUUID()}`,
-      organizationId: workspace.organization.id,
-      organizationName: input.organizationName?.trim() || workspace.organization.name,
+      organizationId: organization.id,
+      organizationName: input.organizationName?.trim() || organization.name,
       name: input.name.trim(),
       kind: getProjectKind(input.kind),
       repository,
@@ -1863,6 +2163,20 @@ class PostgresCloudStore implements CloudStore {
         now,
       ],
     )
+    if (repository?.accessToken) {
+      await this.pool.query(
+        `
+          INSERT INTO cloud_project_repository_secrets(project_id, user_id, organization_id, access_token, updated_at)
+          VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT (project_id) DO UPDATE
+          SET organization_id = EXCLUDED.organization_id,
+              user_id = EXCLUDED.user_id,
+              access_token = EXCLUDED.access_token,
+              updated_at = EXCLUDED.updated_at
+        `,
+        [project.id, user.id, organization.id, repository.accessToken, now],
+      )
+    }
     return project
   }
 
@@ -1875,12 +2189,12 @@ class PostgresCloudStore implements CloudStore {
     },
   ): Promise<OrganizationRecord> {
     await this.ensureWorkspaceExists(user)
-    const workspace = await this.getWorkspaceState(user)
+    const current = await this.getOrganizationForUser(user)
     const organization: OrganizationRecord = {
-      ...workspace.organization,
+      ...current,
       name: input.name.trim(),
       slug: input.slug.trim(),
-      providers: workspace.organization.providers ?? [],
+      providers: current.providers ?? [],
     }
     if (input.plan) {
       await this.pool.query(
@@ -1894,13 +2208,15 @@ class PostgresCloudStore implements CloudStore {
     }
     await this.pool.query(
       `
-        UPDATE cloud_workspaces
-        SET organization_json = $2::jsonb,
-            updated_at = $3
-        WHERE user_id = $1
+        UPDATE cloud_organizations
+        SET slug = $2,
+            name = $3,
+            updated_at = $4
+        WHERE id = $1
       `,
-      [user.id, JSON.stringify(organization), new Date().toISOString()],
+      [organization.id, organization.slug, organization.name, new Date().toISOString()],
     )
+    await this.syncWorkspaceOrganizationJson(user.id, organization)
     await this.pool.query(
       `
         UPDATE cloud_projects
@@ -1930,7 +2246,7 @@ class PostgresCloudStore implements CloudStore {
     provider: OrganizationProviderRecord
   }> {
     await this.ensureWorkspaceExists(user)
-    const workspace = await this.getWorkspaceState(user)
+    const organization = await this.getOrganizationForUser(user)
     const models = normalizeProviderModels(input.models)
     const provider: OrganizationProviderRecord = {
       id: `provider-${crypto.randomUUID()}`,
@@ -1944,21 +2260,48 @@ class PostgresCloudStore implements CloudStore {
       supportsCloudRuntime: supportsCloudRuntime(input.kind),
       createdAt: new Date().toISOString(),
     }
-    const organization: OrganizationRecord = {
-      ...workspace.organization,
-      providers: [...(workspace.organization.providers ?? []), provider],
-    }
     await this.pool.query(
       `
-        UPDATE cloud_workspaces
-        SET organization_json = $2::jsonb,
-            updated_at = $3
-        WHERE user_id = $1
+        INSERT INTO cloud_organization_providers(
+          id, organization_id, kind, label, secret_hint, base_url, credential_type, models_json,
+          default_model, supports_cloud_runtime, created_at, updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12)
       `,
-      [user.id, JSON.stringify(organization), new Date().toISOString()],
+      [
+        provider.id,
+        organization.id,
+        provider.kind,
+        provider.label,
+        provider.secretHint,
+        provider.baseUrl,
+        provider.credentialType,
+        JSON.stringify(provider.models),
+        provider.defaultModel,
+        provider.supportsCloudRuntime,
+        provider.createdAt,
+        new Date().toISOString(),
+      ],
     )
+    await this.pool.query(
+      `
+        INSERT INTO cloud_organization_provider_secrets(provider_id, user_id, organization_id, secret, updated_at)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (provider_id) DO UPDATE
+        SET user_id = EXCLUDED.user_id,
+            organization_id = EXCLUDED.organization_id,
+            secret = EXCLUDED.secret,
+            updated_at = EXCLUDED.updated_at
+      `,
+      [provider.id, user.id, organization.id, input.secret.trim(), new Date().toISOString()],
+    )
+    const nextOrganization: OrganizationRecord = {
+      ...organization,
+      providers: [...(organization.providers ?? []), provider],
+    }
+    await this.syncWorkspaceOrganizationJson(user.id, nextOrganization)
     return {
-      organization,
+      organization: nextOrganization,
       provider,
     }
   }
@@ -1968,11 +2311,13 @@ class PostgresCloudStore implements CloudStore {
     input: CreateCloudConversationRequest,
   ): Promise<CloudConversationRecord | null> {
     await this.ensureWorkspaceExists(user)
-    const projectResult = await this.pool.query<{ id: string; name: string }>(
+    const projectResult = await this.pool.query<{ id: string; name: string; organization_id: string }>(
       `
-        SELECT id, name
-        FROM cloud_projects
-        WHERE user_id = $1 AND id = $2
+        SELECT p.id, p.name, p.organization_id
+        FROM cloud_projects p
+        INNER JOIN cloud_organization_memberships m
+          ON m.organization_id = p.organization_id
+        WHERE m.user_id = $1 AND p.id = $2
       `,
       [user.id, input.projectId],
     )
@@ -1980,6 +2325,7 @@ class PostgresCloudStore implements CloudStore {
       return null
     }
     const project = projectResult.rows[0]
+    const organizationId = project.organization_id
     const conversation: CloudConversationRecord = {
       id: `conversation-${crypto.randomUUID()}`,
       projectId: project.id,
@@ -1993,12 +2339,13 @@ class PostgresCloudStore implements CloudStore {
     await this.pool.query(
       `
         INSERT INTO cloud_conversations(
-          id, user_id, project_id, title, status, model_provider, model_id, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          id, user_id, organization_id, project_id, title, status, model_provider, model_id, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       `,
       [
         conversation.id,
         user.id,
+        organizationId,
         conversation.projectId,
         conversation.title,
         conversation.status,
@@ -2010,11 +2357,11 @@ class PostgresCloudStore implements CloudStore {
     )
     await this.pool.query(
       `
-        INSERT INTO cloud_conversation_messages(conversation_id, user_id, messages_json, updated_at)
-        VALUES ($1, $2, $3::jsonb, $4)
+        INSERT INTO cloud_conversation_messages(conversation_id, user_id, organization_id, messages_json, updated_at)
+        VALUES ($1, $2, $3, $4::jsonb, $5)
         ON CONFLICT (conversation_id) DO NOTHING
       `,
-      [conversation.id, user.id, JSON.stringify([]), now],
+      [conversation.id, user.id, organizationId, JSON.stringify([]), now],
     )
     return conversation
   }
@@ -2026,9 +2373,12 @@ class PostgresCloudStore implements CloudStore {
     await this.ensureWorkspaceExists(user)
     const conversationResult = await this.pool.query<{ id: string }>(
       `
-        SELECT id
-        FROM cloud_conversations
-        WHERE user_id = $1 AND id = $2
+        SELECT c.id
+        FROM cloud_conversations c
+        INNER JOIN cloud_projects p ON p.id = c.project_id
+        INNER JOIN cloud_organization_memberships m
+          ON m.organization_id = p.organization_id
+        WHERE m.user_id = $1 AND c.id = $2
       `,
       [user.id, conversationId],
     )
@@ -2041,9 +2391,9 @@ class PostgresCloudStore implements CloudStore {
       `
         SELECT messages_json
         FROM cloud_conversation_messages
-        WHERE user_id = $1 AND conversation_id = $2
+        WHERE conversation_id = $1
       `,
-      [user.id, conversationId],
+      [conversationId],
     )
     return messagesResult.rowCount ? messagesResult.rows[0].messages_json ?? [] : []
   }
@@ -2056,9 +2406,12 @@ class PostgresCloudStore implements CloudStore {
     await this.ensureWorkspaceExists(user)
     const conversationResult = await this.pool.query<{ id: string }>(
       `
-        SELECT id
-        FROM cloud_conversations
-        WHERE user_id = $1 AND id = $2
+        SELECT c.id
+        FROM cloud_conversations c
+        INNER JOIN cloud_projects p ON p.id = c.project_id
+        INNER JOIN cloud_organization_memberships m
+          ON m.organization_id = p.organization_id
+        WHERE m.user_id = $1 AND c.id = $2
       `,
       [user.id, conversationId],
     )
@@ -2073,10 +2426,18 @@ class PostgresCloudStore implements CloudStore {
     }))
     await this.pool.query(
       `
-        INSERT INTO cloud_conversation_messages(conversation_id, user_id, messages_json, updated_at)
-        VALUES ($1, $2, $3::jsonb, $4)
+        INSERT INTO cloud_conversation_messages(conversation_id, user_id, organization_id, messages_json, updated_at)
+        VALUES (
+          $1,
+          $2,
+          (SELECT c.organization_id FROM cloud_conversations c WHERE c.id = $1),
+          $3::jsonb,
+          $4
+        )
         ON CONFLICT (conversation_id) DO UPDATE
-        SET messages_json = EXCLUDED.messages_json,
+        SET user_id = EXCLUDED.user_id,
+            organization_id = EXCLUDED.organization_id,
+            messages_json = EXCLUDED.messages_json,
             updated_at = EXCLUDED.updated_at
       `,
       [conversationId, user.id, JSON.stringify(normalized), new Date().toISOString()],
@@ -2143,6 +2504,19 @@ class PostgresCloudStore implements CloudStore {
     const plans = await this.listPlans()
     const subscription = getPlanRecord(plans, user.subscriptionPlan)
     const activeParallelSessions = await this.getActiveParallelSessions(user.id)
+    const providers: OrganizationProviderRuntimeRecord[] = (workspace.organization.providers ?? []).map(
+      (provider) => ({
+        id: provider.id,
+        kind: provider.kind,
+        label: provider.label,
+        baseUrl: provider.baseUrl,
+        credentialType: provider.credentialType,
+        secret: workspace.providerSecretsById?.get(provider.id) ?? '',
+        models: provider.models,
+        defaultModel: provider.defaultModel,
+        supportsCloudRuntime: provider.supportsCloudRuntime,
+      }),
+    )
     return {
       user,
       subscription,
@@ -2158,6 +2532,16 @@ class PostgresCloudStore implements CloudStore {
       cloudInstance: workspace.cloudInstance,
       project,
       conversation,
+      providers,
+      repository:
+        project?.repository == null
+          ? null
+          : {
+              cloneUrl: project.repository.cloneUrl,
+              defaultBranch: project.repository.defaultBranch,
+              authMode: project.repository.authMode,
+              accessToken: workspace.repositoryAccessTokenByProjectId?.get(project.id) ?? null,
+            },
     }
   }
 

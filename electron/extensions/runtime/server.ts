@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { spawn } from 'node:child_process'
+import fs from 'node:fs'
 import { listChatonsExtensions } from '../manager.js'
 import { FILES_ROOT } from './constants.js'
 import { appendExtensionLog } from './logging.js'
@@ -22,6 +23,24 @@ function normalizePathInsideExtension(root: string, raw: string | undefined) {
   const candidate = path.resolve(root, raw)
   if (!candidate.startsWith(path.resolve(root))) return null
   return candidate
+}
+
+function resolveServerCommand(command: string, env: Record<string, string>) {
+  const trimmed = String(command || '').trim()
+  const lower = trimmed.toLowerCase()
+  if (lower === 'node' || lower === 'node.exe') {
+    const execPath = process.execPath
+    if (execPath && fs.existsSync(execPath)) {
+      return {
+        command: execPath,
+        env: {
+          ...env,
+          ELECTRON_RUN_AS_NODE: '1',
+        },
+      }
+    }
+  }
+  return { command: trimmed, env }
 }
 
 async function sleep(ms: number) {
@@ -82,11 +101,12 @@ export async function ensureExtensionServerStarted(extensionId: string) {
     CHATON_EXTENSION_DATA_DIR: path.join(FILES_ROOT, extensionId),
     ...normalizeExtensionEnv(start.env),
   }
+  const resolved = resolveServerCommand(start.command, env)
 
   const args = Array.isArray(start.args) ? start.args : []
-  const child = spawn(start.command, args, {
+  const child = spawn(resolved.command, args, {
     cwd,
-    env,
+    env: resolved.env,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   runtimeState.serverProcesses.set(extensionId, child)

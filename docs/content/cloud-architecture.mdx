@@ -139,6 +139,8 @@ That cache is a view cache, not the cloud source of truth.
 
 The desktop requests a websocket token from `cloud-realtime`, opens a websocket, and applies replay plus live deltas. Runtime events are bridged into the same `pi:event` renderer path used by local conversations so the renderer does not need a separate cloud-only event protocol.
 
+Live delivery and replay are filtered by the server-authorized cloud audience context instead of being broadcast blindly to every socket on a cloud instance. Runtime event envelopes carry organization and conversation audience metadata so reconnect and live fan-out stay scoped to the caller's authorized cloud organization.
+
 ### 4.4 Remote runtime routing
 
 When a conversation belongs to a cloud project, desktop runtime commands are routed to `runtime-headless` instead of to the local `PiSessionRuntimeManager`.
@@ -185,9 +187,15 @@ The cloud runtime session store supports:
 
 ### 6.3 Current limitation
 
-The cloud runtime service currently exists and is wired through the desktop, but the repository still contains a synthetic execution path in `runtime-headless` rather than a full Pi-backed headless runtime implementation.
+The cloud runtime service now creates a managed Pi agent directory and serves real Pi-backed remote sessions from `runtime-headless`.
 
-That means the cloud runtime control flow, session reuse, quota admission, transcript persistence, and event publication are implemented, but the remote executor is not yet equivalent to the full local Pi runtime.
+That means cloud runtime control flow, session reuse, quota admission, transcript persistence, model/auth materialization, and event publication are implemented through a real Pi session rather than through a synthetic echo path.
+
+It is still not equivalent to the full local desktop runtime:
+
+- repo-backed cloud projects now use a managed per-project source checkout plus per-conversation Git worktrees, but they still do not have full parity with the richer local worktree management UI and cleanup paths
+- remote extension parity is not complete
+- cloud sharing and organization membership are still evolving
 
 ---
 
@@ -211,6 +219,7 @@ Important authorization rules:
 
 - desktop bearer tokens are validated by `cloud-api`
 - websocket token issuance is checked server-side before `cloud-realtime` accepts a client
+- websocket replay and live delivery are filtered by authorized audience metadata, not only by cloud instance id
 - runtime admission is checked server-side before `runtime-headless` creates or serves a session
 - internal service-to-service routes require the shared internal service token
 - provider secrets entered through the browser cloud portal remain cloud-owned
@@ -221,8 +230,8 @@ Important authorization rules:
 
 Current cloud limitations in the repository:
 
-- the remote runtime path is not yet a full Pi-backed executor
-- cloud project sharing and organization membership are still evolving
+- repo-backed cloud runtime uses server-managed Git worktrees, but it still lacks the fuller local worktree tooling and lifecycle surface exposed by the desktop app
+- cloud project sharing and organization membership are still evolving; the Postgres control plane now stores normalized organizations and memberships and writes `organization_id` on the main cloud entity tables, but those tables still retain compatibility `user_id` ownership and are not yet a full multi-user shared-org model
 - the cloud portal supports browser auth and provider onboarding, but provider execution support is narrower than desktop-local provider support
 - full offline editing and client-side/cloud-side repository sync are not part of the current architecture
 

@@ -34,10 +34,17 @@ type IssuedTokenRecord = {
   expiresAt: number
   cloudInstanceId: string
   userId: string
+  organizationId: string
+}
+
+type SocketAudienceRecord = {
+  socket: import('ws').WebSocket
+  userId: string
+  organizationId: string
 }
 
 const issuedTokens = new Map<string, IssuedTokenRecord>()
-const socketsByInstanceId = new Map<string, Set<import('ws').WebSocket>>()
+const socketsByInstanceId = new Map<string, Set<SocketAudienceRecord>>()
 const eventReplayByInstanceId = new Map<string, RealtimeServerEvent[]>()
 const eventSeqByInstanceId = new Map<string, number>()
 
@@ -127,6 +134,16 @@ function getRedisSeqKey(cloudInstanceId: string): string {
   return `${redisChannelPrefix}${cloudInstanceId}:seq`
 }
 
+function canAccessEvent(
+  audience: Pick<SocketAudienceRecord, 'organizationId'>,
+  event: Pick<RealtimeServerEvent, 'organizationId'>,
+): boolean {
+  if (event.organizationId && event.organizationId !== audience.organizationId) {
+    return false
+  }
+  return true
+}
+
 function reapExpiredTokens(): void {
   const now = Date.now()
   for (const [token, record] of issuedTokens.entries()) {
@@ -168,10 +185,19 @@ async function ensureRedisClients(): Promise<void> {
 }
 
 function broadcastToInstance(cloudInstanceId: string, rawEvent: string): void {
+  let parsedEvent: RealtimeServerEvent | null = null
+  try {
+    parsedEvent = JSON.parse(rawEvent) as RealtimeServerEvent
+  } catch {
+    return
+  }
   const targets = socketsByInstanceId.get(cloudInstanceId) ?? new Set()
-  for (const socket of targets) {
-    if (socket.readyState === socket.OPEN) {
-      socket.send(rawEvent)
+  for (const target of targets) {
+    if (
+      target.socket.readyState === target.socket.OPEN &&
+      canAccessEvent(target, parsedEvent)
+    ) {
+      target.socket.send(rawEvent)
     }
   }
 }
@@ -240,6 +266,15 @@ async function readReplayEvents(
     })
     .filter((event): event is RealtimeServerEvent => event !== null)
     .filter((event) => (typeof afterSeq === 'number' ? (event.seq ?? 0) > afterSeq : true))
+}
+
+async function readAuthorizedReplayEvents(
+  cloudInstanceId: string,
+  audience: Pick<SocketAudienceRecord, 'organizationId'>,
+  afterSeq?: number,
+): Promise<RealtimeServerEvent[]> {
+  const events = await readReplayEvents(cloudInstanceId, afterSeq)
+  return events.filter((event) => canAccessEvent(audience, event))
 }
 
 async function publishEvent(cloudInstanceId: string, event: RealtimeServerEvent): Promise<void> {
@@ -317,6 +352,7 @@ async function handleRequest(
       expiresAt,
       cloudInstanceId,
       userId: access.userId,
+      organizationId: access.organizationId,
     })
 
     const payload: RealtimeTokenResponse = {
@@ -390,8 +426,11 @@ async function handleRequest(
     const payload: RealtimeReplayResponse = {
       cloudInstanceId,
       lastSeq: await getLastEventSeq(cloudInstanceId),
-      events: await readReplayEvents(
+      events: await readAuthorizedReplayEvents(
         cloudInstanceId,
+        {
+          organizationId: access.organizationId,
+        },
         Number.isFinite(afterSeq) && afterSeq > 0 ? afterSeq : undefined,
       ),
     }
@@ -441,7 +480,12 @@ wss.on('connection', (socket, request) => {
     socket.close(1013, 'instance_capacity_reached')
     return
   }
-  instanceSockets.add(socket)
+  const socketRecord: SocketAudienceRecord = {
+    socket,
+    userId: record.userId,
+    organizationId: record.organizationId,
+  }
+  instanceSockets.add(socketRecord)
   socketsByInstanceId.set(cloudInstanceId, instanceSockets)
   issuedTokens.delete(token)
 
@@ -451,13 +495,14 @@ wss.on('connection', (socket, request) => {
     ts: new Date().toISOString(),
     payload: {
       cloudInstanceId,
+      organizationId: record.organizationId,
       status: 'connected',
       message: 'Realtime connected',
     },
   }
 
   socket.send(JSON.stringify(connectedEvent))
-  void readReplayEvents(cloudInstanceId)
+  void readAuthorizedReplayEvents(cloudInstanceId, socketRecord)
     .then((events) => {
       for (const event of events) {
         if (socket.readyState === socket.OPEN) {
@@ -478,6 +523,7 @@ wss.on('connection', (socket, request) => {
       ts: new Date().toISOString(),
       payload: {
         cloudInstanceId,
+        organizationId: record.organizationId,
         status: 'connected',
         message: redisReady ? 'Heartbeat ok (redis)' : 'Heartbeat ok',
       },
@@ -488,7 +534,7 @@ wss.on('connection', (socket, request) => {
   socket.on('close', () => {
     clearInterval(heartbeat)
     const targets = socketsByInstanceId.get(cloudInstanceId)
-    targets?.delete(socket)
+    targets?.delete(socketRecord)
     if (targets && targets.size === 0) {
       socketsByInstanceId.delete(cloudInstanceId)
     }
