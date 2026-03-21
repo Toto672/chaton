@@ -1428,7 +1428,9 @@ class PostgresCloudStore implements CloudStore {
         INNER JOIN cloud_organization_memberships m
           ON m.organization_id = o.id
         WHERE m.user_id = $1
-        ORDER BY o.created_at ASC
+        ORDER BY
+          CASE WHEN o.owner_user_id = $1 THEN 0 ELSE 1 END,
+          o.created_at ASC
         LIMIT 1
       `,
       [user.id],
@@ -2223,9 +2225,9 @@ class PostgresCloudStore implements CloudStore {
         SET organization_name = $2,
             repo_name = $2,
             updated_at = $3
-        WHERE user_id = $1 AND organization_id = $4
+        WHERE organization_id = $1
       `,
-      [user.id, organization.name, new Date().toISOString(), organization.id],
+      [organization.id, organization.name, new Date().toISOString()],
     )
     return organization
   }

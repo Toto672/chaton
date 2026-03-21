@@ -231,7 +231,7 @@ Important authorization rules:
 Current cloud limitations in the repository:
 
 - repo-backed cloud runtime uses server-managed Git worktrees, but it still lacks the fuller local worktree tooling and lifecycle surface exposed by the desktop app
-- cloud project sharing and organization membership are still evolving; the Postgres control plane now stores normalized organizations and memberships and writes `organization_id` on the main cloud entity tables, but those tables still retain compatibility `user_id` ownership and are not yet a full multi-user shared-org model
+- cloud project sharing and organization membership are still evolving; the Postgres control plane now stores normalized organizations and memberships, writes `organization_id` on the main cloud entity tables, and resolves the current compatibility organization view from memberships, but those tables still retain compatibility `user_id` ownership and the bootstrap payload still surfaces only one organization
 - the cloud portal supports browser auth and provider onboarding, but provider execution support is narrower than desktop-local provider support
 - full offline editing and client-side/cloud-side repository sync are not part of the current architecture
 

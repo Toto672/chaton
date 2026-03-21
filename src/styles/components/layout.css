@@ -1129,7 +1129,6 @@
   .menu-row-popover-item {
     @apply flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[#303139] transition-colors hover:bg-[#f0f0f2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
     font-size: var(--ui-font-body);
-    border-left: 3px solid transparent;
   }
 
   .menu-row-popover-item-active {

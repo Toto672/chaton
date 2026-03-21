@@ -90,6 +90,17 @@ description: Verified documentation changes and rationale for Chatons features a
 - `docs/content/cloud-architecture.mdx` -- Updated current limitations to reflect mixed compatibility ownership during migration
 - `docs/content/developer-guide.mdx` -- Documented explicit organization ownership on cloud entity rows during the migration
 
+### Made the compatibility single-organization cloud view resolve from memberships
+
+**Change:** The Postgres control plane now resolves the current compatibility organization view from `cloud_organization_memberships`, preferring an owned organization first and otherwise falling back to the oldest membership, instead of implicitly treating the caller's per-user workspace blob as the only organization source.
+
+**Why:** Even before the desktop bootstrap exposes multiple organizations, the current single-organization view should still be rooted in the normalized organization membership model rather than in the legacy per-user ownership assumption.
+
+**Files updated:**
+- `apps/cloud-api/store.ts` -- Switched compatibility organization selection to membership-based owner-first ordering and removed a remaining org-name update filtered by `user_id`
+- `docs/content/cloud-architecture.mdx` -- Clarified that the current single-org bootstrap view is membership-derived
+- `docs/content/developer-guide.mdx` -- Documented the owner-first membership selection used by the compatibility bootstrap
+
 ## 2026-03-21 (Latest)
 
 ### Fixed Tailwind 4 migration visual regressions

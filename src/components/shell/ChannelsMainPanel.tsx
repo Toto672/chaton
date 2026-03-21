@@ -39,8 +39,10 @@ export function ChannelsMainPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      setLoading(true);
+    const load = async (showLoading: boolean) => {
+      if (showLoading) {
+        setLoading(true);
+      }
       const [installedResult, uiResult] = await Promise.all([
         workspaceIpc.listExtensions(),
         workspaceIpc.registerExtensionUi(),
@@ -49,9 +51,17 @@ export function ChannelsMainPanel() {
       setExtensions(installedResult.extensions ?? []);
       setEntries((uiResult.entries ?? []) as ExtensionUiEntry[]);
       setLoading(false);
-    })();
+    };
+
+    void load(true);
+
+    const intervalId = window.setInterval(() => {
+      void load(false);
+    }, 2000);
+
     return () => {
       cancelled = true;
+      window.clearInterval(intervalId);
     };
   }, []);
 
