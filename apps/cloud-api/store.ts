@@ -427,6 +427,7 @@ function createDefaultWorkspaceState(
 
 class MemoryCloudStore implements CloudStore {
   mode: 'memory' = 'memory'
+  private readonly context: StoreContext
   private readonly usersById = new Map<string, CloudUserState>()
   private readonly usersByAccessToken = new Map<string, string>()
   private readonly userIdsByEmail = new Map<string, string>()
@@ -445,7 +446,9 @@ class MemoryCloudStore implements CloudStore {
     expiresAt: string
   }>()
 
-  constructor(private readonly context: StoreContext) {}
+  constructor(context: StoreContext) {
+    this.context = context
+  }
 
   async init(): Promise<void> {}
 
