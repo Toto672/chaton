@@ -6,6 +6,7 @@ import { LandingPage } from "./LandingPage";
 import { ExtensionsPage } from "./ExtensionsPage";
 import { ExtensionDetailPage } from "./ExtensionDetailPage";
 import { CloudPortalPage } from "./CloudPortalPage";
+import { CloudPricingPage } from "./CloudPricingPage";
 import { CloudSignupPage } from "./CloudSignupPage";
 import { CloudLoginPage } from "./CloudLoginPage";
 import { CloudOnboardingPage } from "./CloudOnboardingPage";
@@ -85,6 +86,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/:lang/extensions" element={<RoutePage Component={ExtensionsPage} />} />
         <Route path="/:lang/extensions/:slug" element={<RoutePage Component={ExtensionDetailPage} />} />
         <Route path="/:lang/cloud" element={<RoutePage Component={CloudPortalPage} />} />
+        <Route path="/:lang/cloud/pricing" element={<RoutePage Component={CloudPricingPage} />} />
         <Route path="/:lang/cloud/signup" element={<RoutePage Component={CloudSignupPage} />} />
         <Route path="/:lang/cloud/login" element={<RoutePage Component={CloudLoginPage} />} />
         <Route path="/:lang/cloud/onboarding" element={<RoutePage Component={CloudOnboardingPage} />} />
@@ -97,6 +99,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/extensions" element={<RoutePage Component={ExtensionsPage} />} />
         <Route path="/extensions/:slug" element={<RoutePage Component={ExtensionDetailPage} />} />
         <Route path="/cloud" element={<RoutePage Component={CloudPortalPage} />} />
+        <Route path="/cloud/pricing" element={<RoutePage Component={CloudPricingPage} />} />
         <Route path="/cloud/signup" element={<RoutePage Component={CloudSignupPage} />} />
         <Route path="/cloud/login" element={<RoutePage Component={CloudLoginPage} />} />
         <Route path="/cloud/onboarding" element={<RoutePage Component={CloudOnboardingPage} />} />

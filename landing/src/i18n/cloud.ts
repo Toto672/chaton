@@ -3,8 +3,67 @@ import type { LanguageCode } from "./translations";
 type CloudCopy = {
   nav: {
     home: string;
+    pricing: string;
     signUp: string;
     logIn: string;
+  };
+  pricing: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
+    monthlyLabel: string;
+    annualLabel: string;
+    annualNote: string;
+    primaryCta: string;
+    secondaryCta: string;
+    compareLabel: string;
+    priceSuffix: string;
+    includedLabel: string;
+    includedItemsIntro: string;
+    comparisonSubtitle: string;
+    ctaTitle: string;
+    ctaBody: string;
+    ctaPrimary: string;
+    ctaSecondary: string;
+    plans: [
+      {
+        name: string;
+        audience: string;
+        monthlyPrice: string;
+        annualPrice: string;
+        blurb: string;
+        highlight?: string;
+        cta: string;
+        bullets: [string, string, string, string];
+      },
+      {
+        name: string;
+        audience: string;
+        monthlyPrice: string;
+        annualPrice: string;
+        blurb: string;
+        highlight?: string;
+        cta: string;
+        bullets: [string, string, string, string];
+      },
+      {
+        name: string;
+        audience: string;
+        monthlyPrice: string;
+        annualPrice: string;
+        blurb: string;
+        highlight?: string;
+        cta: string;
+        bullets: [string, string, string, string];
+      },
+    ];
+    includedTitle: string;
+    includedItems: [string, string, string, string];
+    comparisonTitle: string;
+    comparisonRows: Array<{
+      label: string;
+      values: [string, string, string];
+    }>;
   };
   portal: {
     title: string;
@@ -123,7 +182,94 @@ type CloudCopy = {
 };
 
 const en: CloudCopy = {
-  nav: { home: "Home", signUp: "Sign up", logIn: "Log in" },
+  nav: { home: "Home", pricing: "Pricing", signUp: "Sign up", logIn: "Log in" },
+  pricing: {
+    eyebrow: "Pricing",
+    title: "Simple cloud pricing for durable AI work.",
+    subtitle:
+      "From a focused solo setup to a high-capacity shared workspace, choose the plan that fits how your team runs work in parallel.",
+    monthlyLabel: "Monthly",
+    annualLabel: "Annual",
+    annualNote: "Save about 17% with annual billing",
+    primaryCta: "Start with Chatons Cloud",
+    secondaryCta: "See cloud setup",
+    compareLabel: "Compare plans",
+    priceSuffix: "/month",
+    includedLabel: "Included with every plan",
+    includedItemsIntro: "Shared workspace, shared projects, organization-managed access, and cloud conversations that stay available when your team signs off.",
+    comparisonSubtitle: "A quick view of what changes as your team needs more capacity.",
+    ctaTitle: "Ready to set up your cloud workspace?",
+    ctaBody: "Create your organization, connect providers, and start running shared conversations in minutes.",
+    ctaPrimary: "Get started",
+    ctaSecondary: "View cloud overview",
+    plans: [
+      {
+        name: "Plus",
+        audience: "For solo builders and tiny teams",
+        monthlyPrice: "$19",
+        annualPrice: "$16",
+        blurb: "A focused starting point for individuals and small teams moving one cloud workflow at a time.",
+        cta: "Start on Plus",
+        bullets: [
+          "1 parallel cloud runtime session",
+          "Shared cloud projects and conversations",
+          "Organization-owned provider credentials",
+          "Email support",
+        ],
+      },
+      {
+        name: "Pro",
+        audience: "For active teams shipping every day",
+        monthlyPrice: "$49",
+        annualPrice: "$41",
+        blurb: "The default choice for teams that need room for collaboration, handoffs, and long-running work.",
+        highlight: "Best value",
+        cta: "Choose Pro",
+        bullets: [
+          "3 parallel cloud runtime sessions",
+          "Faster handoffs across shared threads",
+          "Best for 2 to 6 active collaborators",
+          "Priority email support",
+        ],
+      },
+      {
+        name: "Max",
+        audience: "For larger teams and heavy runtime usage",
+        monthlyPrice: "$149",
+        annualPrice: "$124",
+        blurb: "High-capacity cloud execution for organizations running multiple workflows and teams in parallel.",
+        cta: "Talk to us about Max",
+        bullets: [
+          "10 parallel cloud runtime sessions",
+          "Room for multiple long-running jobs at once",
+          "Best for operations, support, and engineering together",
+          "Priority support with onboarding help",
+        ],
+      },
+    ],
+    includedTitle: "Included in every plan",
+    includedItems: [
+      "Shared organizations and projects",
+      "Persistent cloud conversations",
+      "Organization-managed providers",
+      "Desktop and browser access",
+    ],
+    comparisonTitle: "What changes between plans",
+    comparisonRows: [
+      {
+        label: "Parallel cloud sessions",
+        values: ["1", "3", "10"],
+      },
+      {
+        label: "Ideal team size",
+        values: ["1 to 2 people", "2 to 6 people", "6+ people"],
+      },
+      {
+        label: "Support",
+        values: ["Email", "Priority email", "Priority + onboarding"],
+      },
+    ],
+  },
   portal: {
     title: "Chatons for teams, with a runtime that stays online.",
     subtitle:
@@ -275,7 +421,7 @@ const cloudCopies: Partial<Record<LanguageCode, CloudCopy>> = {
   en,
   fr: {
     ...en,
-    nav: { home: "Accueil", signUp: "Créer un compte", logIn: "Se connecter" },
+    nav: { home: "Accueil", pricing: "Tarifs", signUp: "Créer un compte", logIn: "Se connecter" },
     portal: {
       ...en.portal,
       title: "Chatons pour les équipes, avec un runtime qui reste en ligne.",
@@ -430,7 +576,7 @@ const cloudCopies: Partial<Record<LanguageCode, CloudCopy>> = {
   },
   es: {
     ...en,
-    nav: { home: "Inicio", signUp: "Crear cuenta", logIn: "Iniciar sesión" },
+    nav: { home: "Inicio", pricing: "Precios", signUp: "Crear cuenta", logIn: "Iniciar sesión" },
     portal: {
       ...en.portal,
       title: "Chatons para equipos, con un runtime que sigue en marcha.",
@@ -583,7 +729,7 @@ const cloudCopies: Partial<Record<LanguageCode, CloudCopy>> = {
   },
   de: {
     ...en,
-    nav: { home: "Start", signUp: "Registrieren", logIn: "Anmelden" },
+    nav: { home: "Start", pricing: "Preise", signUp: "Registrieren", logIn: "Anmelden" },
     portal: {
       ...en.portal,
       title: "Chatons für Teams, mit einer Runtime, die online bleibt.",

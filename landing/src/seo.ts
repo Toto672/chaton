@@ -303,3 +303,30 @@ export function useExtensionDetailSeo(ext: ExtensionEntry | undefined) {
       : [],
   );
 }
+
+export function useCloudPricingSeo() {
+  useCanonicalAndOg({
+    path: "/cloud/pricing",
+    title: "Chatons Cloud Pricing",
+    description:
+      "Compare Chatons Cloud Plus, Pro, and Max plans for hosted AI workspace and cloud runtime concurrency.",
+  });
+
+  useJsonLd([
+    webSiteSchema(),
+    breadcrumbSchema([
+      { name: "Home", url: SITE_URL },
+      { name: "Cloud", url: `${SITE_URL}/cloud` },
+      { name: "Pricing", url: `${SITE_URL}/cloud/pricing` },
+    ]),
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      name: "Chatons Cloud Pricing",
+      description:
+        "Pricing for Chatons Cloud hosted workspace and runtime plans.",
+      url: `${SITE_URL}/cloud/pricing`,
+      publisher: organizationSchema(),
+    },
+  ]);
+}

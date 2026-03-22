@@ -15,6 +15,7 @@ export function CloudPortalPage({
   const [account, setAccount] = useState(() => getCloudAccount());
   const copy = getCloudCopy(currentLanguage);
   const homeHref = buildLocalizedPath(currentLanguage, "/");
+  const pricingHref = buildLocalizedPath(currentLanguage, "/cloud/pricing");
   const signupHref = buildLocalizedPath(currentLanguage, "/cloud/signup");
   const loginHref = buildLocalizedPath(currentLanguage, "/cloud/login");
   const onboardingHref = buildLocalizedPath(currentLanguage, "/cloud/onboarding");
@@ -82,6 +83,7 @@ export function CloudPortalPage({
       <header className="site-header">
         <nav className="site-nav" aria-label="Primary">
           <Link to={homeHref}>{copy.nav.home}</Link>
+          <Link to={pricingHref}>{copy.nav.pricing}</Link>
           <Link to={signupHref}>{copy.nav.signUp}</Link>
           <Link to={loginHref}>{copy.nav.logIn}</Link>
           <LanguageSwitcher currentLanguage={currentLanguage} onLanguageChange={onLanguageChange} />
