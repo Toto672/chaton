@@ -111,6 +111,8 @@ export type CloudAccountResponse = {
   user: CloudUserRecord
   usage: CloudUsageRecord
   plans: CloudSubscriptionRecord[]
+  organizations: OrganizationRecord[]
+  activeOrganizationId: string | null
 }
 
 export type CloudAdminListUsersResponse = {

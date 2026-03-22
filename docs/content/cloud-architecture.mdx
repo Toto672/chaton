@@ -131,9 +131,11 @@ The desktop cloud flow is:
 
 ### 4.2 Bootstrap and local cache
 
-After authentication, the desktop calls the cloud bootstrap API and mirrors the returned cloud projects and conversations into local SQLite for rendering and startup hydration.
+After authentication, the desktop calls the cloud bootstrap API and mirrors the returned organizations, active organization id, cloud projects, and conversations into local SQLite for rendering and startup hydration.
 
 That cache is a view cache, not the cloud source of truth.
+
+Bootstrap now returns all organizations visible through organization memberships. The server also returns one active organization id that clients use as the default org context for new cloud actions unless the user explicitly chooses another organization.
 
 ### 4.3 Realtime
 
@@ -152,7 +154,9 @@ When a conversation belongs to a cloud project, desktop runtime commands are rou
 Cloud control-plane state currently owns:
 
 - authenticated cloud users and desktop sessions
+- active organization selection for authenticated cloud sessions
 - cloud subscription plans and usage counters
+- cloud organizations, memberships, and organization invites
 - cloud projects
 - cloud conversations
 - cloud conversation messages
@@ -231,7 +235,8 @@ Important authorization rules:
 Current cloud limitations in the repository:
 
 - repo-backed cloud runtime uses server-managed Git worktrees, but it still lacks the fuller local worktree tooling and lifecycle surface exposed by the desktop app
-- cloud project sharing and organization membership are still evolving; the Postgres control plane now stores normalized organizations and memberships, writes `organization_id` on the main cloud entity tables, and resolves the current compatibility organization view from memberships, but those tables still retain compatibility `user_id` ownership and the bootstrap payload still surfaces only one organization
+- the Postgres control plane now persists organizations, memberships, active organization selection, and invite records, but several cloud tables still retain compatibility `user_id` columns during the migration to fully organization-native ownership
+- the cloud portal and desktop both consume the active organization model, but invite management and org switching UI are still partial compared with the underlying API support
 - the cloud portal supports browser auth and provider onboarding, but provider execution support is narrower than desktop-local provider support
 - full offline editing and client-side/cloud-side repository sync are not part of the current architecture
 

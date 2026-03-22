@@ -115,10 +115,13 @@ export async function handleAdminRoute(
     }
 
     const refreshedPlans = await store.listPlans()
+    const workspace = await store.getWorkspaceState(updated)
     const payload: CloudAccountResponse = {
       user: toCloudUserRecord(updated, refreshedPlans),
       usage: await buildUsage(updated),
       plans: refreshedPlans,
+      organizations: workspace.organizations,
+      activeOrganizationId: workspace.activeOrganizationId,
     }
     json(request, response, 200, payload)
     return true
@@ -171,10 +174,13 @@ export async function handleAdminRoute(
       return true
     }
     const refreshedPlans = await store.listPlans()
+    const workspace = await store.getWorkspaceState(updated)
     const payload: CloudAccountResponse = {
       user: toCloudUserRecord(updated, refreshedPlans),
       usage: await buildUsage(updated),
       plans: refreshedPlans,
+      organizations: workspace.organizations,
+      activeOrganizationId: workspace.activeOrganizationId,
     }
     json(request, response, 200, payload)
     return true

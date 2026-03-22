@@ -3755,6 +3755,666 @@ video {
    CLOUD ONBOARDING REDESIGN
    ============================================================ */
 
+.cloud-account-page .cloud-main {
+  max-width: 1440px;
+}
+
+.cloud-account-topbar {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cloud-account-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.cloud-account-context {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(7, 12, 24, 0.5);
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cloud-account-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cloud-account-link-button {
+  text-decoration: none;
+}
+
+.cloud-account-shell {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.cloud-account-sidebar {
+  position: sticky;
+  top: 24px;
+}
+
+.cloud-account-sidebar-card {
+  display: grid;
+  gap: 22px;
+  padding: 22px;
+  border-radius: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.86), rgba(8, 15, 28, 0.92)),
+    linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(249, 115, 22, 0.06));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 20px 48px rgba(2, 6, 23, 0.24);
+}
+
+.cloud-account-sidebar-header {
+  display: grid;
+  gap: 6px;
+}
+
+.cloud-account-sidebar-eyebrow {
+  color: rgba(191, 219, 254, 0.86);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cloud-account-sidebar-header strong {
+  color: #f8fafc;
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.cloud-account-sidebar-header p {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 14px;
+}
+
+.cloud-account-mini-progress {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: rgba(7, 12, 24, 0.56);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.cloud-account-mini-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cloud-account-mini-progress-row span {
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cloud-account-mini-progress-row strong {
+  color: #f8fafc;
+  font-size: 18px;
+}
+
+.cloud-account-mini-progress-bar,
+.cloud-account-progress-bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  overflow: hidden;
+}
+
+.cloud-account-mini-progress-bar span,
+.cloud-account-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3b82f6, #22c55e);
+}
+
+.cloud-account-nav {
+  display: grid;
+  gap: 10px;
+}
+
+.cloud-account-nav-item {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  border-radius: 18px;
+  background: rgba(7, 12, 24, 0.4);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.cloud-account-nav-item:hover {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(10, 16, 30, 0.72);
+}
+
+.cloud-account-nav-item.is-active {
+  border-color: rgba(96, 165, 250, 0.34);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(37, 99, 235, 0.18));
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.08);
+}
+
+.cloud-account-nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: rgba(59, 130, 246, 0.18);
+  color: #dbeafe;
+}
+
+.cloud-account-nav-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.cloud-account-nav-copy strong {
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.cloud-account-nav-copy span {
+  color: rgba(226, 232, 240, 0.66);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.cloud-account-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cloud-account-main {
+  display: grid;
+  gap: 24px;
+}
+
+.cloud-account-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  gap: 24px;
+  align-items: end;
+}
+
+.cloud-account-hero-copy .cloud-section-title {
+  margin-top: 14px;
+  max-width: 14ch;
+}
+
+.cloud-account-hero-copy .hero-subtitle {
+  max-width: 700px;
+}
+
+.cloud-account-hero-meta {
+  display: grid;
+  gap: 12px;
+}
+
+.cloud-account-stat {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(7, 12, 24, 0.56);
+}
+
+.cloud-account-stat span {
+  color: rgba(148, 163, 184, 0.78);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cloud-account-stat strong {
+  color: #f8fafc;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.cloud-account-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.cloud-account-panel {
+  display: grid;
+  gap: 20px;
+}
+
+.cloud-account-panel.is-highlighted {
+  border-color: rgba(96, 165, 250, 0.32);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 20px 48px rgba(2, 6, 23, 0.24),
+    0 0 0 1px rgba(96, 165, 250, 0.08);
+}
+
+.cloud-account-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cloud-account-panel-header .cloud-section-title {
+  margin-top: 12px;
+}
+
+.cloud-account-progress-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: rgba(7, 12, 24, 0.54);
+}
+
+.cloud-account-progress-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cloud-account-progress-header strong {
+  color: #f8fafc;
+  font-size: 20px;
+}
+
+.cloud-account-progress-header p {
+  margin: 4px 0 0;
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 14px;
+}
+
+.cloud-account-progress-value {
+  color: #f8fafc;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.cloud-account-step-list {
+  display: grid;
+  gap: 14px;
+}
+
+.cloud-account-step-card {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 14px;
+  width: 100%;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 22px;
+  background: rgba(7, 12, 24, 0.42);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.cloud-account-step-card:hover {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(10, 16, 30, 0.7);
+}
+
+.cloud-account-step-card.is-done {
+  border-color: rgba(52, 211, 153, 0.18);
+  background: linear-gradient(180deg, rgba(5, 78, 59, 0.18), rgba(7, 12, 24, 0.46));
+}
+
+.cloud-account-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  background: rgba(59, 130, 246, 0.18);
+  color: #eff6ff;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.cloud-account-step-card.is-done .cloud-account-step-index {
+  background: rgba(16, 185, 129, 0.2);
+  color: #d1fae5;
+}
+
+.cloud-account-step-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.cloud-account-step-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cloud-account-step-title-row strong {
+  color: #f8fafc;
+  font-size: 16px;
+}
+
+.cloud-account-step-copy p {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.74);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.cloud-account-step-detail {
+  color: rgba(191, 219, 254, 0.86);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cloud-account-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cloud-account-status-pill.is-ready {
+  background: rgba(16, 185, 129, 0.16);
+  color: #86efac;
+}
+
+.cloud-account-status-pill.is-pending {
+  background: rgba(148, 163, 184, 0.14);
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.cloud-account-side-stack,
+.cloud-account-sections {
+  display: grid;
+  gap: 24px;
+}
+
+.cloud-account-task-list {
+  display: grid;
+  gap: 12px;
+}
+
+.cloud-account-task {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  border-radius: 18px;
+  background: rgba(7, 12, 24, 0.44);
+  color: inherit;
+  text-align: left;
+}
+
+.cloud-account-task:not(.is-complete) {
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.cloud-account-task:not(.is-complete):hover {
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.cloud-account-task.is-complete {
+  border-color: rgba(16, 185, 129, 0.18);
+  background: linear-gradient(180deg, rgba(5, 78, 59, 0.18), rgba(7, 12, 24, 0.44));
+}
+
+.cloud-account-task-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: rgba(59, 130, 246, 0.16);
+  color: #dbeafe;
+}
+
+.cloud-account-task span {
+  display: grid;
+  gap: 4px;
+}
+
+.cloud-account-task strong {
+  color: #f8fafc;
+  font-size: 14px;
+}
+
+.cloud-account-task span span {
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.cloud-account-billing-card {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: rgba(7, 12, 24, 0.54);
+}
+
+.cloud-account-billing-card strong {
+  display: block;
+  color: #f8fafc;
+  font-size: 18px;
+}
+
+.cloud-account-billing-card p {
+  margin: 4px 0 0;
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 14px;
+}
+
+.cloud-account-billing-price {
+  color: #f8fafc;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.cloud-account-billing-price small {
+  margin-left: 2px;
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cloud-account-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.cloud-account-action-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.cloud-account-inline-success {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #86efac;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cloud-account-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.cloud-account-plan-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 24px;
+  background: rgba(7, 12, 24, 0.52);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.cloud-account-plan-card:hover {
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+.cloud-account-plan-card.is-active {
+  border-color: rgba(96, 165, 250, 0.36);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(29, 78, 216, 0.14));
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.08);
+}
+
+.cloud-account-plan-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cloud-account-plan-card-header strong {
+  color: #f8fafc;
+  font-size: 18px;
+}
+
+.cloud-account-plan-card-header p,
+.cloud-account-plan-detail {
+  margin: 4px 0 0;
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.cloud-account-plan-price {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.cloud-account-plan-price span {
+  color: #f8fafc;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.cloud-account-plan-price small {
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cloud-account-billing-grid,
+.cloud-account-desktop-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.cloud-account-billing-panel,
+.cloud-account-desktop-cta {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(7, 12, 24, 0.54);
+}
+
+.cloud-account-billing-label {
+  color: rgba(191, 219, 254, 0.82);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cloud-account-billing-panel strong {
+  color: #f8fafc;
+  font-size: 18px;
+}
+
+.cloud-account-billing-panel p {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.cloud-account-inline-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #bfdbfe;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cloud-account-inline-link:hover {
+  color: #eff6ff;
+}
+
 .cloud-onboarding-layout {
   display: grid;
   grid-template-columns: 340px 1fr;
@@ -4204,6 +4864,26 @@ video {
 
 /* Responsive */
 @media (max-width: 1024px) {
+  .cloud-account-shell,
+  .cloud-account-overview-grid,
+  .cloud-account-hero,
+  .cloud-account-billing-grid,
+  .cloud-account-desktop-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cloud-account-sidebar {
+    position: static;
+  }
+
+  .cloud-account-plan-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cloud-account-form-grid {
+    grid-template-columns: 1fr;
+  }
+
   .cloud-onboarding-layout {
     grid-template-columns: 1fr;
   }
@@ -4214,6 +4894,40 @@ video {
 }
 
 @media (max-width: 640px) {
+  .cloud-account-topbar {
+    align-items: flex-start;
+  }
+
+  .cloud-account-brand,
+  .cloud-account-topbar-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .cloud-account-sidebar-card,
+  .cloud-account-step-card,
+  .cloud-account-plan-card,
+  .cloud-account-billing-panel,
+  .cloud-account-desktop-cta {
+    padding: 16px;
+  }
+
+  .cloud-account-progress-header,
+  .cloud-account-billing-card,
+  .cloud-account-step-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cloud-account-nav-item {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .cloud-account-nav-badge {
+    grid-column: 2;
+    justify-self: start;
+  }
+
   .cloud-step-header {
     padding: 16px 18px;
   }

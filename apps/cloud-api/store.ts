@@ -485,6 +485,13 @@ function resolveWorkspaceOrganization(
   return organization
 }
 
+function cloneOrganizations(organizations: OrganizationRecord[]): OrganizationRecord[] {
+  return organizations.map((organization) => ({
+    ...organization,
+    providers: [...(organization.providers ?? [])],
+  }))
+}
+
 class MemoryCloudStore implements CloudStore {
   mode: 'memory' = 'memory'
   private readonly context: StoreContext
@@ -1192,6 +1199,7 @@ class PostgresCloudStore implements CloudStore {
         access_token TEXT PRIMARY KEY,
         refresh_token TEXT NOT NULL,
         user_id TEXT NOT NULL REFERENCES cloud_users(id) ON DELETE CASCADE,
+        active_organization_id TEXT,
         expires_at TIMESTAMPTZ NOT NULL,
         created_at TIMESTAMPTZ NOT NULL
       );
@@ -1331,6 +1339,17 @@ class PostgresCloudStore implements CloudStore {
         expires_at TIMESTAMPTZ NOT NULL,
         created_at TIMESTAMPTZ NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS cloud_organization_invites (
+        token_hash TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL REFERENCES cloud_organizations(id) ON DELETE CASCADE,
+        invited_email TEXT NOT NULL,
+        inviter_user_id TEXT NOT NULL REFERENCES cloud_users(id) ON DELETE CASCADE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        accepted_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS cloud_organization_invites_organization_id_idx
+        ON cloud_organization_invites(organization_id);
     `)
 
     await this.pool.query(`
@@ -1357,7 +1376,9 @@ class PostgresCloudStore implements CloudStore {
       ALTER TABLE cloud_users
       ADD COLUMN IF NOT EXISTS complimentary_granted_at TIMESTAMPTZ;
       ALTER TABLE cloud_users
-      ADD COLUMN IF NOT EXISTS complimentary_expires_at TIMESTAMPTZ
+      ADD COLUMN IF NOT EXISTS complimentary_expires_at TIMESTAMPTZ;
+      ALTER TABLE cloud_sessions
+      ADD COLUMN IF NOT EXISTS active_organization_id TEXT
     `)
 
     await this.pool.query(`
@@ -1623,7 +1644,7 @@ class PostgresCloudStore implements CloudStore {
     )
   }
 
-  private async getOrganizationForUser(user: CloudUserState): Promise<OrganizationRecord> {
+  private async listOrganizationsForUser(user: CloudUserState): Promise<OrganizationRecord[]> {
     await this.init()
     const organizationResult = await this.pool.query<{
       id: string
@@ -1648,11 +1669,11 @@ class PostgresCloudStore implements CloudStore {
     if (!organizationResult.rowCount) {
       const fallback = createDefaultWorkspaceState(user, this.context.publicBaseUrl)
       await this.upsertNormalizedOrganization(user, fallback.organizations[0])
-      return fallback.organizations[0]
+      return cloneOrganizations(fallback.organizations)
     }
 
-    const organizationRow = organizationResult.rows[0]
     const providersResult = await this.pool.query<{
+      organization_id: string
       id: string
       kind: OrganizationProviderRecord['kind']
       label: string
@@ -1665,21 +1686,18 @@ class PostgresCloudStore implements CloudStore {
       created_at: string | Date
     }>(
       `
-        SELECT id, kind, label, secret_hint, base_url, credential_type, models_json, default_model,
+        SELECT organization_id, id, kind, label, secret_hint, base_url, credential_type, models_json, default_model,
                supports_cloud_runtime, created_at
         FROM cloud_organization_providers
-        WHERE organization_id = $1
+        WHERE organization_id = ANY($1::text[])
         ORDER BY created_at ASC
       `,
-      [organizationRow.id],
+      [organizationResult.rows.map((row) => row.id)],
     )
 
-    return {
-      id: organizationRow.id,
-      slug: organizationRow.slug,
-      name: organizationRow.name,
-      role: organizationRow.role,
-      providers: providersResult.rows.map((row) => ({
+    const providersByOrganizationId = new Map<string, OrganizationProviderRecord[]>()
+    for (const row of providersResult.rows) {
+      const provider: OrganizationProviderRecord = {
         id: row.id,
         kind: row.kind,
         label: row.label,
@@ -1691,8 +1709,20 @@ class PostgresCloudStore implements CloudStore {
         supportsCloudRuntime: row.supports_cloud_runtime,
         createdAt:
           typeof row.created_at === 'string' ? row.created_at : row.created_at.toISOString(),
-      })),
+      }
+      providersByOrganizationId.set(row.organization_id, [
+        ...(providersByOrganizationId.get(row.organization_id) ?? []),
+        provider,
+      ])
     }
+
+    return organizationResult.rows.map((organizationRow) => ({
+      id: organizationRow.id,
+      slug: organizationRow.slug,
+      name: organizationRow.name,
+      role: organizationRow.role,
+      providers: providersByOrganizationId.get(organizationRow.id) ?? [],
+    }))
   }
 
   async listPlans(): Promise<CloudSubscriptionRecord[]> {
@@ -1967,19 +1997,24 @@ class PostgresCloudStore implements CloudStore {
     expiresAt: string
   }): Promise<void> {
     await this.init()
+    const organizations = await this.listOrganizationsForUser(
+      (await this.getUserById(params.userId)) as CloudUserState,
+    )
     await this.pool.query(
       `
-        INSERT INTO cloud_sessions(access_token, refresh_token, user_id, expires_at, created_at)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO cloud_sessions(access_token, refresh_token, user_id, active_organization_id, expires_at, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (access_token) DO UPDATE
         SET refresh_token = EXCLUDED.refresh_token,
             user_id = EXCLUDED.user_id,
+            active_organization_id = COALESCE(cloud_sessions.active_organization_id, EXCLUDED.active_organization_id),
             expires_at = EXCLUDED.expires_at
       `,
       [
         params.accessToken,
         params.refreshToken,
         params.userId,
+        organizations[0]?.id ?? null,
         params.expiresAt,
         new Date().toISOString(),
       ],
@@ -2186,15 +2221,25 @@ class PostgresCloudStore implements CloudStore {
 
     const workspaceResult = await this.pool.query<{
       cloud_instance_json: CloudInstanceRecord
+      active_organization_id: string | null
     }>(
       `
-        SELECT cloud_instance_json
-        FROM cloud_workspaces
-        WHERE user_id = $1
+        SELECT w.cloud_instance_json,
+               (
+                 SELECT s.active_organization_id
+                 FROM cloud_sessions s
+                 WHERE s.user_id = $1
+                   AND s.expires_at > NOW()
+                   AND s.active_organization_id IS NOT NULL
+                 ORDER BY s.created_at DESC
+                 LIMIT 1
+               ) AS active_organization_id
+        FROM cloud_workspaces w
+        WHERE w.user_id = $1
       `,
       [user.id],
     )
-    const organization = await this.getOrganizationForUser(user)
+    const organizations = await this.listOrganizationsForUser(user)
     const projectsResult = await this.pool.query<{
       id: string
       organization_id: string
@@ -2280,8 +2325,11 @@ class PostgresCloudStore implements CloudStore {
     )
 
     return this.normalizeWorkspace(user, {
-      organizations: [organization],
-      activeOrganizationId: organization.id,
+      organizations,
+      activeOrganizationId:
+        workspaceResult.rows[0]?.active_organization_id ??
+        organizations[0]?.id ??
+        null,
       cloudInstance: workspaceResult.rows[0].cloud_instance_json,
       projectsById: new Map(
         projectsResult.rows.map((row) => [
@@ -2342,7 +2390,7 @@ class PostgresCloudStore implements CloudStore {
     const workspace = await this.getWorkspaceState(user)
     const organization =
       workspace.organizations.find((item) => item.id === input.organizationId.trim()) ?? null
-    if (input.organizationId.trim() !== organization.id) {
+    if (!organization || input.organizationId.trim() !== organization.id) {
       throw new Error('Unknown organization')
     }
     const repository = normalizeRepositoryConfig(input.repository, organization.name)
@@ -2535,6 +2583,151 @@ class PostgresCloudStore implements CloudStore {
       organization: nextOrganization,
       provider,
     }
+  }
+
+  async setActiveOrganization(
+    user: CloudUserState,
+    input: SetActiveOrganizationRequest,
+  ): Promise<string | null> {
+    await this.ensureWorkspaceExists(user)
+    const memberships = await this.pool.query<{ organization_id: string }>(
+      `
+        SELECT organization_id
+        FROM cloud_organization_memberships
+        WHERE user_id = $1
+          AND organization_id = $2
+        LIMIT 1
+      `,
+      [user.id, input.organizationId],
+    )
+    if (!memberships.rowCount) {
+      return null
+    }
+    await this.pool.query(
+      `
+        UPDATE cloud_sessions
+        SET active_organization_id = $2
+        WHERE user_id = $1
+      `,
+      [user.id, input.organizationId],
+    )
+    return input.organizationId
+  }
+
+  async createOrganizationInvite(
+    user: CloudUserState,
+    input: CreateOrganizationInviteRequest,
+  ): Promise<{ organization: OrganizationRecord; email: string; token: string } | null> {
+    await this.ensureWorkspaceExists(user)
+    const result = await this.pool.query<{
+      id: string
+      slug: string
+      name: string
+      role: OrganizationRecord['role']
+    }>(
+      `
+        SELECT o.id, o.slug, o.name, m.role
+        FROM cloud_organizations o
+        INNER JOIN cloud_organization_memberships m
+          ON m.organization_id = o.id
+        WHERE m.user_id = $1
+          AND o.id = $2
+        LIMIT 1
+      `,
+      [user.id, input.organizationId],
+    )
+    const organization = result.rows[0] ?? null
+    if (!organization || !['owner', 'admin'].includes(organization.role)) {
+      return null
+    }
+    const token = crypto.randomUUID()
+    await this.pool.query(
+      `
+        INSERT INTO cloud_organization_invites(
+          token_hash, organization_id, invited_email, inviter_user_id, expires_at, accepted_at, created_at
+        ) VALUES ($1, $2, $3, $4, $5, NULL, $6)
+      `,
+      [
+        token,
+        organization.id,
+        input.email.trim().toLowerCase(),
+        user.id,
+        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        new Date().toISOString(),
+      ],
+    )
+    return {
+      organization: {
+        ...organization,
+        providers: [],
+      },
+      email: input.email.trim().toLowerCase(),
+      token,
+    }
+  }
+
+  async acceptOrganizationInvite(
+    user: CloudUserState,
+    input: AcceptOrganizationInviteRequest,
+  ): Promise<OrganizationRecord | null> {
+    await this.ensureWorkspaceExists(user)
+    const inviteResult = await this.pool.query<{
+      organization_id: string
+      invited_email: string
+      expires_at: string | Date
+      accepted_at: string | Date | null
+    }>(
+      `
+        SELECT organization_id, invited_email, expires_at, accepted_at
+        FROM cloud_organization_invites
+        WHERE token_hash = $1
+        LIMIT 1
+      `,
+      [input.token],
+    )
+    if (!inviteResult.rowCount) {
+      return null
+    }
+    const invite = inviteResult.rows[0]
+    const expiresAt =
+      typeof invite.expires_at === 'string' ? invite.expires_at : invite.expires_at.toISOString()
+    if (invite.accepted_at || expiresAt <= new Date().toISOString()) {
+      return null
+    }
+    if (invite.invited_email.trim().toLowerCase() !== user.email.trim().toLowerCase()) {
+      return null
+    }
+    const now = new Date().toISOString()
+    await this.pool.query(
+      `
+        INSERT INTO cloud_organization_memberships(organization_id, user_id, role, created_at, updated_at)
+        VALUES ($1, $2, 'member', $3, $3)
+        ON CONFLICT (organization_id, user_id) DO UPDATE
+        SET updated_at = EXCLUDED.updated_at
+      `,
+      [invite.organization_id, user.id, now],
+    )
+    await this.pool.query(
+      `
+        UPDATE cloud_organization_invites
+        SET accepted_at = $2
+        WHERE token_hash = $1
+      `,
+      [input.token, now],
+    )
+    await this.pool.query(
+      `
+        UPDATE cloud_sessions
+        SET active_organization_id = $2
+        WHERE user_id = $1
+      `,
+      [user.id, invite.organization_id],
+    )
+    const workspace = await this.getWorkspaceState(user)
+    return (
+      workspace.organizations.find((organization) => organization.id === invite.organization_id) ??
+      null
+    )
   }
 
   async createConversation(
