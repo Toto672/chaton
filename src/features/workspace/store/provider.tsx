@@ -706,6 +706,25 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       })
       return
     }
+
+    let account = stateRef.current.cloudAccount
+    if (!account || account.organizations.length === 0) {
+      const refreshed = await workspaceIpc.getCloudAccount()
+      if (refreshed.ok) {
+        account = refreshed.account
+        dispatch({ type: 'setCloudAccount', payload: { account: refreshed.account } })
+        dispatch({ type: 'setCloudAdminUsers', payload: { users: refreshed.users } })
+      }
+    }
+
+    if (!account || account.organizations.length === 0) {
+      dispatch({
+        type: 'setNotice',
+        payload: { notice: "Aucune organisation cloud disponible pour créer un projet." },
+      })
+      return
+    }
+
     setShowCloudProjectModal(true)
   }, [])
 

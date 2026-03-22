@@ -62,6 +62,7 @@ export function CreateCloudProjectModal({
     organizations.find((item) => item.id === organizationId) ?? null;
   const selectedInstance = instances[selectedInstanceIndex] ?? instances[0];
   const repositoryNeedsToken = authMode === "token";
+  const hasOrganizations = organizations.length > 0;
 
   const kindCards = useMemo(
     () => [
@@ -93,7 +94,9 @@ export function CreateCloudProjectModal({
 
   const canAdvanceFromStepOne = projectName.trim().length > 0;
   const canAdvanceFromStepTwo =
-    Boolean(organizationId.trim()) && Boolean(selectedInstance?.id);
+    hasOrganizations &&
+    Boolean(organizationId.trim()) &&
+    Boolean(selectedInstance?.id);
   const canSubmit =
     canAdvanceFromStepOne &&
     canAdvanceFromStepTwo &&
@@ -245,25 +248,38 @@ export function CreateCloudProjectModal({
                   <label htmlFor="organization-id" className="form-label">
                     {t("Organisation")}
                   </label>
-                  <select
-                    id="organization-id"
-                    className="form-select"
-                    value={organizationId}
-                    onChange={(e) => setOrganizationId(e.target.value)}
-                  >
-                    {organizations.map((organization) => (
-                      <option key={organization.id} value={organization.id}>
-                        {organization.name}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="form-hint">
-                    {selectedOrganization
-                      ? t("Slug org: {{slug}}", {
-                          slug: selectedOrganization.slug,
-                        })
-                      : t("Sélectionnez une organisation accessible")}
-                  </span>
+                  {hasOrganizations ? (
+                    <>
+                      <select
+                        id="organization-id"
+                        className="form-select"
+                        value={organizationId}
+                        onChange={(e) => setOrganizationId(e.target.value)}
+                      >
+                        {organizations.map((organization) => (
+                          <option key={organization.id} value={organization.id}>
+                            {organization.name}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="form-hint">
+                        {selectedOrganization
+                          ? t("Slug org: {{slug}}", {
+                              slug: selectedOrganization.slug,
+                            })
+                          : t("Sélectionnez une organisation accessible")}
+                      </span>
+                    </>
+                  ) : (
+                    <div className="cloud-project-ready-card">
+                      <strong>{t("Aucune organisation disponible")}</strong>
+                      <p>
+                        {t(
+                          "Le desktop n’a reçu aucune organisation cloud. Rafraîchissez votre session cloud puis réessayez.",
+                        )}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="cloud-project-summary-grid">
