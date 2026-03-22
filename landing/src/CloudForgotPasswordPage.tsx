@@ -45,15 +45,44 @@ export function CloudForgotPasswordPage({
           >
             <label className="cloud-field">
               <span>{copy.forgotPassword.email}</span>
-              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder={copy.forgotPassword.emailPlaceholder} type="email" autoComplete="email" />
+              <input 
+                id="forgot-email"
+                value={email} 
+                onChange={(event) => setEmail(event.target.value)} 
+                placeholder={copy.forgotPassword.emailPlaceholder} 
+                type="email" 
+                autoComplete="email"
+                aria-label={copy.forgotPassword.email}
+                aria-invalid={error ? "true" : "false"}
+                aria-describedby={error ? "forgot-error" : done ? "forgot-success" : undefined}
+              />
             </label>
-            {error ? <div className="cloud-inline-error">{error}</div> : null}
+            {error ? (
+              <div 
+                id="forgot-error" 
+                className="cloud-inline-error" 
+                role="alert" 
+                aria-live="polite"
+              >
+                {error}
+              </div>
+            ) : null}
             {done ? (
-              <div className="cloud-inline-success">
+              <div 
+                id="forgot-success"
+                className="cloud-inline-success"
+                role="status"
+                aria-live="polite"
+              >
                 {copy.forgotPassword.success}
               </div>
             ) : null}
-            <button className="cloud-primary-button" type="submit" disabled={pending}>
+            <button 
+              className="cloud-primary-button" 
+              type="submit" 
+              disabled={pending}
+              aria-busy={pending}
+            >
               {pending ? copy.forgotPassword.pending : copy.forgotPassword.submit}
             </button>
             <Link className="cloud-text-link" to={buildLocalizedPath(currentLanguage, "/cloud/login")}>

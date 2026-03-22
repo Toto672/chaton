@@ -47,24 +47,61 @@ export function CloudSignupPage({
           >
             <label className="cloud-field">
               <span>{copy.signup.fullName}</span>
-              <input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder={copy.signup.fullNamePlaceholder} autoComplete="name" />
+              <input 
+                id="signup-fullName"
+                value={fullName} 
+                onChange={(event) => setFullName(event.target.value)} 
+                placeholder={copy.signup.fullNamePlaceholder} 
+                autoComplete="name"
+                aria-label={copy.signup.fullName}
+                aria-invalid={error ? "true" : "false"}
+                aria-describedby={error ? "signup-error" : undefined}
+              />
             </label>
             <label className="cloud-field">
               <span>{copy.signup.email}</span>
-              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder={copy.signup.emailPlaceholder} type="email" autoComplete="email" />
+              <input 
+                id="signup-email"
+                value={email} 
+                onChange={(event) => setEmail(event.target.value)} 
+                placeholder={copy.signup.emailPlaceholder} 
+                type="email" 
+                autoComplete="email"
+                aria-label={copy.signup.email}
+                aria-invalid={error ? "true" : "false"}
+                aria-describedby={error ? "signup-error" : undefined}
+              />
             </label>
             <label className="cloud-field">
               <span>{copy.signup.password}</span>
               <input
+                id="signup-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder={copy.signup.passwordPlaceholder}
                 type="password"
                 autoComplete="new-password"
+                aria-label={copy.signup.password}
+                aria-invalid={error ? "true" : "false"}
+                aria-describedby={error ? "signup-error" : undefined}
               />
             </label>
-            {error ? <div className="cloud-inline-error">{error}</div> : null}
-            <button className="cloud-primary-button" type="submit" disabled={pending}>
+            {error ? (
+              <div 
+                id="signup-error" 
+                className="cloud-inline-error" 
+                role="alert" 
+                aria-live="polite"
+              >
+                {error}
+              </div>
+            ) : null}
+            <button 
+              className="cloud-primary-button" 
+              type="submit" 
+              disabled={pending}
+              aria-busy={pending}
+            >
               {pending ? copy.signup.pending : copy.signup.submit}
             </button>
           </form>

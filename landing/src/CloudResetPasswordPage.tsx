@@ -53,19 +53,58 @@ export function CloudResetPasswordPage({
           >
             <label className="cloud-field">
               <span>{copy.resetPassword.newPassword}</span>
-              <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder={copy.resetPassword.newPasswordPlaceholder} type="password" autoComplete="new-password" />
+              <input 
+                id="reset-password"
+                value={password} 
+                onChange={(event) => setPassword(event.target.value)} 
+                placeholder={copy.resetPassword.newPasswordPlaceholder} 
+                type="password" 
+                autoComplete="new-password"
+                aria-label={copy.resetPassword.newPassword}
+                aria-invalid={error ? "true" : "false"}
+                aria-describedby={error ? "reset-error" : done ? "reset-success" : undefined}
+              />
             </label>
             <label className="cloud-field">
               <span>{copy.resetPassword.confirmPassword}</span>
-              <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder={copy.resetPassword.confirmPasswordPlaceholder} type="password" autoComplete="new-password" />
+              <input 
+                id="reset-confirm-password"
+                value={confirmPassword} 
+                onChange={(event) => setConfirmPassword(event.target.value)} 
+                placeholder={copy.resetPassword.confirmPasswordPlaceholder} 
+                type="password" 
+                autoComplete="new-password"
+                aria-label={copy.resetPassword.confirmPassword}
+                aria-invalid={error ? "true" : "false"}
+                aria-describedby={error ? "reset-error" : done ? "reset-success" : undefined}
+              />
             </label>
-            {error ? <div className="cloud-inline-error">{error}</div> : null}
+            {error ? (
+              <div 
+                id="reset-error" 
+                className="cloud-inline-error" 
+                role="alert" 
+                aria-live="polite"
+              >
+                {error}
+              </div>
+            ) : null}
             {done ? (
-              <div className="cloud-inline-success">
+              <div 
+                id="reset-success"
+                className="cloud-inline-success"
+                role="status"
+                aria-live="polite"
+              >
                 {copy.resetPassword.success}
               </div>
             ) : null}
-            <button className="cloud-primary-button" type="submit" disabled={pending || done}>
+            <button 
+              className="cloud-primary-button" 
+              type="submit" 
+              disabled={pending || done}
+              aria-busy={pending}
+            >
               {pending ? copy.resetPassword.pending : copy.resetPassword.submit}
             </button>
             <Link className="cloud-text-link" to={buildLocalizedPath(currentLanguage, "/cloud/login")}>

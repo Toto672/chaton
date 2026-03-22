@@ -47,14 +47,48 @@ export function CloudLoginPage({
           >
             <label className="cloud-field">
               <span>{copy.login.email}</span>
-              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder={copy.login.emailPlaceholder} type="email" autoComplete="email username" />
+              <input 
+                id="login-email"
+                value={email} 
+                onChange={(event) => setEmail(event.target.value)} 
+                placeholder={copy.login.emailPlaceholder} 
+                type="email" 
+                autoComplete="email username"
+                aria-label={copy.login.email}
+                aria-invalid={error ? "true" : "false"}
+                aria-describedby={error ? "login-error" : undefined}
+              />
             </label>
             <label className="cloud-field">
               <span>{copy.login.password}</span>
-              <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder={copy.login.passwordPlaceholder} type="password" autoComplete="current-password" />
+              <input 
+                id="login-password"
+                value={password} 
+                onChange={(event) => setPassword(event.target.value)} 
+                placeholder={copy.login.passwordPlaceholder} 
+                type="password" 
+                autoComplete="current-password"
+                aria-label={copy.login.password}
+                aria-invalid={error ? "true" : "false"}
+                aria-describedby={error ? "login-error" : undefined}
+              />
             </label>
-            {error ? <div className="cloud-inline-error">{error}</div> : null}
-            <button className="cloud-primary-button" type="submit" disabled={pending}>
+            {error ? (
+              <div 
+                id="login-error" 
+                className="cloud-inline-error" 
+                role="alert" 
+                aria-live="polite"
+              >
+                {error}
+              </div>
+            ) : null}
+            <button 
+              className="cloud-primary-button" 
+              type="submit" 
+              disabled={pending}
+              aria-busy={pending}
+            >
               {pending ? copy.login.pending : copy.login.submit}
             </button>
             <Link className="cloud-text-link" to={buildLocalizedPath(currentLanguage, "/cloud/forgot-password")}>
