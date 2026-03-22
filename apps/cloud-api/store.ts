@@ -296,7 +296,6 @@ function getWorkspaceCapabilityForKind(kind: CloudProjectKind): CloudProjectReco
 
 function normalizeRepositoryConfig(
   input: CreateCloudProjectRequest['repository'],
-  fallbackRepoName: string,
 ): CloudRepositoryConfigRecord | null {
   if (!input) {
     return null
@@ -462,29 +461,6 @@ function createDefaultWorkspaceState(
   }
 }
 
-function cloneOrganizationRecord(organization: OrganizationRecord): OrganizationRecord {
-  return {
-    ...organization,
-    providers: [...(organization.providers ?? [])],
-  }
-}
-
-function resolveWorkspaceOrganization(
-  workspace: CloudWorkspaceState,
-  organizationId?: string | null,
-): OrganizationRecord | null {
-  const targetId =
-    organizationId?.trim() ||
-    workspace.activeOrganizationId ||
-    workspace.organizations[0]?.id ||
-    ''
-  const organization = workspace.organizations.find((item) => item.id === targetId) ?? null
-  if (organization && !workspace.activeOrganizationId) {
-    workspace.activeOrganizationId = organization.id
-  }
-  return organization
-}
-
 function cloneOrganizations(organizations: OrganizationRecord[]): OrganizationRecord[] {
   return organizations.map((organization) => ({
     ...organization,
@@ -493,7 +469,7 @@ function cloneOrganizations(organizations: OrganizationRecord[]): OrganizationRe
 }
 
 class MemoryCloudStore implements CloudStore {
-  mode: 'memory' = 'memory'
+  mode: 'memory' = 'memory' as const
   private readonly context: StoreContext
   private readonly usersById = new Map<string, CloudUserState>()
   private readonly usersByAccessToken = new Map<string, string>()
@@ -740,7 +716,7 @@ class MemoryCloudStore implements CloudStore {
     if (!organization) {
       throw new Error('Unknown organization')
     }
-    const repository = normalizeRepositoryConfig(input.repository, organization.name)
+    const repository = normalizeRepositoryConfig(input.repository)
     const project = toProjectRecord({
       id: `project-${crypto.randomUUID()}`,
       organizationId: organization.id,
@@ -962,7 +938,8 @@ class MemoryCloudStore implements CloudStore {
     return normalized
   }
 
-  async getActiveParallelSessions(_userId: string): Promise<number> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async getActiveParallelSessions(__userId: string): Promise<number> {
     return 0
   }
 
@@ -1147,7 +1124,7 @@ class MemoryCloudStore implements CloudStore {
 }
 
 class PostgresCloudStore implements CloudStore {
-  mode: 'postgres' = 'postgres'
+  mode: 'postgres' = 'postgres' as const
   private readonly context: StoreContext
   private readonly pool: Pool
   private initialized = false
@@ -2393,7 +2370,7 @@ class PostgresCloudStore implements CloudStore {
     if (!organization || input.organizationId.trim() !== organization.id) {
       throw new Error('Unknown organization')
     }
-    const repository = normalizeRepositoryConfig(input.repository, organization.name)
+    const repository = normalizeRepositoryConfig(input.repository)
     const project = toProjectRecord({
       id: `project-${crypto.randomUUID()}`,
       organizationId: organization.id,

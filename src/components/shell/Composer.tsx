@@ -956,7 +956,8 @@ export function Composer() {
     selectedConversation?.thinkingLevel,
     selectedRuntime?.state?.model,
     state.conversations,
-    // selectedModelKey and selectedThinking intentionally omitted to avoid infinite loops
+    selectedModelKey,
+    // selectedThinking intentionally omitted to avoid infinite loops
   ]);
 
   useEffect(() => {

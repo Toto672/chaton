@@ -49,7 +49,8 @@ const eventReplayByInstanceId = new Map<string, RealtimeServerEvent[]>()
 const eventSeqByInstanceId = new Map<string, number>()
 
 let redisPub: RedisClientType | null = null
-let redisSub: RedisClientType | null = null
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+let _redisSub: RedisClientType | null = null
 let redisReady = false
 
 function json(
@@ -180,7 +181,7 @@ async function ensureRedisClients(): Promise<void> {
   })
 
   redisPub = publisher
-  redisSub = subscriber
+  _redisSub = subscriber
   redisReady = true
 }
 
@@ -549,7 +550,7 @@ tokenReaper.unref?.()
 void ensureRedisClients().catch((error) => {
   console.warn('[cloud-realtime] Redis disabled, falling back to in-memory fan-out:', error)
   redisPub = null
-  redisSub = null
+  _redisSub = null
   redisReady = false
 })
 

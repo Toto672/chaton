@@ -62,14 +62,6 @@ type RuntimeAgentState = {
   worktreePath: string | null
 }
 
-type RuntimeCommandBody = {
-  type: string
-  message?: string
-  provider?: string
-  modelId?: string
-  level?: string
-}
-
 function ensureDir(dirPath: string): void {
   fs.mkdirSync(dirPath, { recursive: true })
 }

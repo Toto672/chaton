@@ -21,7 +21,6 @@ import type {
 } from '../../packages/protocol/index.js'
 import type {
   CloudRuntimeAccessGrant,
-  CloudSubscriptionPlan,
 } from '../../packages/domain/index.js'
 import {
   buildOrganizationInviteEmail,
@@ -46,7 +45,7 @@ import {
   filterVisiblePlans,
   verifyPkceChallenge,
 } from './context.ts'
-import { getAuthedWebUser, requireAdmin, requireAuthedUser, requireInternalService, requireSubscription } from './guards.ts'
+import { getAuthedWebUser, requireAuthedUser, requireInternalService, requireSubscription } from './guards.ts'
 import { escapeHtml, handleCorsPreflight, html, json, readFormBody, readJsonBody, redirect } from './http.ts'
 import { handleWebAuthRoute } from './web-auth.ts'
 import { handleAdminRoute } from './admin-routes.ts'

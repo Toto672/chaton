@@ -54,7 +54,7 @@ export type RuntimeStore = {
 }
 
 class MemoryRuntimeStore implements RuntimeStore {
-  mode: 'memory' = 'memory'
+  mode: 'memory' = 'memory' as const
   private readonly sessions = new Map<string, RuntimeSession>()
 
   async init(): Promise<void> {}
@@ -151,7 +151,7 @@ class MemoryRuntimeStore implements RuntimeStore {
 }
 
 class PostgresRuntimeStore implements RuntimeStore {
-  mode: 'postgres' = 'postgres'
+  mode: 'postgres' = 'postgres' as const
   private readonly pool: Pool
   private initialized = false
 

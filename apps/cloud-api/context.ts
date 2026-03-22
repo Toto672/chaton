@@ -1,11 +1,9 @@
 import crypto from 'node:crypto'
 import type {
   CloudBootstrapResponse,
-  CloudDesktopAuthExchangeResponse,
   CloudWebSessionResponse,
 } from '../../packages/protocol/index.js'
 import type {
-  CloudRuntimeAccessGrant,
   CloudSubscriptionGrantRecord,
   CloudSubscriptionRecord,
   CloudUsageRecord,
