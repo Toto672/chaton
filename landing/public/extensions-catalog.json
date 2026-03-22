@@ -103,7 +103,7 @@
       "id": "@thibautrey/chatons-channel-discord",
       "slug": "discord",
       "name": "Discord",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "description": "Discord bot bridge for Chatons. Connect your Discord bot to automatically sync messages from channels and DMs.",
       "category": "channel",
       "author": "Thibaut Rey",
@@ -127,7 +127,7 @@
       ],
       "repositoryUrl": null,
       "npmUrl": "https://www.npmjs.com/package/@thibautrey/chatons-channel-discord",
-      "iconUrl": "/extension-icons/@thibautrey-chatons-channel-discord.png"
+      "iconUrl": "/extension-icons/@thibautrey-chatons-channel-discord.svg"
     },
     {
       "id": "@thibautrey/chatons-channel-slack",
