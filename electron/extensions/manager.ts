@@ -422,6 +422,7 @@ const CHATONS_CATALOG_URL = 'https://marketplace.chatons.ai/api/extensions'
 type ResolvedCommand = {
   command: string
   argsPrefix?: string[]
+  env?: NodeJS.ProcessEnv
 }
 
 function resolveNodeCommand(): ResolvedCommand | null {
@@ -440,24 +441,36 @@ function resolveNodeCommand(): ResolvedCommand | null {
 }
 
 function resolveNpmCommand(): ResolvedCommand | null {
-  if (process.platform === 'win32') {
-    const nodeCommand = resolveNodeCommand()
+  const nodeCommand = resolveNodeCommand()
+  const npmCliCandidates = new Set<string>()
+
+  if (nodeCommand) {
+    const nodeDir = path.dirname(nodeCommand.command)
+    npmCliCandidates.add(path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'))
+    npmCliCandidates.add(path.join(nodeDir, '..', 'node_modules', 'npm', 'bin', 'npm-cli.js'))
+  }
+
+  const resourceRoots = [
+    process.resourcesPath,
+    path.join(process.resourcesPath, 'app.asar.unpacked'),
+    path.join(process.resourcesPath, 'app.asar'),
+  ]
+  for (const root of resourceRoots) {
+    npmCliCandidates.add(path.join(root, 'node_modules', 'npm', 'bin', 'npm-cli.js'))
+  }
+
+  for (const candidate of npmCliCandidates) {
+    if (!candidate || !fs.existsSync(candidate)) continue
     if (nodeCommand) {
-      const nodeDir = path.dirname(nodeCommand.command)
-      const npmCliCandidates = [
-        path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
-        path.join(nodeDir, '..', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
-      ]
-      for (const candidate of npmCliCandidates) {
-        if (fs.existsSync(candidate)) {
-          return {
-            command: nodeCommand.command,
-            argsPrefix: [...(nodeCommand.argsPrefix ?? []), candidate],
-          }
-        }
+      return {
+        command: nodeCommand.command,
+        argsPrefix: [...(nodeCommand.argsPrefix ?? []), candidate],
+        env: { ELECTRON_RUN_AS_NODE: '1' },
       }
     }
+  }
 
+  if (process.platform === 'win32') {
     if (isCommandAvailable('npm.cmd')) {
       return { command: 'npm.cmd' }
     }
@@ -477,7 +490,27 @@ function spawnResolvedCommand(
   args: string[],
   options: Parameters<typeof spawn>[2],
 ) {
-  return spawn(resolved.command, [...(resolved.argsPrefix ?? []), ...args], options)
+  return spawn(resolved.command, [...(resolved.argsPrefix ?? []), ...args], {
+    ...options,
+    env: { ...process.env, ...(resolved.env ?? {}), ...(options?.env ?? {}) },
+  })
+}
+
+function spawnSyncResolvedCommand(
+  resolved: ResolvedCommand,
+  args: string[],
+  options: Parameters<typeof spawnSync>[2],
+) {
+  return spawnSync(resolved.command, [...(resolved.argsPrefix ?? []), ...args], {
+    ...options,
+    env: { ...process.env, ...(resolved.env ?? {}), ...(options?.env ?? {}) },
+  })
+}
+
+function syncOutputToString(value: string | Buffer | null | undefined): string {
+  if (typeof value === 'string') return value
+  if (Buffer.isBuffer(value)) return value.toString('utf8')
+  return ''
 }
 
 /**
@@ -508,13 +541,14 @@ function checkNpmLoginStatus(): { loggedIn: boolean; username?: string; npmAvail
       return { loggedIn: false, npmAvailable: false }
     }
     
-    const result = spawnSync(npm.command, [...(npm.argsPrefix ?? []), 'whoami'], {
+    const result = spawnSyncResolvedCommand(npm, ['whoami'], {
       encoding: 'utf8',
       timeout: 10_000,
       maxBuffer: 1 * 1024 * 1024,
     })
-    if (result.status === 0 && result.stdout?.trim()) {
-      return { loggedIn: true, username: result.stdout.trim(), npmAvailable: true }
+    const stdout = syncOutputToString(result.stdout)
+    if (result.status === 0 && stdout.trim()) {
+      return { loggedIn: true, username: stdout.trim(), npmAvailable: true }
     }
     return { loggedIn: false, npmAvailable: true }
   } catch (error) {
@@ -725,12 +759,12 @@ async function fetchChatonsCatalog(): Promise<ChatonsExtensionCatalogEntry[]> {
  */
 function refreshCatalogSync(): NpmCatalogCache {
   try {
-    // Check if node is available (we use node to fetch the catalog)
-    if (!isCommandAvailable('node')) {
+    const node = resolveNodeCommand()
+    if (!node) {
       throw new Error('node command not found. Node.js must be installed.')
     }
 
-    const result = spawnSync('node', ['-e', `
+    const result = spawnSyncResolvedCommand(node, ['-e', `
       fetch('${CHATONS_CATALOG_URL}')
         .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
         .then(d => process.stdout.write(JSON.stringify(d)))
@@ -741,11 +775,14 @@ function refreshCatalogSync(): NpmCatalogCache {
       maxBuffer: 2 * 1024 * 1024,
     })
 
+    const stdout = syncOutputToString(result.stdout)
+    const stderr = syncOutputToString(result.stderr)
+
     if (result.status !== 0) {
-      throw new Error(result.stderr?.trim() || 'Failed to fetch catalog from chatons.ai')
+      throw new Error(stderr.trim() || 'Failed to fetch catalog from chatons.ai')
     }
 
-    const data = JSON.parse(result.stdout) as Record<string, unknown>
+    const data = JSON.parse(stdout) as Record<string, unknown>
     const entries: ChatonsExtensionCatalogEntry[] = []
 
     for (const category of ['builtin', 'channel', 'tool'] as const) {
