@@ -132,6 +132,8 @@ export type CloudAdminUpdatePlanRequest = {
   label?: string
   parallelSessionsLimit?: number
   isDefault?: boolean
+  /** When true, this plan is hidden from the client UI */
+  isHidden?: boolean
 }
 
 export type CloudWebSessionResponse = {

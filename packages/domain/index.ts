@@ -13,6 +13,8 @@ export type CloudSubscriptionRecord = {
   label: string
   parallelSessionsLimit: number
   isDefault?: boolean
+  /** When true, this plan is hidden from the client UI (but still usable by admins) */
+  isHidden?: boolean
 }
 
 export type CloudSubscriptionGrantRecord = {

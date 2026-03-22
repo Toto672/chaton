@@ -362,6 +362,7 @@ function clonePlan(plan: CloudSubscriptionRecord): CloudSubscriptionRecord {
     label: plan.label,
     parallelSessionsLimit: plan.parallelSessionsLimit,
     isDefault: plan.isDefault === true,
+    isHidden: plan.isHidden === true,
   }
 }
 

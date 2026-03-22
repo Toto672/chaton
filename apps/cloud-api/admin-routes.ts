@@ -68,6 +68,7 @@ export async function handleAdminRoute(
           ? Math.max(0, Math.floor(body.parallelSessionsLimit))
           : target.parallelSessionsLimit,
       isDefault: body.isDefault === true ? true : target.isDefault === true,
+      isHidden: body.isHidden === true ? true : target.isHidden === true,
     }
     await store.savePlan(next)
 

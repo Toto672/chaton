@@ -42,6 +42,7 @@ import {
   signingPublicJwk,
   store,
   toCloudUserRecord,
+  filterVisiblePlans,
   verifyPkceChallenge,
 } from './context.ts'
 import { requireAdmin, requireAuthedUser, requireInternalService, requireSubscription } from './guards.ts'
@@ -386,7 +387,7 @@ async function handleRequest(
     const payload: CloudAccountResponse = {
       user: toCloudUserRecord(auth.user, plans),
       usage: await buildUsage(auth.user),
-      plans,
+      plans: filterVisiblePlans(plans),
     }
     json(request, response, 200, payload)
     return

@@ -26,6 +26,11 @@ export const store: CloudStore = createCloudStore({
   publicBaseUrl,
 })
 
+/** Filter out hidden plans (used for client-facing responses) */
+export function filterVisiblePlans(plans: CloudSubscriptionRecord[]): CloudSubscriptionRecord[] {
+  return plans.filter((plan) => !plan.isHidden)
+}
+
 export function createPrivateSigningKey(secret: string): crypto.KeyObject {
   const privateKeyPem = [
     '-----BEGIN PRIVATE KEY-----',
