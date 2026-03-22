@@ -25,20 +25,90 @@ function normalizePathInsideExtension(root: string, raw: string | undefined) {
   return candidate
 }
 
-function resolveServerCommand(command: string, env: Record<string, string>) {
-  const trimmed = String(command || '').trim()
-  const lower = trimmed.toLowerCase()
-  if (lower === 'node' || lower === 'node.exe') {
-    const execPath = process.execPath
-    if (execPath && fs.existsSync(execPath)) {
+function resolveNodeCommand(env: Record<string, string>) {
+  const execPath = process.execPath
+  if (execPath && fs.existsSync(execPath)) {
+    if (process.versions.electron) {
       return {
         command: execPath,
+        argsPrefix: [] as string[],
         env: {
           ...env,
           ELECTRON_RUN_AS_NODE: '1',
         },
       }
     }
+    return { command: execPath, argsPrefix: [] as string[], env }
+  }
+  return null
+}
+
+function resolvePackageManagerCommand(
+  command: string,
+  env: Record<string, string>,
+): { command: string; argsPrefix?: string[]; env: Record<string, string> } | null {
+  const trimmed = String(command || '').trim()
+  const lower = trimmed.toLowerCase()
+  if (!lower) return null
+
+  const node = resolveNodeCommand(env)
+  if (!node) return null
+
+  const packageManagerCliByName = new Map<string, string[]>([
+    ['npm', ['npm', 'bin', 'npm-cli.js']],
+    ['pnpm', ['pnpm', 'bin', 'pnpm.cjs']],
+    ['yarn', ['yarn', 'bin', 'yarn.js']],
+  ])
+  const cliRelativePath = packageManagerCliByName.get(lower)
+  if (!cliRelativePath) return null
+
+  const resourceRoots = [
+    process.resourcesPath,
+    path.join(process.resourcesPath, 'app.asar.unpacked'),
+    path.join(process.resourcesPath, 'app.asar'),
+  ]
+
+  for (const root of resourceRoots) {
+    const candidate = path.join(root, 'node_modules', ...cliRelativePath)
+    if (!fs.existsSync(candidate)) continue
+    return {
+      command: node.command,
+      argsPrefix: [...(node.argsPrefix ?? []), candidate],
+      env: node.env,
+    }
+  }
+
+  const nodeDir = path.dirname(node.command)
+  const nodeCandidates = [
+    path.join(nodeDir, 'node_modules', ...cliRelativePath),
+    path.join(nodeDir, '..', 'node_modules', ...cliRelativePath),
+  ]
+  for (const candidate of nodeCandidates) {
+    if (!fs.existsSync(candidate)) continue
+    return {
+      command: node.command,
+      argsPrefix: [...(node.argsPrefix ?? []), candidate],
+      env: node.env,
+    }
+  }
+
+  return null
+}
+
+function resolveServerCommand(command: string, env: Record<string, string>) {
+  const trimmed = String(command || '').trim()
+  const lower = trimmed.toLowerCase()
+  if (lower === 'node' || lower === 'node.exe') {
+    return resolveNodeCommand(env) ?? { command: trimmed, env }
+  }
+  if (lower === 'npm' || lower === 'npm.cmd' || lower === 'npm.exe') {
+    return resolvePackageManagerCommand('npm', env) ?? { command: trimmed, env }
+  }
+  if (lower === 'pnpm' || lower === 'pnpm.cmd' || lower === 'pnpm.exe') {
+    return resolvePackageManagerCommand('pnpm', env) ?? { command: trimmed, env }
+  }
+  if (lower === 'yarn' || lower === 'yarn.cmd' || lower === 'yarn.exe') {
+    return resolvePackageManagerCommand('yarn', env) ?? { command: trimmed, env }
   }
   return { command: trimmed, env }
 }
@@ -104,7 +174,7 @@ export async function ensureExtensionServerStarted(extensionId: string) {
   const resolved = resolveServerCommand(start.command, env)
 
   const args = Array.isArray(start.args) ? start.args : []
-  const child = spawn(resolved.command, args, {
+  const child = spawn(resolved.command, [...(resolved.argsPrefix ?? []), ...args], {
     cwd,
     env: resolved.env,
     stdio: ['ignore', 'pipe', 'pipe'],

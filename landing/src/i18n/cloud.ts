@@ -124,9 +124,8 @@ type CloudCopy = {
     forgotPassword: string;
   };
   onboarding: {
-    organizationEyebrow: string;
-    organizationTitle: string;
-    organizationSubtitle: string;
+    setupTitle: string;
+    setupSubtitle: string;
     summaryEyebrow: string;
     summaryTitle: string;
     summaryBody: string;
@@ -136,27 +135,53 @@ type CloudCopy = {
     organizationStatus: string;
     providersStatus: string;
     desktopStatus: string;
-    organizationName: string;
-    organizationSlug: string;
-    organizationNamePlaceholder: string;
-    organizationSlugPlaceholder: string;
-    saveOrganization: string;
-    savingOrganization: string;
-    providersEyebrow: string;
-    providersTitle: string;
-    providersSubtitle: string;
-    provider: string;
-    secret: string;
-    secretPlaceholder: string;
-    addProvider: string;
-    addingProvider: string;
-    noProvider: string;
-    secretPrefix: string;
-    desktopEyebrow: string;
-    desktopTitle: string;
-    desktopSubtitle: string;
-    openDesktop: string;
-    backToPortal: string;
+    steps: {
+      organization: {
+        eyebrow: string;
+        title: string;
+        subtitle: string;
+        activeOrganization: string;
+        nameLabel: string;
+        namePlaceholder: string;
+        urlLabel: string;
+        urlPlaceholder: string;
+        urlPreview: string;
+        planLabel: string;
+        save: string;
+        saving: string;
+      };
+      provider: {
+        eyebrow: string;
+        title: string;
+        subtitle: string;
+        providerLabel: string;
+        secretLabel: string;
+        secretPlaceholder: string;
+        add: string;
+        adding: string;
+        noProvider: string;
+        secretPrefix: string;
+        connectedProviders: string;
+      };
+      desktop: {
+        eyebrow: string;
+        title: string;
+        subtitle: string;
+        infoTitle: string;
+        step1: string;
+        step2: string;
+        step3: string;
+        openDesktop: string;
+        backToPortal: string;
+        prereqOrganization: string;
+        prereqProvider: string;
+      };
+    };
+    completion: {
+      title: string;
+      body: string;
+      cta: string;
+    };
     plans: [
       { label: string; detail: string },
       { label: string; detail: string },
@@ -381,10 +406,8 @@ const en: CloudCopy = {
     forgotPassword: "Forgot your password?",
   },
   onboarding: {
-    organizationEyebrow: "Organization setup",
-    organizationTitle: "Create your shared cloud workspace",
-    organizationSubtitle:
-      "Projects, permissions, runtime quotas, providers and secrets live at the organization level.",
+    setupTitle: "Launch your cloud workspace",
+    setupSubtitle: "Three steps to get your team up and running with Chatons Cloud.",
     summaryEyebrow: "Setup progress",
     summaryTitle: "Launch your workspace in three steps",
     summaryBody:
@@ -399,29 +422,53 @@ const en: CloudCopy = {
     organizationStatus: "Organization",
     providersStatus: "Providers",
     desktopStatus: "Desktop app",
-    organizationName: "Organization name",
-    organizationSlug: "Slug",
-    organizationNamePlaceholder: "Acme Labs",
-    organizationSlugPlaceholder: "acme-labs",
-    saveOrganization: "Save organization",
-    savingOrganization: "Saving organization...",
-    providersEyebrow: "Providers",
-    providersTitle: "Add organization-owned providers",
-    providersSubtitle:
-      "These credentials stay in the cloud. Desktop Chatons connects to the org, not directly to the provider, for cloud projects.",
-    provider: "Provider",
-    secret: "Secret or token",
-    secretPlaceholder: "sk-live-...",
-    addProvider: "Add provider",
-    addingProvider: "Adding provider...",
-    noProvider: "No provider configured yet.",
-    secretPrefix: "Secret prefix:",
-    desktopEyebrow: "Desktop connection",
-    desktopTitle: "Connect your desktop app",
-    desktopSubtitle:
-      "Once your org and provider are ready, the desktop app can attach through the browser and preserve the cloud session locally.",
-    openDesktop: "Open in desktop Chatons",
-    backToPortal: "Back to cloud portal",
+    steps: {
+      organization: {
+        eyebrow: "Step 1",
+        title: "Create your organization",
+        subtitle: "Your team workspace lives here — projects, permissions, and billing.",
+        activeOrganization: "Active organization",
+        nameLabel: "Organization name",
+        namePlaceholder: "Acme Labs",
+        urlLabel: "Workspace URL",
+        urlPlaceholder: "acme-labs",
+        urlPreview: "Your workspace will be at",
+        planLabel: "Choose your plan",
+        save: "Save organization",
+        saving: "Saving organization...",
+      },
+      provider: {
+        eyebrow: "Step 2",
+        title: "Connect an AI provider",
+        subtitle: "Add your API credentials once — your whole team uses them.",
+        providerLabel: "Provider",
+        secretLabel: "API key or token",
+        secretPlaceholder: "sk-live-...",
+        add: "Add provider",
+        adding: "Adding provider...",
+        noProvider: "No providers configured yet.",
+        secretPrefix: "Secret prefix:",
+        connectedProviders: "Connected providers",
+      },
+      desktop: {
+        eyebrow: "Step 3",
+        title: "Connect the desktop app",
+        subtitle: "Link Chatons Desktop to your cloud workspace.",
+        infoTitle: "How to connect:",
+        step1: "Open the button below in Chatons Desktop",
+        step2: "Confirm the connection in the app",
+        step3: "Your desktop is now linked to the cloud",
+        openDesktop: "Open in Chatons Desktop",
+        backToPortal: "Back to cloud portal",
+        prereqOrganization: "Set up your organization first",
+        prereqProvider: "Add at least one provider first",
+      },
+    },
+    completion: {
+      title: "Your workspace is ready!",
+      body: "Open Chatons Desktop to start collaborating with your team.",
+      cta: "Launch Chatons Desktop",
+    },
     plans: [
       { label: "Plus", detail: "Great for a small shared workspace" },
       { label: "Pro", detail: "For active teams with multiple live sessions" },
@@ -550,40 +597,58 @@ const cloudCopies: Partial<Record<LanguageCode, CloudCopy>> = {
     },
     onboarding: {
       ...en.onboarding,
-      organizationEyebrow: "Configuration de l'organisation",
-      organizationTitle: "Créez votre espace cloud partagé",
-      organizationSubtitle:
-        "Projets, permissions, quotas runtime, fournisseurs et secrets sont gérés au niveau de l'organisation.",
-      organizationName: "Nom de l'organisation",
-      saveOrganization: "Enregistrer l'organisation",
-      savingOrganization: "Enregistrement...",
-      providersEyebrow: "Fournisseurs",
-      providersTitle: "Ajouter des fournisseurs au niveau de l'organisation",
-      providersSubtitle:
-        "Ces identifiants restent dans le cloud. Pour les projets cloud, Chatons Desktop se connecte à l'organisation, pas directement au fournisseur.",
-      secret: "Secret ou jeton",
-      addProvider: "Ajouter le fournisseur",
-      addingProvider: "Ajout en cours...",
-      noProvider: "Aucun fournisseur configuré pour le moment.",
-      secretPrefix: "Préfixe du secret :",
-      desktopEyebrow: "Connexion desktop",
-      desktopTitle: "Connecter l'application desktop",
-      desktopSubtitle:
-        "Une fois l'organisation et le fournisseur prêts, l'application desktop peut se lier via le navigateur et conserver la session cloud localement.",
-      openDesktop: "Ouvrir dans Chatons Desktop",
-      backToPortal: "Retour au portail cloud",
-      plans: [
-        { label: "Plus", detail: "Parfait pour un petit espace partagé" },
-        {
-          label: "Pro",
-          detail: "Pour une équipe active avec plusieurs sessions en parallèle",
+      setupTitle: "Lancez votre espace cloud",
+      setupSubtitle: "Trois étapes pour démarrer avec Chatons Cloud.",
+      steps: {
+        organization: {
+          ...en.onboarding.steps.organization,
+          eyebrow: "Étape 1",
+          title: "Créez votre organisation",
+          subtitle: "L'espace de travail de votre équipe — projets, permissions et facturation.",
+          activeOrganization: "Organisation active",
+          nameLabel: "Nom de l'organisation",
+          namePlaceholder: "Acme Labs",
+          urlLabel: "URL de l'espace",
+          urlPlaceholder: "acme-labs",
+          urlPreview: "Votre espace sera à",
+          planLabel: "Choisissez votre plan",
+          save: "Enregistrer l'organisation",
+          saving: "Enregistrement...",
         },
-        {
-          label: "Max",
-          detail:
-            "Pour des organisations plus larges et davantage de concurrence runtime",
+        provider: {
+          ...en.onboarding.steps.provider,
+          eyebrow: "Étape 2",
+          title: "Connectez un fournisseur IA",
+          subtitle: "Ajoutez vos identifiants une fois — toute votre équipe les utilise.",
+          providerLabel: "Fournisseur",
+          secretLabel: "Clé API ou jeton",
+          secretPlaceholder: "sk-live-...",
+          add: "Ajouter le fournisseur",
+          adding: "Ajout en cours...",
+          noProvider: "Aucun fournisseur configuré pour le moment.",
+          secretPrefix: "Préfixe du secret :",
+          connectedProviders: "Fournisseurs connectés",
         },
-      ],
+        desktop: {
+          ...en.onboarding.steps.desktop,
+          eyebrow: "Étape 3",
+          title: "Connectez l'application desktop",
+          subtitle: "Liez Chatons Desktop à votre espace cloud.",
+          infoTitle: "Comment connecter :",
+          step1: "Ouvrez le bouton ci-dessous dans Chatons Desktop",
+          step2: "Confirmez la connexion dans l'application",
+          step3: "Votre desktop est maintenant lié au cloud",
+          openDesktop: "Ouvrir dans Chatons Desktop",
+          backToPortal: "Retour au portail cloud",
+          prereqOrganization: "Configurez d'abord votre organisation",
+          prereqProvider: "Ajoutez d'abord au moins un fournisseur",
+        },
+      },
+      completion: {
+        title: "Votre espace est prêt !",
+        body: "Ouvrez Chatons Desktop pour commencer à collaborer avec votre équipe.",
+        cta: "Lancer Chatons Desktop",
+      },
     },
     forgotPassword: {
       ...en.forgotPassword,
@@ -705,38 +770,58 @@ const cloudCopies: Partial<Record<LanguageCode, CloudCopy>> = {
     },
     onboarding: {
       ...en.onboarding,
-      organizationEyebrow: "Configuración de la organización",
-      organizationTitle: "Crea tu workspace cloud compartido",
-      organizationSubtitle:
-        "Proyectos, permisos, cuotas de runtime, proveedores y secretos viven a nivel de organización.",
-      organizationName: "Nombre de la organización",
-      saveOrganization: "Guardar organización",
-      savingOrganization: "Guardando organización...",
-      providersTitle: "Añade proveedores gestionados por la organización",
-      providersSubtitle:
-        "Estas credenciales se quedan en la nube. Para proyectos cloud, Chatons Desktop se conecta a la organización, no directamente al proveedor.",
-      secret: "Secreto o token",
-      addProvider: "Añadir proveedor",
-      addingProvider: "Añadiendo proveedor...",
-      noProvider: "Todavía no hay ningún proveedor configurado.",
-      secretPrefix: "Prefijo del secreto:",
-      desktopEyebrow: "Conexión con desktop",
-      desktopTitle: "Conecta tu app de escritorio",
-      desktopSubtitle:
-        "Cuando la organización y el proveedor estén listos, la app de escritorio podrá enlazarse desde el navegador y conservar la sesión cloud localmente.",
-      openDesktop: "Abrir en Chatons Desktop",
-      backToPortal: "Volver al portal cloud",
-      plans: [
-        { label: "Plus", detail: "Ideal para un espacio compartido pequeño" },
-        {
-          label: "Pro",
-          detail: "Para equipos activos con varias sesiones en vivo",
+      setupTitle: "Lanza tu espacio cloud",
+      setupSubtitle: "Tres pasos para comenzar con Chatons Cloud.",
+      steps: {
+        organization: {
+          ...en.onboarding.steps.organization,
+          eyebrow: "Paso 1",
+          title: "Crea tu organización",
+          subtitle: "El espacio de trabajo de tu equipo — proyectos, permisos y facturación.",
+          activeOrganization: "Organización activa",
+          nameLabel: "Nombre de la organización",
+          namePlaceholder: "Acme Labs",
+          urlLabel: "URL del espacio",
+          urlPlaceholder: "acme-labs",
+          urlPreview: "Tu espacio estará en",
+          planLabel: "Elige tu plan",
+          save: "Guardar organización",
+          saving: "Guardando...",
         },
-        {
-          label: "Max",
-          detail: "Para organizaciones mayores y más concurrencia de runtime",
+        provider: {
+          ...en.onboarding.steps.provider,
+          eyebrow: "Paso 2",
+          title: "Conecta un proveedor IA",
+          subtitle: "Añade tus credenciales una vez — todo tu equipo las usa.",
+          providerLabel: "Proveedor",
+          secretLabel: "Clave API o token",
+          secretPlaceholder: "sk-live-...",
+          add: "Añadir proveedor",
+          adding: "Añadiendo...",
+          noProvider: "Todavía no hay ningún proveedor configurado.",
+          secretPrefix: "Prefijo del secreto:",
+          connectedProviders: "Proveedores conectados",
         },
-      ],
+        desktop: {
+          ...en.onboarding.steps.desktop,
+          eyebrow: "Paso 3",
+          title: "Conecta la app de escritorio",
+          subtitle: "Enlaza Chatons Desktop con tu espacio cloud.",
+          infoTitle: "Cómo conectar:",
+          step1: "Abre el botón de abajo en Chatons Desktop",
+          step2: "Confirma la conexión en la aplicación",
+          step3: "Tu desktop ya está enlazado al cloud",
+          openDesktop: "Abrir en Chatons Desktop",
+          backToPortal: "Volver al portal cloud",
+          prereqOrganization: "Primero configura tu organización",
+          prereqProvider: "Primero añade al menos un proveedor",
+        },
+      },
+      completion: {
+        title: "¡Tu espacio está listo!",
+        body: "Abre Chatons Desktop para empezar a colaborar con tu equipo.",
+        cta: "Abrir Chatons Desktop",
+      },
     },
     forgotPassword: {
       ...en.forgotPassword,
@@ -858,38 +943,58 @@ const cloudCopies: Partial<Record<LanguageCode, CloudCopy>> = {
     },
     onboarding: {
       ...en.onboarding,
-      organizationEyebrow: "Organisation einrichten",
-      organizationTitle: "Euren geteilten Cloud-Workspace erstellen",
-      organizationSubtitle:
-        "Projekte, Rechte, Runtime-Quoten, Anbieter und Secrets werden auf Organisationsebene verwaltet.",
-      organizationName: "Name der Organisation",
-      saveOrganization: "Organisation speichern",
-      savingOrganization: "Organisation wird gespeichert...",
-      providersTitle: "Anbieter für die Organisation hinzufügen",
-      providersSubtitle:
-        "Diese Zugangsdaten bleiben in der Cloud. Für Cloud-Projekte verbindet sich Chatons Desktop mit der Organisation, nicht direkt mit dem Anbieter.",
-      secret: "Secret oder Token",
-      addProvider: "Anbieter hinzufügen",
-      addingProvider: "Anbieter wird hinzugefügt...",
-      noProvider: "Noch kein Anbieter eingerichtet.",
-      secretPrefix: "Secret-Präfix:",
-      desktopEyebrow: "Desktop-Verbindung",
-      desktopTitle: "Desktop-App verbinden",
-      desktopSubtitle:
-        "Sobald Organisation und Anbieter bereit sind, kann sich die Desktop-App über den Browser anbinden und die Cloud-Sitzung lokal behalten.",
-      openDesktop: "In Chatons Desktop öffnen",
-      backToPortal: "Zurück zum Cloud-Portal",
-      plans: [
-        { label: "Plus", detail: "Gut für einen kleinen geteilten Workspace" },
-        {
-          label: "Pro",
-          detail: "Für aktive Teams mit mehreren laufenden Sessions",
+      setupTitle: "Startet euren Cloud-Workspace",
+      setupSubtitle: "Drei Schritte, um mit Chatons Cloud zu starten.",
+      steps: {
+        organization: {
+          ...en.onboarding.steps.organization,
+          eyebrow: "Schritt 1",
+          title: "Erstellt eure Organisation",
+          subtitle: "Der Arbeitsbereich eures Teams — Projekte, Rechte und Abrechnung.",
+          activeOrganization: "Aktive Organisation",
+          nameLabel: "Name der Organisation",
+          namePlaceholder: "Acme Labs",
+          urlLabel: "Workspace-URL",
+          urlPlaceholder: "acme-labs",
+          urlPreview: "Euer Workspace wird unter",
+          planLabel: "Wählt euren Plan",
+          save: "Organisation speichern",
+          saving: "Wird gespeichert...",
         },
-        {
-          label: "Max",
-          detail: "Für größere Organisationen und mehr Runtime-Konkurrenz",
+        provider: {
+          ...en.onboarding.steps.provider,
+          eyebrow: "Schritt 2",
+          title: "KI-Anbieter verbinden",
+          subtitle: "Fügt eure Zugangsdaten einmal hinzu — euer ganzes Team nutzt sie.",
+          providerLabel: "Anbieter",
+          secretLabel: "API-Schlüssel oder Token",
+          secretPlaceholder: "sk-live-...",
+          add: "Anbieter hinzufügen",
+          adding: "Wird hinzugefügt...",
+          noProvider: "Noch kein Anbieter eingerichtet.",
+          secretPrefix: "Secret-Präfix:",
+          connectedProviders: "Verbundene Anbieter",
         },
-      ],
+        desktop: {
+          ...en.onboarding.steps.desktop,
+          eyebrow: "Schritt 3",
+          title: "Desktop-App verbinden",
+          subtitle: "Verbindet Chatons Desktop mit eurem Cloud-Workspace.",
+          infoTitle: "So verbindet ihr:",
+          step1: "Öffnet den Button unten in Chatons Desktop",
+          step2: "Bestätigt die Verbindung in der App",
+          step3: "Euer Desktop ist jetzt mit der Cloud verbunden",
+          openDesktop: "In Chatons Desktop öffnen",
+          backToPortal: "Zurück zum Cloud-Portal",
+          prereqOrganization: "Richtet zuerst eure Organisation ein",
+          prereqProvider: "Fügt zuerst mindestens einen Anbieter hinzu",
+        },
+      },
+      completion: {
+        title: "Euer Workspace ist bereit!",
+        body: "Öffnet Chatons Desktop, um mit eurem Team zu kollaborieren.",
+        cta: "Chatons Desktop öffnen",
+      },
     },
     forgotPassword: {
       ...en.forgotPassword,
