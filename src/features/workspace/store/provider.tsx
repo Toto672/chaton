@@ -563,8 +563,20 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     })
   }, [])
 
+  const openCloudLogin = useCallback(async () => {
+    await workspaceIpc.openExternal('https://cloud.chatons.ai/login')
+  }, [])
+
+  const openCloudSignup = useCallback(async () => {
+    await workspaceIpc.openExternal('https://cloud.chatons.ai/signup')
+  }, [])
+
   const openCloudSettings = useCallback(() => {
     dispatch({ type: 'setSidebarMode', payload: { mode: 'settings' } })
+  }, [])
+
+  const openSettingsToCloud = useCallback(() => {
+    dispatch({ type: 'setSidebarMode', payload: { mode: 'settings', settingsSection: 'cloud' } })
   }, [])
 
   const refreshCloudAccount = useCallback(async () => {
@@ -576,6 +588,23 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     }
     dispatch({ type: 'setCloudAccount', payload: { account: result.account } })
     dispatch({ type: 'setCloudAdminUsers', payload: { users: result.users } })
+  }, [])
+
+  const logoutCloud = useCallback(async () => {
+    const result = await workspaceIpc.logoutCloud()
+    if (!result.ok) {
+      dispatch({
+        type: 'setNotice',
+        payload: { notice: 'Impossible de se déconnecter du cloud.' },
+      })
+      return
+    }
+    dispatch({ type: 'setCloudAccount', payload: { account: null } })
+    dispatch({ type: 'setCloudAdminUsers', payload: { users: [] } })
+    dispatch({
+      type: 'setNotice',
+      payload: { notice: 'Déconnexion réussie.' },
+    })
   }, [])
 
   const updateCloudUser = useCallback(async (
@@ -1510,6 +1539,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       openExtensions: () => dispatch({ type: 'setSidebarMode', payload: { mode: 'extensions' } }),
       openChannels: () => dispatch({ type: 'setSidebarMode', payload: { mode: 'channels' } }),
       openCloudSettings,
+      openSettingsToCloud,
       closeSettings: () => dispatch({ type: 'setSidebarMode', payload: { mode: 'default' } }),
       selectProject: async (projectId: string) => {
         dispatch({ type: 'selectProject', payload: { projectId } })
@@ -1528,7 +1558,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       toggleProjectCollapsed,
       importProject,
       connectCloudInstance,
+      openCloudLogin,
+      openCloudSignup,
       refreshCloudAccount,
+      logoutCloud,
       updateCloudUser,
       grantCloudSubscription,
       updateCloudPlan,
@@ -1602,6 +1635,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       updateCloudPlan,
       createCloudProject,
       openCloudSettings,
+      openSettingsToCloud,
       isLoading,
       persistSettings,
       respondExtensionUi,

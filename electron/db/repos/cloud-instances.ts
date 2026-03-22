@@ -145,3 +145,26 @@ export function saveCloudInstanceSession(
     )
   return result.changes > 0
 }
+
+export function clearCloudInstanceSession(
+  db: Database.Database,
+  id: string,
+): boolean {
+  const now = new Date().toISOString()
+  const result = db
+    .prepare(
+      `UPDATE cloud_instances
+       SET
+         user_email = NULL,
+         access_token = NULL,
+         refresh_token = NULL,
+         token_expires_at = NULL,
+         oauth_state = NULL,
+         connection_status = 'disconnected',
+         last_error = NULL,
+         updated_at = ?
+       WHERE id = ?`,
+    )
+    .run(now, id)
+  return result.changes > 0
+}

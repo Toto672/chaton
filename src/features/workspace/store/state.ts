@@ -16,6 +16,7 @@ import type {
   PiConversationRuntime,
   ThreadActionSuggestion,
 } from '../rpc'
+import type { SettingsSection } from '@/components/sidebar/settings/sections/constants'
 
 export type Action =
   | {
@@ -39,7 +40,7 @@ export type Action =
   | { type: 'setExtensionUpdatesCount'; payload: { count: number } }
   | { type: 'setCloudAccount'; payload: { account: CloudAccount | null } }
   | { type: 'setCloudAdminUsers'; payload: { users: CloudAccountUser[] } }
-  | { type: 'setSidebarMode'; payload: { mode: 'default' | 'settings' | 'skills' | 'extensions' | 'channels' | 'extension-main-view'; activeExtensionViewId?: string | null; deeplinkExtensionId?: string | null } }
+  | { type: 'setSidebarMode'; payload: { mode: 'default' | 'settings' | 'skills' | 'extensions' | 'channels' | 'extension-main-view'; activeExtensionViewId?: string | null; deeplinkExtensionId?: string | null; settingsSection?: SettingsSection } }
   | { type: 'setAppMode'; payload: { mode: AppMode } }
   | { type: 'setAssistantView'; payload: { view: AssistantView } }
   | { type: 'setAssistantExtensionView'; payload: { viewId: string | null } }
@@ -146,6 +147,7 @@ export const initialState: WorkspaceState = {
   settings: defaultSettings,
   notice: null,
   extensionUpdatesCount: 0,
+  pendingSettingsSection: null,
 }
 
 import type { PiStoreState } from './pi-store'
@@ -390,6 +392,10 @@ export function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         deeplinkExtensionId:
           action.payload.mode === 'extensions'
             ? (action.payload.deeplinkExtensionId ?? null)
+            : null,
+        pendingSettingsSection:
+          action.payload.mode === 'settings' && action.payload.settingsSection
+            ? action.payload.settingsSection
             : null,
       }
     }

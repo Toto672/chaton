@@ -397,6 +397,7 @@ i18n.use(initReactI18next).init({
         "toolCallDisplayMode.verbose.description": "Full display: tool traces expanded and shown",
         "toolCallDisplayMode.light.description": "Compact: tool names shown but traces collapsed",
         "toolCallDisplayMode.quiet.description": "Hidden: no tool calls shown in conversations",
+        "Quel mode d'affichage choisir ?": "Which display mode to choose?",
       },
     },
     fr: {
@@ -842,6 +843,7 @@ i18n.use(initReactI18next).init({
         "toolCallDisplayMode.verbose.description": "Complet : traces des outils dépliées et affichées",
         "toolCallDisplayMode.light.description": "Compact : noms des outils affichés mais traces repliées",
         "toolCallDisplayMode.quiet.description": "Masqué : aucun appel d'outil affiché dans les conversations",
+        "Quel mode d'affichage choisir ?": "Quel mode d'affichage choisir ?",
       },
     },
   },

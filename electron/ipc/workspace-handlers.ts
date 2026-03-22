@@ -67,6 +67,7 @@ import {
 import {
   listCloudInstances,
   findCloudInstanceByBaseUrl,
+  clearCloudInstanceSession,
   findCloudInstanceById,
   findCloudInstanceByOauthState,
   insertCloudInstance,
@@ -2020,6 +2021,16 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       return { ok: false as const, reason: "not_connected" as const };
     }
     return { ok: true as const, account, users };
+  });
+
+  ipcMain.handle("cloud:logout", async () => {
+    const db = getDb();
+    const instance = listCloudInstances(db).find((entry) => Boolean(entry.access_token));
+    if (!instance) {
+      return { ok: false as const, reason: "not_connected" as const };
+    }
+    clearCloudInstanceSession(db, instance.id);
+    return { ok: true as const };
   });
 
   ipcMain.handle(
@@ -4447,6 +4458,19 @@ export function registerSystemHandlers() {
   ipcMain.handle("app:detectExternalCommand", async (_event, command: string) =>
     detectExternalCommand(command),
   );
+
+  ipcMain.handle("app:openExternal", async (_event, url: string) => {
+    try {
+      if (typeof url !== "string" || !url.trim()) {
+        return { success: false, error: "Missing URL" };
+      }
+      new URL(url);
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
 
   ipcMain.handle("ollama:detect", async () => {
     try {

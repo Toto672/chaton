@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld("chaton", {
     } | null;
   }) => ipcRenderer.invoke("projects:createCloud", params),
   getCloudAccount: () => ipcRenderer.invoke("cloud:getAccount"),
+  logoutCloud: () => ipcRenderer.invoke("cloud:logout"),
   updateCloudUser: (
     userId: string,
     updates: { subscriptionPlan?: 'plus' | 'pro' | 'max'; isAdmin?: boolean },
@@ -573,6 +574,8 @@ contextBridge.exposeInMainWorld("chaton", {
   detectVscode: () => ipcRenderer.invoke("vscode:detect"),
   detectExternalCommand: (command: string) =>
     ipcRenderer.invoke("app:detectExternalCommand", command),
+  openExternal: (url: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("app:openExternal", url),
   openExternalApplication: (command: string, args: string[]) =>
     ipcRenderer.invoke("app:openExternalApplication", command, args),
   detectOllama: () => ipcRenderer.invoke("ollama:detect"),

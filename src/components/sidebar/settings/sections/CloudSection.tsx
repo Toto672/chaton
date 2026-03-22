@@ -11,7 +11,10 @@ import type {
 type Props = {
   state: WorkspaceState
   onConnect: (options?: { name?: string; baseUrl?: string }) => Promise<void> | void
+  onLogin: () => Promise<void> | void
+  onSignup: () => Promise<void> | void
   onRefresh: () => Promise<void> | void
+  onLogout: () => Promise<void> | void
   onUpdateUser: (userId: string, updates: { subscriptionPlan?: CloudSubscriptionPlan; isAdmin?: boolean }) => Promise<void> | void
   onGrantSubscription: (userId: string, grant: { planId: CloudSubscriptionPlan; durationDays?: number | null }) => Promise<void> | void
   onUpdatePlan: (planId: CloudSubscriptionPlan, updates: { label?: string; parallelSessionsLimit?: number; isDefault?: boolean }) => Promise<void> | void
@@ -195,16 +198,12 @@ function UserRow({
   )
 }
 
-export function CloudSection({ state, onConnect, onRefresh, onUpdateUser, onGrantSubscription, onUpdatePlan }: Props) {
+export function CloudSection({ state, onConnect, onLogin, onSignup, onRefresh, onLogout, onUpdateUser, onGrantSubscription, onUpdatePlan }: Props) {
   const { t } = useTranslation()
   const account = state.cloudAccount
   const cloudInstances = state.cloudInstances
   const plans = account?.plans ?? []
   const visibleCloudInstances = cloudInstances.length > 0
-  const activeOrganization =
-    account?.organizations.find((organization) => organization.id === account.activeOrganizationId) ??
-    account?.organizations[0] ??
-    null
 
   const cloudStatusText = useMemo(() => {
     if (cloudInstances.length === 0) {
@@ -237,8 +236,11 @@ export function CloudSection({ state, onConnect, onRefresh, onUpdateUser, onGran
         </div>
         {!account ? (
           <div className="settings-actions-row">
-            <button type="button" className="settings-action" onClick={() => void onConnect()}>
-              Connecter Chatons Cloud
+            <button type="button" className="settings-action" onClick={() => void onLogin()}>
+              Se connecter
+            </button>
+            <button type="button" className="settings-action-secondary" onClick={() => void onSignup()}>
+              S'inscrire
             </button>
           </div>
         ) : (
@@ -269,9 +271,24 @@ export function CloudSection({ state, onConnect, onRefresh, onUpdateUser, onGran
                 <div className="settings-card-note">{account.user.isAdmin ? 'Admin' : 'Utilisateur'}</div>
               </div>
               <div className="settings-row-wrap">
-                <span className="settings-label">Organisation active</span>
+                <span className="settings-label">Organisations</span>
                 <div className="settings-card-note">
-                  {activeOrganization ? `${activeOrganization.name} · ${activeOrganization.role}` : 'Aucune'}
+                  {account.organizations.length === 0 ? (
+                    'Aucune'
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {account.organizations.map((org) => (
+                        <div key={org.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {org.id === account.activeOrganizationId && (
+                            <span style={{ color: 'var(--color-accent)', fontWeight: 500 }}>●</span>
+                          )}
+                          <span>{org.name}</span>
+                          <span style={{ color: 'var(--color-text-secondary)' }}>·</span>
+                          <span style={{ textTransform: 'capitalize' }}>{org.role.replace('_', ' ')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -302,6 +319,9 @@ export function CloudSection({ state, onConnect, onRefresh, onUpdateUser, onGran
             <div className="settings-actions-row" style={{ marginTop: '16px' }}>
               <button type="button" className="settings-action-secondary" onClick={() => void onRefresh()}>
                 Rafraîchir
+              </button>
+              <button type="button" className="settings-action-secondary" onClick={() => void onLogout()}>
+                Se déconnecter
               </button>
             </div>
           </>

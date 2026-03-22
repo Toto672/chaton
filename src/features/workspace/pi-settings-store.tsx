@@ -11,6 +11,7 @@ import type {
   PiSettingsJson,
 } from './types'
 import type { SettingsSection } from '@/components/sidebar/settings/sections/constants'
+import { useWorkspace } from './store'
 
 type PiSettingsContextValue = {
   activeSection: SettingsSection
@@ -34,6 +35,7 @@ const PiSettingsContext = createContext<PiSettingsContextValue | null>(null)
 
 export function PiSettingsProvider({ children }: PropsWithChildren) {
   const REFRESH_TTL_MS = 30_000
+  const { state: workspaceState } = useWorkspace()
   const [activeSection, setActiveSection] = useState<SettingsSection>('appearance')
   const [snapshot, setSnapshot] = useState<PiConfigSnapshot | null>(null)
   const [settingsJson, setSettingsJson] = useState<PiSettingsJson>({})
@@ -43,6 +45,13 @@ export function PiSettingsProvider({ children }: PropsWithChildren) {
   const [lastResult, setLastResult] = useState<PiCommandResult | null>(null)
   const lastRefreshAtRef = useRef(0)
   const refreshInFlightRef = useRef(false)
+
+  // Sync active section when workspace opens settings with a specific section
+  useEffect(() => {
+    if (workspaceState.pendingSettingsSection) {
+      setActiveSection(workspaceState.pendingSettingsSection)
+    }
+  }, [workspaceState.pendingSettingsSection])
 
   const refresh = async () => {
     if (refreshInFlightRef.current) {

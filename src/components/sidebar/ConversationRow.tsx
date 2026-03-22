@@ -23,6 +23,7 @@ export const ConversationRow = memo(function ConversationRow({ conversation, isA
   perfMonitor.recordComponentRender('ConversationRow')
   const { t } = useTranslation()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
   const resetTimerRef = useRef<number | null>(null)
 
   // Activity status from external Pi store (only re-renders this row when its status changes)
@@ -88,6 +89,8 @@ export const ConversationRow = memo(function ConversationRow({ conversation, isA
       style={progressStyle}
       role="button"
       tabIndex={0}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       onClick={() => {
         // Dispatch event to notify MainView to scroll to bottom
         window.dispatchEvent(
@@ -133,40 +136,50 @@ export const ConversationRow = memo(function ConversationRow({ conversation, isA
           </span>
         )}
       </span>
-      <span className="thread-row-meta">
-        <button
-          type="button"
-          className={`thread-delete-button ${confirmDelete ? 'thread-delete-button-confirm' : ''}`}
-          onMouseDown={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-          }}
-          onPointerDown={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-          }}
-          onClick={(event) => {
-            void onDeleteClick(event)
-          }}
-          aria-label={confirmDelete ? t('Confirmer la suppression de {{title}}', { title: conversation.title }) : t('Supprimer {{title}}', { title: conversation.title })}
-          title={confirmDelete ? t('Cliquer à nouveau pour supprimer') : t('Supprimer la conversation')}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          <AnimatePresence initial={false} mode="wait">
-            {confirmDelete && (
-              <motion.span
-                className="thread-delete-confirm-text"
-                initial={{ opacity: 0, scale: 0.8, x: -4 }}
-                animate={{ opacity: 1, scale: 1, x: 0 }}
-                exit={{ opacity: 0, scale: 0.8, x: 4 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
-              >
-                {t('Confirmer')}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </button>
-      </span>
+      <AnimatePresence>
+        {isHovered && (
+          <motion.span
+            className="thread-row-meta h-7 shrink-0 py-0"
+            initial={{ opacity: 0, x: 4 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 4 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+          >
+            <button
+              type="button"
+              className={`thread-delete-button ${confirmDelete ? 'thread-delete-button-confirm' : ''}`}
+              onMouseDown={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+              }}
+              onPointerDown={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+              }}
+              onClick={(event) => {
+                void onDeleteClick(event)
+              }}
+              aria-label={confirmDelete ? t('Confirmer la suppression de {{title}}', { title: conversation.title }) : t('Supprimer {{title}}', { title: conversation.title })}
+              title={confirmDelete ? t('Cliquer à nouveau pour supprimer') : t('Supprimer la conversation')}
+            >
+              <Trash2 className="h-3 w-3" />
+              <AnimatePresence initial={false} mode="wait">
+                {confirmDelete && (
+                  <motion.span
+                    className="thread-delete-confirm-text"
+                    initial={{ opacity: 0, scale: 0.8, x: -4 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.8, x: 4 }}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                  >
+                    {t('Confirmer')}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </button>
+          </motion.span>
+        )}
+      </AnimatePresence>
     </div>
   )
 }, (prevProps, nextProps) => {

@@ -1,4 +1,5 @@
 import type { JsonValue } from './rpc'
+import type { SettingsSection } from '@/components/sidebar/settings/sections/constants'
 
 export type AppMode = 'workspace' | 'assistant'
 
@@ -344,6 +345,7 @@ export type WorkspaceState = {
   settings: SidebarSettings
   notice: string | null
   extensionUpdatesCount: number
+  pendingSettingsSection: SettingsSection | null
   // piByConversation and completedActionByConversation moved to pi-store.ts
   // (external store) to avoid re-rendering all context consumers on every
   // streaming event. Use usePiRuntime() / usePiStore() hooks instead.

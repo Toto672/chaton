@@ -7,7 +7,7 @@ import { SortFilterPopover } from './SortFilterPopover'
 
 export function SidebarHeaderActions() {
   const { t } = useTranslation()
-  const { importProject, connectCloudInstance, createCloudProject, createConversationGlobal, toggleSidebarSearch, state } = useWorkspace()
+  const { importProject, openSettingsToCloud, createCloudProject, createConversationGlobal, toggleSidebarSearch, state } = useWorkspace()
   const cloudProjects = state.projects.filter((project) => project.location === 'cloud' && !project.isArchived && !project.isHidden)
   const hasCloudConnection = state.cloudInstances.length > 0
   const cloudStatus =
@@ -74,7 +74,7 @@ export function SidebarHeaderActions() {
         title={cloudActionTitle}
         onClick={() => {
           if (!hasCloudConnection) {
-            void connectCloudInstance()
+            openSettingsToCloud()
             return
           }
           void createCloudProject()

@@ -298,6 +298,7 @@ export const workspaceIpc = {
     } | null;
   }): Promise<CreateCloudProjectResult> => getApi().createCloudProject(params),
   getCloudAccount: (): Promise<GetCloudAccountResult> => getApi().getCloudAccount(),
+  logoutCloud: (): Promise<{ ok: true } | { ok: false; reason: "not_connected" }> => getApi().logoutCloud(),
   updateCloudUser: (
     userId: string,
     updates: { subscriptionPlan?: CloudSubscriptionPlan; isAdmin?: boolean },
@@ -961,6 +962,8 @@ export const workspaceIpc = {
   detectVscode: (): Promise<{ detected: boolean }> => getApi().detectVscode(),
   detectExternalCommand: (command: string): Promise<{ detected: boolean }> =>
     getApi().detectExternalCommand(command),
+  openExternal: (url: string): Promise<{ success: boolean; error?: string }> =>
+    getApi().openExternal(url),
   openExternalApplication: (
     command: string,
     args: string[],

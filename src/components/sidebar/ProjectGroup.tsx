@@ -25,6 +25,7 @@ export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [afficherTousLesFils, setAfficherTousLesFils] = useState(false)
   const resetTimerRef = useRef<number | null>(null)
+  const [isHovered, setIsHovered] = useState(false)
 
   // Access pi store to check conversation activity status
   const piStore = usePiStore((s) => s)
@@ -129,7 +130,11 @@ export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [
 
   return (
     <section className="project-group" aria-labelledby={`project-label-${project.id}`}>
-      <div className={`project-header-row ${state.selectedProjectId === project.id ? 'project-header-active' : ''}`}>
+      <div
+        className={`project-header-row ${state.selectedProjectId === project.id ? 'project-header-active' : ''}`}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
         <button
           id={`project-label-${project.id}`}
           type="button"
@@ -161,69 +166,81 @@ export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [
             ) : null}
           </span>
         </button>
-        <button
-          type="button"
-          className="project-action-button"
-          aria-label={`Afficher les details de ${project.name}`}
-          title="Details du projet"
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            onOpenDetails?.(project)
-          }}
-        >
-          <Info className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          className="project-action-button"
-          aria-label={`Créer un fil à partir de ${project.name}`}
-          title="Créer un fil"
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            void createConversationForProject(project.id)
-          }}
-        >
-          <PencilLine className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          className="project-action-button"
-          aria-label={`Masquer ${project.name}`}
-          title="Masquer le projet"
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            setProjectHidden(project.id, true)
-          }}
-        >
-          <EyeOff className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          className={`project-action-button ${confirmDelete ? 'project-action-button-confirm' : ''}`}
-          aria-label={confirmDelete ? t('Confirmer la suppression de {{name}}', { name: project.name }) : t('Supprimer {{name}}', { name: project.name })}
-          title={confirmDelete ? t('Cliquer à nouveau pour supprimer') : t('Supprimer le projet')}
-          onClick={(event) => {
-            void onDeleteClick(event)
-          }}
-        >
-          <Trash2 className="h-4 w-4" />
-          <AnimatePresence initial={false} mode="wait">
-            {confirmDelete && (
-              <motion.span
-                className="project-delete-confirm-text"
-                initial={{ opacity: 0, scale: 0.8, x: -4 }}
-                animate={{ opacity: 1, scale: 1, x: 0 }}
-                exit={{ opacity: 0, scale: 0.8, x: 4 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
+        <AnimatePresence>
+          {isHovered && (
+            <motion.div
+              className="project-actions"
+              initial={{ opacity: 0, x: 4 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 4 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+            >
+              <button
+                type="button"
+                className="project-action-button"
+                aria-label={`Afficher les details de ${project.name}`}
+                title="Details du projet"
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  onOpenDetails?.(project)
+                }}
               >
-                {t('Confirmer')}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </button>
+                <Info className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                className="project-action-button"
+                aria-label={`Créer un fil à partir de ${project.name}`}
+                title="Créer un fil"
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  void createConversationForProject(project.id)
+                }}
+              >
+                <PencilLine className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                className="project-action-button"
+                aria-label={`Masquer ${project.name}`}
+                title="Masquer le projet"
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  setProjectHidden(project.id, true)
+                }}
+              >
+                <EyeOff className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                className={`project-action-button ${confirmDelete ? 'project-action-button-confirm' : ''}`}
+                aria-label={confirmDelete ? t('Confirmer la suppression de {{name}}', { name: project.name }) : t('Supprimer {{name}}', { name: project.name })}
+                title={confirmDelete ? t('Cliquer à nouveau pour supprimer') : t('Supprimer le projet')}
+                onClick={(event) => {
+                  void onDeleteClick(event)
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                <AnimatePresence initial={false} mode="wait">
+                  {confirmDelete && (
+                    <motion.span
+                      className="project-delete-confirm-text"
+                      initial={{ opacity: 0, scale: 0.8, x: -4 }}
+                      animate={{ opacity: 1, scale: 1, x: 0 }}
+                      exit={{ opacity: 0, scale: 0.8, x: 4 }}
+                      transition={{ duration: 0.2, ease: 'easeOut' }}
+                    >
+                      {t('Confirmer')}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <AnimatePresence initial={false}>

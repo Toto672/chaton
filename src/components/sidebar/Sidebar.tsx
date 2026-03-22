@@ -1,4 +1,5 @@
 import { Brain, Home, MessageCircle, MessageSquareShare, Plus, Puzzle, Search, Settings, Workflow, Zap } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
 
 import { ConversationRow } from '@/components/sidebar/ConversationRow'
 import { SettingsSidebar } from '@/components/sidebar/settings/SettingsSidebar'
@@ -186,47 +187,90 @@ export function Sidebar({ width }: { width: number }) {
           <div className="sidebar-scroll">
             {state.settings.organizeBy === 'chronological' ? (
               <section aria-label={t('Liste chronologique')} role="list" className="sidebar-thread-list">
-              {visibleConversations.map((conversation) => (
-                <ConversationRow
-                  key={conversation.id}
-                  conversation={conversation}
-                  isActive={state.selectedConversationId === conversation.id}
-                  onSelect={selectConversation}
-                  onDelete={deleteConversation}
-                  extensions={extensionsData}
-                />
-              ))}
+                <AnimatePresence initial={false}>
+                  {visibleConversations.map((conversation) => (
+                    <motion.div
+                      key={conversation.id}
+                      layout
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                      style={{ overflow: 'hidden' }}
+                    >
+                      <ConversationRow
+                        conversation={conversation}
+                        isActive={state.selectedConversationId === conversation.id}
+                        onSelect={selectConversation}
+                        onDelete={deleteConversation}
+                        extensions={extensionsData}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </section>
             ) : (
               <>
                 <section aria-label="Threads globaux" role="list" className="sidebar-thread-list">
-                  {globalConversations.map((conversation) => (
-                    <ConversationRow
-                      key={conversation.id}
-                      conversation={conversation}
-                      isActive={state.selectedConversationId === conversation.id}
-                      onSelect={selectConversation}
-                      onDelete={deleteConversation}
-                      extensions={extensionsData}
-                    />
-                  ))}
+                  <AnimatePresence initial={false}>
+                    {globalConversations.map((conversation) => (
+                      <motion.div
+                        key={conversation.id}
+                        layout
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                        style={{ overflow: 'hidden' }}
+                      >
+                        <ConversationRow
+                          conversation={conversation}
+                          isActive={state.selectedConversationId === conversation.id}
+                          onSelect={selectConversation}
+                          onDelete={deleteConversation}
+                          extensions={extensionsData}
+                        />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
                 </section>
-                {visibleProjects.map((project) => (
-                  <ProjectGroup
-                    key={project.id}
-                    project={project}
-                    extensions={extensionsData}
-                    onOpenDetails={setDetailsProject}
-                  />
-                ))}
-                {(autoFoldedProjects.length > 0 || subFolders.length > 0 || archivedProjects.length > 0) && (
-                  <ProjectFolder
-                    autoFoldedProjects={autoFoldedProjects}
-                    archivedProjects={archivedProjects}
-                    subFolders={subFolders}
-                    extensions={extensionsData}
-                  />
-                )}
+                <AnimatePresence initial={false}>
+                  {visibleProjects.map((project) => (
+                    <motion.div
+                      key={project.id}
+                      layout
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.16, ease: 'easeOut' }}
+                    >
+                      <ProjectGroup
+                        project={project}
+                        extensions={extensionsData}
+                        onOpenDetails={setDetailsProject}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+                <AnimatePresence initial={false}>
+                  {(autoFoldedProjects.length > 0 || subFolders.length > 0 || archivedProjects.length > 0) && (
+                    <motion.div
+                      key="project-folder"
+                      layout
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.16, ease: 'easeOut' }}
+                    >
+                      <ProjectFolder
+                        autoFoldedProjects={autoFoldedProjects}
+                        archivedProjects={archivedProjects}
+                        subFolders={subFolders}
+                        extensions={extensionsData}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </>
             )}
           </div>

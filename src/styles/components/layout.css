@@ -150,13 +150,12 @@
     @apply inline-flex h-4 w-4 shrink-0 items-center justify-center text-sm leading-none;
   }
 
-  .project-action-button {
-    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#696b74] opacity-0 transition-all duration-150 hover:bg-white/80 hover:text-[#44506a] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+  .project-actions {
+    @apply flex items-center gap-0.5;
   }
 
-  .project-header-row:hover .project-action-button,
-  .project-header-row:focus-within .project-action-button {
-    @apply opacity-100;
+  .project-action-button {
+    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#696b74] transition-all duration-150 hover:bg-white/80 hover:text-[#44506a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
   }
 
   .project-action-button-confirm {
@@ -176,7 +175,7 @@
   }
 
   .thread-row {
-    @apply flex w-full items-center justify-between rounded-md bg-transparent px-2.5 py-2 text-left transition-colors hover:bg-[#eeeeef] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+    @apply flex h-9 w-full items-center justify-between rounded-md bg-transparent px-2.5 text-left transition-colors hover:bg-[#eeeeef] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
   }
 
   .thread-row-active {
@@ -233,24 +232,19 @@
 
   .thread-row-meta {
     font-size: var(--ui-font-meta);
-    @apply shrink-0 text-[#7f8087];
+    @apply flex h-7 shrink-0 items-center text-[#7f8087] py-0;
   }
 
   .thread-delete-button {
-    @apply inline-flex h-7 w-7 items-center justify-center rounded-md text-[#7f8087] opacity-0 transition-all duration-150 hover:bg-[#e2e2e6] hover:text-[#44506a] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
+    @apply inline-flex h-7 w-7 items-center justify-center rounded-md text-[#7f8087] transition-all duration-150 hover:bg-[#e2e2e6] hover:text-[#44506a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
   }
 
   .thread-delete-button-confirm {
-    @apply w-auto px-2 bg-[#ffe9e3] text-[#b9412d] opacity-100;
+    @apply w-auto px-2 bg-[#ffe9e3] text-[#b9412d];
   }
 
   .thread-delete-button-confirm:hover {
     @apply bg-[#ffe9e3] text-[#b9412d];
-  }
-
-  .thread-row:hover .thread-delete-button,
-  .thread-row:focus-within .thread-delete-button {
-    @apply opacity-100;
   }
 
   .thread-delete-confirm-text {

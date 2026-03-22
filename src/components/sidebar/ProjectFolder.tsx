@@ -462,17 +462,28 @@ export const ProjectFolder = memo(function ProjectFolder({
           <span className="project-folder-icons">
             {previewProjects.map((project, i) => (
               <motion.span
-                key={project.id}
+                key={`${project.id}-${allFoldedCount}`}
                 className="project-folder-icon-slot"
-                initial={{ opacity: 0, scale: 0.6 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.04, duration: 0.2, ease: 'easeOut' }}
+                layout
+                initial={{ opacity: 0, scale: 0.6, x: -4 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.6, x: -4 }}
+                transition={{ delay: i * 0.04, duration: 0.18, ease: 'easeOut' }}
               >
                 <ProjectIcon icon={project.icon} size={14} loadAsDataUrl />
               </motion.span>
             ))}
             {extraCount > 0 && (
-              <span className="project-folder-extra-count">+{extraCount}</span>
+              <motion.span
+                key={`extra-count-${allFoldedCount}`}
+                className="project-folder-extra-count"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+              >
+                +{extraCount}
+              </motion.span>
             )}
           </span>
           <span className="project-folder-label">
