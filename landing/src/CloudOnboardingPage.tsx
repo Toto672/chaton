@@ -4,12 +4,9 @@ import {
   ArrowUpRight,
   Check,
   CheckCircle2,
-  CreditCard,
   ExternalLink,
   KeyRound,
-  LayoutDashboard,
   MonitorSmartphone,
-  Settings,
   ShieldCheck,
   Users2,
 } from "lucide-react";
@@ -31,12 +28,9 @@ type ProviderOption = {
 };
 
 type AccountSectionId =
-  | "overview"
   | "organization"
   | "providers"
-  | "subscription"
-  | "billing"
-  | "desktop";
+  | "subscription";
 
 const PROVIDER_OPTIONS: ProviderOption[] = [
   { id: "openai", label: "OpenAI" },
@@ -57,7 +51,7 @@ export function CloudOnboardingPage({
   const navigate = useNavigate();
   const copy = getCloudCopy(currentLanguage);
   const [account, setAccount] = useState(() => getCloudAccount());
-  const [selectedSection, setSelectedSection] = useState<AccountSectionId>("overview");
+  const [selectedSection, setSelectedSection] = useState<AccountSectionId>("organization");
   const activeOrganization =
     account?.organizations.find((organization) => organization.id === account.activeOrganizationId) ??
     account?.organizations[0] ??
@@ -81,9 +75,9 @@ export function CloudOnboardingPage({
 
   const desktopLink = useMemo(() => {
     const url = new URL("chatons://cloud/connect");
-    url.searchParams.set("base_url", "https://cloud.chatons.ai");
+    url.searchParams.set("base_url", account?.baseUrl ?? "https://cloud.chatons.ai");
     return url.toString();
-  }, []);
+  }, [account?.baseUrl]);
 
   useEffect(() => {
     void refreshCloudAccount()
@@ -162,51 +156,36 @@ export function CloudOnboardingPage({
   const navigationSections: Array<{
     id: AccountSectionId;
     label: string;
-    hint: string;
-    icon: typeof LayoutDashboard;
+    icon: typeof Users2;
     badge?: string;
   }> = [
     {
-      id: "overview",
-      label: "Setup overview",
-      hint: "Track what is done and what is left.",
-      icon: LayoutDashboard,
-      badge: `${setupCompletedCount}/3`,
-    },
-    {
       id: "organization",
-      label: copy.onboarding.steps.organization.title,
-      hint: "Workspace name, URL and team context.",
+      label: copy.onboarding.organizationStatus,
       icon: Users2,
     },
     {
       id: "providers",
-      label: copy.onboarding.steps.provider.title,
-      hint: "Shared provider access for the organization.",
+      label: copy.onboarding.providersStatus,
       icon: KeyRound,
       badge: providerCount > 0 ? String(providerCount) : undefined,
     },
     {
       id: "subscription",
-      label: "Subscription plan",
-      hint: "Choose the plan that fits the team.",
+      label: "Subscription",
       icon: ShieldCheck,
       badge: plan.toUpperCase(),
     },
-    {
-      id: "billing",
-      label: "Billing & payment",
-      hint: "Payment method and invoices.",
-      icon: CreditCard,
-    },
-    {
-      id: "desktop",
-      label: copy.onboarding.steps.desktop.title,
-      hint: "Bind the desktop app to the workspace.",
-      icon: MonitorSmartphone,
-      badge: desktopConnected ? copy.onboarding.statusReady : undefined,
-    },
   ];
+
+  function focusSection(sectionId: AccountSectionId | "desktop-connection") {
+    if (sectionId === "desktop-connection") {
+      document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    setSelectedSection(sectionId);
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   if (!account) {
     navigate(buildLocalizedPath(currentLanguage, "/cloud/signup"));
@@ -250,19 +229,9 @@ export function CloudOnboardingPage({
           <aside className="cloud-account-sidebar">
             <div className="cloud-account-sidebar-card">
               <div className="cloud-account-sidebar-header">
-                <span className="cloud-account-sidebar-eyebrow">Account</span>
-                <strong>{organization?.name ?? "Workspace setup"}</strong>
+                <span className="cloud-account-sidebar-eyebrow">Workspace settings</span>
+                <strong>{organization?.name ?? "Chatons Cloud"}</strong>
                 <p>{account.email}</p>
-              </div>
-
-              <div className="cloud-account-mini-progress">
-                <div className="cloud-account-mini-progress-row">
-                  <span>{copy.onboarding.summaryEyebrow}</span>
-                  <strong>{setupProgressPercent}%</strong>
-                </div>
-                <div className="cloud-account-mini-progress-bar" aria-hidden="true">
-                  <span style={{ width: `${setupProgressPercent}%` }} />
-                </div>
               </div>
 
               <nav className="cloud-account-nav" aria-label="Account sections">
@@ -278,10 +247,7 @@ export function CloudOnboardingPage({
                       <span className="cloud-account-nav-icon">
                         <Icon size={16} />
                       </span>
-                      <span className="cloud-account-nav-copy">
-                        <strong>{section.label}</strong>
-                        <span>{section.hint}</span>
-                      </span>
+                      <span className="cloud-account-nav-label">{section.label}</span>
                       {section.badge ? <span className="cloud-account-nav-badge">{section.badge}</span> : null}
                     </button>
                   );
@@ -291,38 +257,45 @@ export function CloudOnboardingPage({
           </aside>
 
           <section className="cloud-account-main">
-            <div className="cloud-account-hero cloud-panel-shell cloud-panel">
-              <div className="cloud-account-hero-copy">
-                <span className="marketing-eyebrow">{copy.onboarding.summaryEyebrow}</span>
-                <h1 className="cloud-section-title">Launch your workspace from one account dashboard</h1>
-                <p className="hero-subtitle">
-                  Replace the wizard with a normal SaaS control panel: left navigation for account settings,
-                  subscription and billing, with setup progress and next actions in the center.
-                </p>
-              </div>
-              <div className="cloud-account-hero-meta">
-                <div className="cloud-account-stat">
-                  <span>Workspace</span>
-                  <strong>{organization?.slug ? `${organization.slug}.chatons.cloud` : "Not configured yet"}</strong>
+            <div className="cloud-account-summary cloud-panel-shell cloud-panel">
+              <div className="cloud-account-summary-header">
+                <div>
+                  <span className="cloud-panel-chip">Workspace</span>
+                  <h1 className="cloud-section-title">{organization?.name ?? "Configure your organization"}</h1>
                 </div>
+                <Link className="cloud-account-inline-link" to={buildLocalizedPath(currentLanguage, "/cloud/pricing")}>
+                  View plans
+                  <ArrowUpRight size={14} />
+                </Link>
+              </div>
+
+              <div className="cloud-account-summary-grid">
                 <div className="cloud-account-stat">
-                  <span>Current plan</span>
-                  <strong>{activePlanOption.label}</strong>
+                  <span>Organization</span>
+                  <strong>{organization?.slug ? `${organization.slug}.chatons.cloud` : "Not configured yet"}</strong>
                 </div>
                 <div className="cloud-account-stat">
                   <span>Providers</span>
                   <strong>{providerCount}</strong>
                 </div>
+                <div className="cloud-account-stat">
+                  <span>Subscription</span>
+                  <strong>{activePlanOption.label}</strong>
+                </div>
+                <div className="cloud-account-stat">
+                  <span>Desktop app</span>
+                  <strong>{desktopConnected ? "Connected" : "Not connected"}</strong>
+                </div>
               </div>
             </div>
 
             <div className="cloud-account-overview-grid">
-              <section className={`cloud-panel-shell cloud-panel cloud-account-panel ${selectedSection === "overview" ? "is-highlighted" : ""}`}>
+              <section className="cloud-panel-shell cloud-panel cloud-account-panel">
                 <div className="cloud-account-panel-header">
                   <div>
-                    <span className="cloud-panel-chip">Setup overview</span>
-                    <h2 className="cloud-section-title">Launch your workspace in three steps</h2>
-                    <p className="hero-subtitle">{copy.onboarding.summaryBody}</p>
+                    <span className="cloud-panel-chip">Status</span>
+                    <h2 className="cloud-section-title">Setup progress</h2>
+                    <p className="hero-subtitle">Track the remaining steps before the workspace is fully usable.</p>
                   </div>
                 </div>
 
@@ -345,15 +318,7 @@ export function CloudOnboardingPage({
                       key={step.id}
                       type="button"
                       className={`cloud-account-step-card ${step.ready ? "is-done" : ""}`}
-                      onClick={() =>
-                        setSelectedSection(
-                          step.id === "organization"
-                            ? "organization"
-                            : step.id === "providers"
-                            ? "providers"
-                            : "desktop"
-                        )
-                      }
+                      onClick={() => focusSection(step.id === "desktop" ? "desktop-connection" : step.id)}
                     >
                       <div className="cloud-account-step-index">
                         {step.ready ? <Check size={16} /> : <span>{index + 1}</span>}
@@ -377,23 +342,23 @@ export function CloudOnboardingPage({
                 <section className="cloud-panel-shell cloud-panel cloud-account-panel">
                   <div className="cloud-account-panel-header">
                     <div>
-                      <span className="cloud-panel-chip is-muted">What remains</span>
+                      <span className="cloud-panel-chip is-muted">Action queue</span>
                       <h2 className="cloud-section-title">Next actions</h2>
                     </div>
                   </div>
 
                   <div className="cloud-account-task-list">
                     {!organization ? (
-                      <button type="button" className="cloud-account-task" onClick={() => setSelectedSection("organization")}>
+                      <button type="button" className="cloud-account-task" onClick={() => focusSection("organization")}>
                         <span className="cloud-account-task-icon"><Users2 size={16} /></span>
                         <span>
                           <strong>Create the organization</strong>
-                          <span>Set the workspace name, URL and default plan.</span>
+                          <span>Set the workspace name and cloud URL.</span>
                         </span>
                       </button>
                     ) : null}
                     {providerCount === 0 ? (
-                      <button type="button" className="cloud-account-task" onClick={() => setSelectedSection("providers")}>
+                      <button type="button" className="cloud-account-task" onClick={() => focusSection("providers")}>
                         <span className="cloud-account-task-icon"><KeyRound size={16} /></span>
                         <span>
                           <strong>Connect at least one provider</strong>
@@ -402,7 +367,7 @@ export function CloudOnboardingPage({
                       </button>
                     ) : null}
                     {!desktopConnected ? (
-                      <button type="button" className="cloud-account-task" onClick={() => setSelectedSection("desktop")}>
+                      <button type="button" className="cloud-account-task" onClick={() => focusSection("desktop-connection")}>
                         <span className="cloud-account-task-icon"><MonitorSmartphone size={16} /></span>
                         <span>
                           <strong>Link Chatons Desktop</strong>
@@ -422,26 +387,70 @@ export function CloudOnboardingPage({
                   </div>
                 </section>
 
-                <section className="cloud-panel-shell cloud-panel cloud-account-panel">
+                <section className="cloud-panel-shell cloud-panel cloud-account-panel" id="desktop-connection">
                   <div className="cloud-account-panel-header">
                     <div>
-                      <span className="cloud-panel-chip is-muted">Billing</span>
-                      <h2 className="cloud-section-title">Subscription snapshot</h2>
+                      <span className="cloud-panel-chip is-muted">Desktop app</span>
+                      <h2 className="cloud-section-title">Connect the app</h2>
                     </div>
                   </div>
-                  <div className="cloud-account-billing-card">
-                    <div>
-                      <strong>{activePlanOption.label}</strong>
-                      <p>{activePlanOption.audience}</p>
-                    </div>
-                    <span className="cloud-account-billing-price">
-                      {billingCycle === "annual" ? activePlanOption.annualPrice : activePlanOption.monthlyPrice}
-                      <small>/mo</small>
-                    </span>
+
+                  <div className="cloud-desktop-info">
+                    <h4>{copy.onboarding.steps.desktop.infoTitle}</h4>
+                    <ol className="cloud-desktop-steps">
+                      <li>{copy.onboarding.steps.desktop.step1}</li>
+                      <li>{copy.onboarding.steps.desktop.step2}</li>
+                      <li>{copy.onboarding.steps.desktop.step3}</li>
+                    </ol>
                   </div>
-                  <button type="button" className="cloud-secondary-button cloud-button-full" onClick={() => setSelectedSection("subscription")}>
-                    Change plan
-                  </button>
+
+                  <div className="cloud-account-desktop-cta">
+                    <a
+                      className={`cloud-primary-button cloud-button-wide ${canConnectDesktop ? "" : "is-disabled"}`}
+                      href={canConnectDesktop ? desktopLink : undefined}
+                      onClick={() => {
+                        if (!canConnectDesktop) {
+                          return;
+                        }
+                        setAccount(markDesktopConnected(account));
+                      }}
+                    >
+                      <ExternalLink size={16} />
+                      {copy.onboarding.steps.desktop.openDesktop}
+                    </a>
+
+                    <button
+                      className="cloud-secondary-button"
+                      type="button"
+                      onClick={() => navigate(buildLocalizedPath(currentLanguage, "/cloud"))}
+                    >
+                      {copy.onboarding.steps.desktop.backToPortal}
+                    </button>
+                  </div>
+
+                  {!canConnectDesktop ? (
+                    <div className="cloud-desktop-prerequisites">
+                      {!organization ? (
+                        <span className="cloud-prerequisite-missing">
+                          <span className="cloud-prerequisite-dot" />
+                          {copy.onboarding.steps.desktop.prereqOrganization}
+                        </span>
+                      ) : null}
+                      {organization && providerCount === 0 ? (
+                        <span className="cloud-prerequisite-missing">
+                          <span className="cloud-prerequisite-dot" />
+                          {copy.onboarding.steps.desktop.prereqProvider}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {desktopConnected ? (
+                    <div className="cloud-account-inline-success">
+                      <CheckCircle2 size={16} />
+                      {copy.onboarding.completion.body}
+                    </div>
+                  ) : null}
                 </section>
               </aside>
             </div>
@@ -573,9 +582,30 @@ export function CloudOnboardingPage({
               >
                 <div className="cloud-account-panel-header">
                   <div>
-                    <span className="cloud-panel-chip">Plan</span>
-                    <h2 className="cloud-section-title">Choose the plan that fits your team's workflow</h2>
-                    <p className="hero-subtitle">Update the workspace plan before you invite more teammates or scale runtime usage.</p>
+                    <span className="cloud-panel-chip">Subscription</span>
+                    <h2 className="cloud-section-title">Subscription and billing</h2>
+                    <p className="hero-subtitle">Manage the current plan, payment method, and upcoming billing work from one section.</p>
+                  </div>
+                </div>
+
+                <div className="cloud-account-billing-grid">
+                  <div className="cloud-account-billing-panel">
+                    <span className="cloud-account-billing-label">Current subscription</span>
+                    <strong>{activePlanOption.label}</strong>
+                    <p>{activePlanOption.detail}</p>
+                    <span className="cloud-account-billing-price">
+                      {billingCycle === "annual" ? activePlanOption.annualPrice : activePlanOption.monthlyPrice}
+                      <small>/mo</small>
+                    </span>
+                  </div>
+
+                  <div className="cloud-account-billing-panel">
+                    <span className="cloud-account-billing-label">Payment method</span>
+                    <strong>Billing setup placeholder</strong>
+                    <p>Add card capture, invoice history, and billing contacts here.</p>
+                    <button type="button" className="cloud-secondary-button" disabled>
+                      Add payment method
+                    </button>
                   </div>
                 </div>
 
@@ -620,13 +650,12 @@ export function CloudOnboardingPage({
                         slug: orgSlug.trim() || organization.slug,
                         plan,
                       })
-                        .then((next) => {
-                          setAccount(next);
-                          setSelectedSection("billing");
-                        })
-                        .catch((err) =>
-                          setOrganizationError(err instanceof Error ? err.message : String(err))
-                        )
+                      .then((next) => {
+                        setAccount(next);
+                      })
+                      .catch((err) =>
+                        setOrganizationError(err instanceof Error ? err.message : String(err))
+                      )
                         .finally(() => setOrganizationPending(false));
                     }}
                   >
@@ -665,7 +694,10 @@ export function CloudOnboardingPage({
                       .then((next) => {
                         setAccount(next);
                         setProviderSecret("");
-                        setSelectedSection("desktop");
+                        document.getElementById("desktop-connection")?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
                       })
                       .catch((err) => setProviderError(err instanceof Error ? err.message : String(err)))
                       .finally(() => setProviderPending(false));
@@ -734,119 +766,6 @@ export function CloudOnboardingPage({
                 ) : (
                   <div className="cloud-provider-empty">{copy.onboarding.steps.provider.noProvider}</div>
                 )}
-              </section>
-
-              <section
-                className={`cloud-panel-shell cloud-panel cloud-account-panel ${selectedSection === "billing" ? "is-highlighted" : ""}`}
-                id="billing"
-              >
-                <div className="cloud-account-panel-header">
-                  <div>
-                    <span className="cloud-panel-chip">Billing & payment</span>
-                    <h2 className="cloud-section-title">Payment settings and subscription management</h2>
-                    <p className="hero-subtitle">
-                      This should live beside the onboarding setup, not inside it. The billing surface is ready for
-                      cards, invoices and usage as dedicated account sections.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="cloud-account-billing-grid">
-                  <div className="cloud-account-billing-panel">
-                    <span className="cloud-account-billing-label">Current subscription</span>
-                    <strong>{activePlanOption.label}</strong>
-                    <p>{activePlanOption.detail}</p>
-                    <button type="button" className="cloud-secondary-button" onClick={() => setSelectedSection("subscription")}>
-                      Update subscription
-                    </button>
-                  </div>
-
-                  <div className="cloud-account-billing-panel">
-                    <span className="cloud-account-billing-label">Payment method</span>
-                    <strong>Billing setup placeholder</strong>
-                    <p>Add card capture, invoice history and billing contacts in this section.</p>
-                    <button type="button" className="cloud-secondary-button" disabled>
-                      Add payment method
-                    </button>
-                  </div>
-                </div>
-              </section>
-
-              <section
-                className={`cloud-panel-shell cloud-panel cloud-account-panel ${selectedSection === "desktop" ? "is-highlighted" : ""}`}
-                id="desktop"
-              >
-                <div className="cloud-account-panel-header">
-                  <div>
-                    <span className="cloud-panel-chip">{copy.onboarding.steps.desktop.eyebrow}</span>
-                    <h2 className="cloud-section-title">{copy.onboarding.steps.desktop.title}</h2>
-                    <p className="hero-subtitle">{copy.onboarding.steps.desktop.subtitle}</p>
-                  </div>
-                </div>
-
-                <div className="cloud-account-desktop-grid">
-                  <div className="cloud-desktop-info">
-                    <h4>{copy.onboarding.steps.desktop.infoTitle}</h4>
-                    <ol className="cloud-desktop-steps">
-                      <li>{copy.onboarding.steps.desktop.step1}</li>
-                      <li>{copy.onboarding.steps.desktop.step2}</li>
-                      <li>{copy.onboarding.steps.desktop.step3}</li>
-                    </ol>
-                  </div>
-
-                  <div className="cloud-account-desktop-cta">
-                    <a
-                      className={`cloud-primary-button cloud-button-wide ${canConnectDesktop ? "" : "is-disabled"}`}
-                      href={canConnectDesktop ? desktopLink : undefined}
-                      onClick={() => {
-                        if (!canConnectDesktop) {
-                          return;
-                        }
-                        setAccount(markDesktopConnected(account));
-                      }}
-                    >
-                      <ExternalLink size={16} />
-                      {copy.onboarding.steps.desktop.openDesktop}
-                    </a>
-
-                    <button
-                      className="cloud-secondary-button"
-                      type="button"
-                      onClick={() => navigate(buildLocalizedPath(currentLanguage, "/cloud"))}
-                    >
-                      {copy.onboarding.steps.desktop.backToPortal}
-                    </button>
-
-                    <Link className="cloud-account-inline-link" to={buildLocalizedPath(currentLanguage, "/cloud/pricing")}>
-                      Review pricing
-                      <ArrowUpRight size={14} />
-                    </Link>
-                  </div>
-                </div>
-
-                {!canConnectDesktop ? (
-                  <div className="cloud-desktop-prerequisites">
-                    {!organization ? (
-                      <span className="cloud-prerequisite-missing">
-                        <span className="cloud-prerequisite-dot" />
-                        {copy.onboarding.steps.desktop.prereqOrganization}
-                      </span>
-                    ) : null}
-                    {organization && providerCount === 0 ? (
-                      <span className="cloud-prerequisite-missing">
-                        <span className="cloud-prerequisite-dot" />
-                        {copy.onboarding.steps.desktop.prereqProvider}
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {desktopConnected ? (
-                  <div className="cloud-account-inline-success">
-                    <CheckCircle2 size={16} />
-                    {copy.onboarding.completion.body}
-                  </div>
-                ) : null}
               </section>
             </div>
           </section>
