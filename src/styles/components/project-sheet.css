@@ -51,6 +51,37 @@
     @apply flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-5;
   }
 
+  .project-sheet-cloud-summary {
+    @apply flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3;
+    border-color: #dbe3f0;
+    background: linear-gradient(180deg, #fafcff 0%, #f3f7fd 100%);
+  }
+
+  .project-sheet-cloud-status {
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold;
+  }
+
+  .project-sheet-cloud-status-connected {
+    background: #e8f8ee;
+    color: #1f6b3f;
+  }
+
+  .project-sheet-cloud-status-connecting {
+    background: #fff4df;
+    color: #9a6700;
+  }
+
+  .project-sheet-cloud-status-disconnected,
+  .project-sheet-cloud-status-error,
+  .project-sheet-cloud-status-unknown {
+    background: #ffeaea;
+    color: #b33a3a;
+  }
+
+  .project-sheet-cloud-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
   .project-sheet-section {
     @apply space-y-3;
   }
@@ -269,6 +300,138 @@
     @apply flex items-center justify-end gap-2;
   }
 
+  .cloud-project-modal {
+    width: min(760px, calc(100vw - 32px));
+    max-width: 760px;
+  }
+
+  .cloud-project-modal-content {
+    @apply space-y-5;
+  }
+
+  .cloud-modal-eyebrow {
+    @apply mb-1 text-[10px] font-semibold uppercase tracking-[0.08em];
+    color: #61708a;
+  }
+
+  .cloud-project-steps {
+    @apply flex items-center gap-2;
+  }
+
+  .cloud-project-step {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold;
+    border-color: #d7dce6;
+    background: #f5f7fb;
+    color: #6a7280;
+  }
+
+  .cloud-project-step.is-active {
+    border-color: #9ab4e7;
+    background: #edf4ff;
+    color: #2956b2;
+  }
+
+  .cloud-project-step.is-complete {
+    border-color: #b8dfc4;
+    background: #e8f8ee;
+    color: #1f6b3f;
+  }
+
+  .cloud-project-stage {
+    @apply space-y-4;
+  }
+
+  .cloud-project-stage-head h3 {
+    @apply text-sm font-semibold;
+    color: #1f2937;
+  }
+
+  .cloud-project-stage-head p {
+    @apply mt-1 text-xs leading-5;
+    color: #6b7280;
+  }
+
+  .cloud-project-kind-grid {
+    @apply grid gap-3 md:grid-cols-2;
+  }
+
+  .cloud-project-kind-card {
+    @apply flex items-start gap-3 rounded-2xl border px-4 py-4 text-left transition-colors;
+    border-color: #e5e7eb;
+    background: #ffffff;
+  }
+
+  .cloud-project-kind-card:hover {
+    border-color: #c9d7ef;
+    background: #fbfdff;
+  }
+
+  .cloud-project-kind-card.is-selected {
+    border-color: #9ab4e7;
+    background: #edf4ff;
+  }
+
+  .cloud-project-kind-icon {
+    @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl;
+    background: #f3f4f6;
+    color: #374151;
+  }
+
+  .cloud-project-kind-copy {
+    @apply min-w-0;
+  }
+
+  .cloud-project-kind-copy strong {
+    @apply text-sm;
+    color: #111827;
+  }
+
+  .cloud-project-kind-copy p {
+    @apply mt-1 text-xs leading-5;
+    color: #4b5563;
+  }
+
+  .cloud-project-kind-copy span {
+    @apply mt-2 block text-[11px] leading-5;
+    color: #6b7280;
+  }
+
+  .cloud-project-summary-grid {
+    @apply grid gap-3 md:grid-cols-2;
+  }
+
+  .cloud-project-summary-card,
+  .cloud-project-ready-card {
+    @apply rounded-2xl border px-4 py-4;
+    border-color: #e5e7eb;
+    background: #fafafa;
+  }
+
+  .cloud-project-summary-title {
+    @apply flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em];
+    color: #6b7280;
+  }
+
+  .cloud-project-summary-value {
+    @apply mt-2 text-sm font-semibold;
+    color: #111827;
+  }
+
+  .cloud-project-summary-note,
+  .cloud-project-ready-card p {
+    @apply mt-1 text-xs leading-5;
+    color: #6b7280;
+  }
+
+  .cloud-project-ready-card strong {
+    @apply text-sm;
+    color: #111827;
+  }
+
+  .cloud-project-modal-footer {
+    @apply items-center justify-between;
+  }
+
   .project-sheet-secondary-button,
   .project-sheet-primary-button {
     @apply inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-medium transition-colors;
@@ -400,5 +563,58 @@
 
   .dark .project-sheet-primary-button:hover {
     background: #cbd5e1;
+  }
+
+  .dark .project-sheet-cloud-summary,
+  .dark .cloud-project-summary-card,
+  .dark .cloud-project-ready-card,
+  .dark .cloud-project-kind-card {
+    border-color: #2a3040;
+    background: #171c27;
+  }
+
+  .dark .cloud-project-kind-card.is-selected {
+    border-color: #5873a5;
+    background: #1b2638;
+  }
+
+  .dark .cloud-project-kind-icon {
+    background: #1e2634;
+    color: #d7dfec;
+  }
+
+  .dark .cloud-project-kind-copy strong,
+  .dark .cloud-project-stage-head h3,
+  .dark .cloud-project-summary-value,
+  .dark .cloud-project-ready-card strong {
+    color: #e5e7eb;
+  }
+
+  .dark .cloud-project-kind-copy p,
+  .dark .cloud-project-kind-copy span,
+  .dark .cloud-project-stage-head p,
+  .dark .cloud-project-summary-title,
+  .dark .cloud-project-summary-note,
+  .dark .cloud-project-ready-card p,
+  .dark .cloud-modal-eyebrow {
+    color: #94a3b8;
+  }
+
+  .dark .cloud-project-step {
+    border-color: #2a3040;
+    background: #171c27;
+    color: #94a3b8;
+  }
+
+  .dark .cloud-project-step.is-active {
+    border-color: #5873a5;
+    background: #1b2638;
+    color: #dbeafe;
+  }
+
+  .dark .cloud-project-step.is-complete {
+    border-color: #27533a;
+    background: #102417;
+    color: #86efac;
   }
 }

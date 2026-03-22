@@ -1164,13 +1164,17 @@ export function Composer() {
   };
 
   const accessModeTooltip =
-    selectedAccessMode === "secure"
+    selectedConversation?.runtimeLocation === 'cloud'
       ? t(
-          "Mode sécurisé: comportement actuel, accès limité au contexte de la conversation.",
+          "Conversation cloud: le runtime s’exécute à distance. Le mode d’accès reste piloté par le contexte cloud et les capacités du projet.",
         )
-      : t(
-          "Mode ouvert: Chaton peut accéder à des fichiers/dossiers hors contexte initial et exécuter les commandes nécessaires.",
-        );
+      : selectedAccessMode === "secure"
+        ? t(
+            "Mode sécurisé: comportement actuel, accès limité au contexte de la conversation.",
+          )
+        : t(
+            "Mode ouvert: Chaton peut accéder à des fichiers/dossiers hors contexte initial et exécuter les commandes nécessaires.",
+          );
 
   const handleAccessModeChange = async (mode: "secure" | "open") => {
     setSelectedAccessMode(mode);

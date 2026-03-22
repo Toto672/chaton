@@ -1,6 +1,7 @@
 import {
   Circle,
   Check,
+  Cloud,
   Download,
   Eye,
   FileWarning,
@@ -52,6 +53,7 @@ export function Topbar() {
     disableConversationWorktree,
     setConversationAccessMode,
     sendPiPrompt,
+    openCloudSettings,
   } = useWorkspace();
   const [isProjectTerminalOpen, setIsProjectTerminalOpen] = useState(false);
   const [isTracing, setIsTracing] = useState(false);
@@ -64,6 +66,20 @@ export function Topbar() {
     selectedConversation?.worktreePath &&
       selectedConversation.worktreePath.trim().length > 0,
   );
+  const selectedProject = state.projects.find((project) => project.id === selectedConversation?.projectId)
+  const isCloudProject = selectedProject?.location === 'cloud'
+  const cloudAccount = state.cloudAccount
+  const hasRemainingCloudCapacity = (cloudAccount?.usage.remainingParallelSessions ?? 0) > 0
+  const cloudStatusLabel =
+    selectedProject?.cloudStatus === 'connected'
+      ? t('Connecté')
+      : selectedProject?.cloudStatus === 'connecting'
+        ? t('Connexion…')
+        : selectedProject?.cloudStatus === 'disconnected'
+          ? t('Déconnecté')
+          : selectedProject?.cloudStatus === 'error'
+            ? t('Erreur')
+            : null
 
   useEffect(() => {
     if (!selectedConversation?.projectId) {
@@ -194,10 +210,49 @@ export function Topbar() {
     <>
       <header className="topbar">
         <div className="topbar-left">
-          <div className="topbar-title">{selectedConversation?.title ?? t("Nouvelle conversation")}</div>
+          <div className="topbar-title-wrap">
+            <div className="topbar-title">{selectedConversation?.title ?? t("Nouvelle conversation")}</div>
+            {selectedConversation?.runtimeLocation === 'cloud' && selectedProject ? (
+              <div className="topbar-cloud-banner">
+                <div className="topbar-cloud-banner-main">
+                  <span className="topbar-cloud-chip">
+                    <Cloud className="h-3.5 w-3.5" />
+                    {t('Exécution cloud')}
+                  </span>
+                  <span className="topbar-cloud-text">
+                    {selectedProject.organizationName || t('Organisation inconnue')} · {selectedProject.name}
+                  </span>
+                  {selectedProject.workspaceCapability ? (
+                    <span className="topbar-cloud-tag">
+                      {selectedProject.workspaceCapability === 'full_tools' ? t('Outils complets') : t('Chat only')}
+                    </span>
+                  ) : null}
+                  {cloudStatusLabel ? (
+                    <span className={`topbar-cloud-status topbar-cloud-status-${selectedProject.cloudStatus ?? 'unknown'}`}>
+                      {cloudStatusLabel}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="topbar-cloud-banner-side">
+                  {cloudAccount ? (
+                    <span className={`topbar-cloud-quota ${hasRemainingCloudCapacity ? '' : 'is-warning'}`}>
+                      {cloudAccount.usage.activeParallelSessions}/{cloudAccount.usage.parallelSessionsLimit} {t('sessions actives')}
+                    </span>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="topbar-cloud-link"
+                    onClick={() => openCloudSettings()}
+                  >
+                    {t('Réglages cloud')}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
         <div className="topbar-actions">
-        {selectedConversation?.projectId ? (
+        {selectedConversation?.projectId && !isCloudProject ? (
           <>
             <div className="flex items-center gap-1">
               <button

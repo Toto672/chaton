@@ -10,7 +10,7 @@ import type {
 
 type Props = {
   state: WorkspaceState
-  onConnect: () => Promise<void> | void
+  onConnect: (options?: { name?: string; baseUrl?: string }) => Promise<void> | void
   onRefresh: () => Promise<void> | void
   onUpdateUser: (userId: string, updates: { subscriptionPlan?: CloudSubscriptionPlan; isAdmin?: boolean }) => Promise<void> | void
   onGrantSubscription: (userId: string, grant: { planId: CloudSubscriptionPlan; durationDays?: number | null }) => Promise<void> | void
@@ -200,6 +200,7 @@ export function CloudSection({ state, onConnect, onRefresh, onUpdateUser, onGran
   const account = state.cloudAccount
   const cloudInstances = state.cloudInstances
   const plans = account?.plans ?? []
+  const visibleCloudInstances = cloudInstances.length > 0
   const activeOrganization =
     account?.organizations.find((organization) => organization.id === account.activeOrganizationId) ??
     account?.organizations[0] ??
@@ -259,6 +260,22 @@ export function CloudSection({ state, onConnect, onRefresh, onUpdateUser, onGran
                 </div>
               </div>
             </div>
+            {visibleCloudInstances ? (
+              <div className="settings-cloud-instance-list">
+                {cloudInstances.map((instance) => (
+                  <div key={instance.id} className={`settings-cloud-instance-card settings-cloud-instance-${instance.connectionStatus}`}>
+                    <div>
+                      <div className="settings-card-title" style={{ fontSize: '14px' }}>{instance.name}</div>
+                      <div className="settings-card-note">{instance.baseUrl}</div>
+                    </div>
+                    <div className="settings-card-note">
+                      {instance.connectionStatus}
+                      {instance.lastError ? ` · ${instance.lastError}` : ''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <div className="settings-actions-row" style={{ marginTop: '16px' }}>
               <button type="button" className="settings-action-secondary" onClick={() => void onRefresh()}>
                 Rafraîchir
@@ -269,31 +286,27 @@ export function CloudSection({ state, onConnect, onRefresh, onUpdateUser, onGran
       </section>
 
       {account?.user.isAdmin ? (
-        <>
-          <section className="settings-card">
-            <h3 className="settings-card-title">Plans d’abonnement</h3>
-            <div className="settings-card-note" style={{ marginBottom: '12px' }}>
-              Les paramètres des plans sont administrables ici. Le quota appliqué par le runtime cloud est recalculé à partir de cette configuration.
-            </div>
-            <div className="settings-list">
+        <section className="settings-card">
+          <h3 className="settings-card-title">Administration cloud</h3>
+          <div className="settings-card-note" style={{ marginBottom: '12px' }}>
+            Les contrôles d’administration restent disponibles ici, mais le statut cloud quotidien reste visible dans la carte ci-dessus.
+          </div>
+          <div className="settings-cloud-admin-grid">
+            <div className="settings-subcard" style={{ display: 'grid', gap: '12px' }}>
+              <div className="settings-card-title" style={{ fontSize: '14px' }}>Plans d’abonnement</div>
               {plans.map((plan) => (
                 <PlanRow key={plan.id} plan={plan} onUpdatePlan={onUpdatePlan} />
               ))}
             </div>
-          </section>
 
-          <section className="settings-card">
-            <h3 className="settings-card-title">Administration cloud</h3>
-            <div className="settings-card-note" style={{ marginBottom: '12px' }}>
-              Le premier utilisateur créé devient admin par défaut. Les utilisateurs héritent des plans disponibles ci-dessus.
-            </div>
-            <div className="settings-list">
+            <div className="settings-subcard" style={{ display: 'grid', gap: '12px' }}>
+              <div className="settings-card-title" style={{ fontSize: '14px' }}>Utilisateurs</div>
               {state.cloudAdminUsers.map((user) => (
                 <UserRow key={user.id} user={user} plans={plans} onUpdateUser={onUpdateUser} onGrantSubscription={onGrantSubscription} />
               ))}
             </div>
-          </section>
-        </>
+          </div>
+        </section>
       ) : null}
     </div>
   )

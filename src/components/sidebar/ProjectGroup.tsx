@@ -95,6 +95,30 @@ export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [
 
   // Check if there are hidden regular conversations
   const hasHiddenRegularConversations = regularConversations.length > THREAD_LIMIT && !afficherTousLesFils
+  const cloudKindLabel =
+    project.kind === 'repository'
+      ? t('Repo')
+      : project.kind === 'conversation_only'
+        ? t('Conversation')
+        : null
+  const cloudCapabilityLabel =
+    project.workspaceCapability === 'full_tools'
+      ? t('Outils complets')
+      : project.workspaceCapability === 'chat_only'
+        ? t('Chat only')
+        : null
+  const cloudStatusLabel =
+    project.location === 'cloud' && project.cloudStatus
+      ? (
+        project.cloudStatus === 'connected'
+          ? t('Connecté')
+          : project.cloudStatus === 'connecting'
+            ? t('Connexion…')
+            : project.cloudStatus === 'disconnected'
+              ? t('Déconnecté')
+              : t('Erreur cloud')
+      )
+      : null
 
   useEffect(() => {
     if (!hasHiddenRegularConversations && afficherTousLesFils) {
@@ -125,7 +149,17 @@ export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [
               loadAsDataUrl
             />
           </span>
-          <span className="project-title truncate">{project.name}</span>
+          <span className="project-title">
+            <span className="truncate">{project.name}</span>
+            {project.location === 'cloud' ? (
+              <span className="project-cloud-meta">
+                <span className="project-cloud-pill">{t('Cloud')}</span>
+                {cloudKindLabel ? <span className="project-cloud-tag">{cloudKindLabel}</span> : null}
+                {cloudCapabilityLabel ? <span className="project-cloud-tag">{cloudCapabilityLabel}</span> : null}
+                {cloudStatusLabel ? <span className={`project-cloud-status project-cloud-status-${project.cloudStatus ?? 'unknown'}`}>{cloudStatusLabel}</span> : null}
+              </span>
+            ) : null}
+          </span>
         </button>
         <button
           type="button"
@@ -205,7 +239,14 @@ export const ProjectGroup = memo(function ProjectGroup({ project, extensions = [
             style={{ overflow: 'hidden' }}
           >
             {conversations.length === 0 ? (
-              <div className="empty-thread-state">{t('Aucun fil pour ce projet')}</div>
+              <div className="empty-thread-state">
+                <div>{t('Aucun fil pour ce projet')}</div>
+                {project.location === 'cloud' ? (
+                  <div className="empty-thread-subtext">
+                    {t('Les conversations de ce projet s’exécutent dans le cloud.')}
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <AnimatePresence initial={false}>
                 {displayedConversations.map((conversation) => (

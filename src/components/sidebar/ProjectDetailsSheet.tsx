@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { FolderGit2, FolderOpen, Image, MessageSquare, PencilLine, Smile, X } from 'lucide-react'
+import { Cloud, FolderGit2, FolderOpen, Image, MessageSquare, PencilLine, Smile, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { ProjectImageThumbnail } from '@/components/sidebar/ProjectImageThumbnail'
@@ -81,7 +81,7 @@ function IconPreview({ icon, size = 20 }: { icon: string | null | undefined; siz
 
 export function ProjectDetailsSheet({ project, open, onClose, onProjectUpdated, onSubFolderChange, availableSubFolders = [] }: ProjectDetailsSheetProps) {
   const { t } = useTranslation()
-  const { state, updateProjectIcon } = useWorkspace()
+  const { state, updateProjectIcon, connectCloudInstance, createConversationForProject, openCloudSettings } = useWorkspace()
   const [iconDraft, setIconDraft] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<IconTab>('emoji')
@@ -156,6 +156,31 @@ export function ProjectDetailsSheet({ project, open, onClose, onProjectUpdated, 
     if (!project?.cloudInstanceId) return null
     return state.cloudInstances.find((instance) => instance.id === project.cloudInstanceId) ?? null
   }, [project?.cloudInstanceId, state.cloudInstances])
+  const cloudStatusLabel = useMemo(() => {
+    if (!project || project.location !== 'cloud') return null
+    switch (project.cloudStatus) {
+      case 'connected':
+        return t('Connecté')
+      case 'connecting':
+        return t('Connexion en cours')
+      case 'disconnected':
+        return t('Déconnecté')
+      case 'error':
+        return t('Erreur')
+      default:
+        return t('Inconnu')
+    }
+  }, [project, t])
+  const cloudKindLabel = project?.kind === 'repository'
+    ? t('Repo distant')
+    : project?.kind === 'conversation_only'
+      ? t('Conversation uniquement')
+      : null
+  const cloudCapabilityLabel = project?.workspaceCapability === 'full_tools'
+    ? t('Outils complets')
+    : project?.workspaceCapability === 'chat_only'
+      ? t('Chat only')
+      : null
 
   const handleSaveIcon = useCallback(async (iconValue?: string) => {
     if (!project || isSaving) return
@@ -253,7 +278,48 @@ export function ProjectDetailsSheet({ project, open, onClose, onProjectUpdated, 
             <div className="project-sheet-body">
               {/* Project info */}
               <section className="project-sheet-section">
-                <h3 className="project-sheet-section-title">{t('Informations principales')}</h3>
+                <h3 className="project-sheet-section-title">
+                  {project.location === 'cloud' ? t('État opérationnel') : t('Informations principales')}
+                </h3>
+                {project.location === 'cloud' ? (
+                  <div className="project-sheet-cloud-summary">
+                    <div className={`project-sheet-cloud-status project-sheet-cloud-status-${project.cloudStatus ?? 'unknown'}`}>
+                      <Cloud className="h-4 w-4" />
+                      <span>{cloudStatusLabel}</span>
+                    </div>
+                    <div className="project-sheet-cloud-actions">
+                      <button
+                        type="button"
+                        className="project-sheet-secondary-button"
+                        onClick={() => {
+                          if (!cloudInstance) return
+                          void connectCloudInstance({ name: cloudInstance.name, baseUrl: cloudInstance.baseUrl })
+                        }}
+                      >
+                        {t('Reconnecter cloud')}
+                      </button>
+                      <button
+                        type="button"
+                        className="project-sheet-secondary-button"
+                        onClick={() => {
+                          void createConversationForProject(project.id)
+                        }}
+                      >
+                        {t('Créer un fil')}
+                      </button>
+                      <button
+                        type="button"
+                        className="project-sheet-primary-button"
+                        onClick={() => {
+                          openCloudSettings()
+                          onClose()
+                        }}
+                      >
+                        {t('Ouvrir les réglages cloud')}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 <dl className="project-sheet-meta">
                   <div>
                     <dt>{t('Nom')}</dt>
@@ -274,19 +340,61 @@ export function ProjectDetailsSheet({ project, open, onClose, onProjectUpdated, 
                         <dd>{project.organizationName || 'N/A'}</dd>
                       </div>
                       <div>
-                        <dt>{t('Etat cloud')}</dt>
-                        <dd>{project.cloudStatus || 'unknown'}</dd>
+                        <dt>{t('État cloud')}</dt>
+                        <dd>{cloudStatusLabel}</dd>
                       </div>
+                      {cloudKindLabel ? (
+                        <div>
+                          <dt>{t('Kind')}</dt>
+                          <dd>{cloudKindLabel}</dd>
+                        </div>
+                      ) : null}
+                      {cloudCapabilityLabel ? (
+                        <div>
+                          <dt>{t('Capacité')}</dt>
+                          <dd>{cloudCapabilityLabel}</dd>
+                        </div>
+                      ) : null}
                       {cloudInstance?.userEmail ? (
                         <div>
                           <dt>{t('Compte cloud')}</dt>
                           <dd>{cloudInstance.userEmail}</dd>
                         </div>
                       ) : null}
-                      {project.cloudInstanceId ? (
+                      {cloudInstance?.name ? (
                         <div>
                           <dt>{t('Instance')}</dt>
-                          <dd>{project.cloudInstanceId}</dd>
+                          <dd>{cloudInstance.name}</dd>
+                        </div>
+                      ) : null}
+                      {cloudInstance?.baseUrl ? (
+                        <div>
+                          <dt>{t('Base URL')}</dt>
+                          <dd className="project-sheet-path">{cloudInstance.baseUrl}</dd>
+                        </div>
+                      ) : null}
+                      {project.repository?.cloneUrl ? (
+                        <div>
+                          <dt>{t('Clone URL')}</dt>
+                          <dd className="project-sheet-path">{project.repository.cloneUrl}</dd>
+                        </div>
+                      ) : null}
+                      {project.repository?.defaultBranch ? (
+                        <div>
+                          <dt>{t('Branche par défaut')}</dt>
+                          <dd>{project.repository.defaultBranch}</dd>
+                        </div>
+                      ) : null}
+                      {project.repository?.authMode ? (
+                        <div>
+                          <dt>{t('Auth dépôt')}</dt>
+                          <dd>{project.repository.authMode === 'token' ? t('Token HTTPS') : t('Aucune')}</dd>
+                        </div>
+                      ) : null}
+                      {cloudInstance?.lastError ? (
+                        <div>
+                          <dt>{t('Dernière erreur')}</dt>
+                          <dd>{cloudInstance.lastError}</dd>
                         </div>
                       ) : null}
                     </>

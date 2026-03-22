@@ -101,7 +101,6 @@ export function Sidebar({ width }: { width: number }) {
     state.projects.filter(p => p.isArchived),
     [state.projects]
   )
-
   // Generate menu items for the top navigation
   const { foldableItems } = useSidebarMenuItems({
     sidebarMode: state.sidebarMode,

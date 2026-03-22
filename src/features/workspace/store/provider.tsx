@@ -543,9 +543,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     })
   }, [])
 
-  const connectCloudInstance = useCallback(async () => {
+  const connectCloudInstance = useCallback(async (options?: { name?: string; baseUrl?: string }) => {
     const result = await workspaceIpc.startCloudAuth({
-      baseUrl: 'https://cloud.chatons.ai',
+      name: options?.name,
+      baseUrl: options?.baseUrl ?? 'https://cloud.chatons.ai',
     })
     if (!result.ok) {
       dispatch({
@@ -560,6 +561,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         notice: 'Connexion cloud ouverte dans votre navigateur.',
       },
     })
+  }, [])
+
+  const openCloudSettings = useCallback(() => {
+    dispatch({ type: 'setSidebarMode', payload: { mode: 'settings' } })
   }, [])
 
   const refreshCloudAccount = useCallback(async () => {
@@ -671,8 +676,23 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       })
       dispatch({
         type: 'setNotice',
-        payload: { notice: 'Projet cloud créé.' },
+        payload: { notice: 'Projet cloud créé. Premier fil cloud lancé.' },
       })
+      const threadResult = await workspaceIpc.createConversationForProject(result.project.id)
+      if (threadResult.ok) {
+        dispatch({
+          type: 'addConversation',
+          payload: { conversation: threadResult.conversation },
+        })
+        dispatch({
+          type: 'setSidebarMode',
+          payload: { mode: 'default' },
+        })
+        dispatch({
+          type: 'selectConversation',
+          payload: { conversationId: threadResult.conversation.id },
+        })
+      }
     },
     [],
   )
@@ -1470,6 +1490,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       openSkills: () => dispatch({ type: 'setSidebarMode', payload: { mode: 'skills' } }),
       openExtensions: () => dispatch({ type: 'setSidebarMode', payload: { mode: 'extensions' } }),
       openChannels: () => dispatch({ type: 'setSidebarMode', payload: { mode: 'channels' } }),
+      openCloudSettings,
       closeSettings: () => dispatch({ type: 'setSidebarMode', payload: { mode: 'default' } }),
       selectProject: async (projectId: string) => {
         dispatch({ type: 'selectProject', payload: { projectId } })
@@ -1561,6 +1582,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       updateCloudUser,
       updateCloudPlan,
       createCloudProject,
+      openCloudSettings,
       isLoading,
       persistSettings,
       respondExtensionUi,

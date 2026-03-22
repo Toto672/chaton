@@ -55,6 +55,10 @@ export function MainView() {
   const selectedConversation = state.conversations.find(
     (conversation) => conversation.id === state.selectedConversationId,
   )
+  const selectedProject = state.projects.find(
+    (project) => project.id === selectedConversation?.projectId,
+  )
+  const cloudUsage = state.cloudAccount?.usage ?? null
   const selectedRuntime = usePiRuntimeMeta(selectedConversation?.id ?? null)
   const messages = usePiMessages(selectedConversation?.id ?? null)
   const isStreaming = selectedRuntime?.status === 'streaming'
@@ -559,6 +563,26 @@ export function MainView() {
             }}
           >
             <section className="chat-section">
+              {selectedConversation?.runtimeLocation === 'cloud' && selectedProject ? (
+                <div className="cloud-runtime-panel">
+                  <div className="cloud-runtime-panel-main">
+                    <div className="cloud-runtime-panel-title">
+                      {t('Cette conversation s’exécute dans le cloud')}
+                    </div>
+                    <div className="cloud-runtime-panel-copy">
+                      {selectedProject.organizationName || t('Organisation inconnue')} · {selectedProject.name}
+                      {selectedProject.workspaceCapability
+                        ? ` · ${selectedProject.workspaceCapability === 'full_tools' ? t('Outils complets') : t('Chat only')}`
+                        : ''}
+                    </div>
+                  </div>
+                  {cloudUsage ? (
+                    <div className={`cloud-runtime-panel-quota ${cloudUsage.remainingParallelSessions === 0 ? 'is-warning' : ''}`}>
+                      {cloudUsage.activeParallelSessions}/{cloudUsage.parallelSessionsLimit} {t('sessions actives')} · {cloudUsage.remainingParallelSessions} {t('restantes')}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="chat-timeline">
                 <AnimatePresence>
                   {shouldShowHeroSection ? (

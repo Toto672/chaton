@@ -253,6 +253,36 @@
     @apply flex flex-wrap gap-2;
   }
 
+  .settings-cloud-instance-list {
+    @apply mt-4 grid gap-2;
+  }
+
+  .settings-cloud-instance-card {
+    @apply flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3 py-3;
+    border-color: #d7dde7;
+    background: #ffffffcc;
+  }
+
+  .settings-cloud-instance-connected {
+    border-color: #c6e6d0;
+    background: #f5fcf7;
+  }
+
+  .settings-cloud-instance-connecting {
+    border-color: #f0deb2;
+    background: #fffaf0;
+  }
+
+  .settings-cloud-instance-disconnected,
+  .settings-cloud-instance-error {
+    border-color: #f0c8c8;
+    background: #fff7f7;
+  }
+
+  .settings-cloud-admin-grid {
+    @apply grid gap-4 lg:grid-cols-2;
+  }
+
   .settings-actions-grid {
     @apply grid grid-cols-1 gap-2 md:grid-cols-2;
   }

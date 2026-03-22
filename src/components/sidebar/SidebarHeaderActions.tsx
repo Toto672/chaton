@@ -8,6 +8,26 @@ import { SortFilterPopover } from './SortFilterPopover'
 export function SidebarHeaderActions() {
   const { t } = useTranslation()
   const { importProject, connectCloudInstance, createCloudProject, createConversationGlobal, toggleSidebarSearch, state } = useWorkspace()
+  const cloudProjects = state.projects.filter((project) => project.location === 'cloud' && !project.isArchived && !project.isHidden)
+  const hasCloudConnection = state.cloudInstances.length > 0
+  const cloudStatus =
+    state.cloudInstances.find((instance) => instance.connectionStatus === 'error')?.connectionStatus ??
+    state.cloudInstances.find((instance) => instance.connectionStatus === 'connecting')?.connectionStatus ??
+    state.cloudInstances.find((instance) => instance.connectionStatus === 'disconnected')?.connectionStatus ??
+    state.cloudInstances[0]?.connectionStatus ??
+    null
+
+  const cloudActionLabel = !hasCloudConnection
+    ? t('Connecter Cloud')
+    : cloudProjects.length === 0
+      ? t('Créer le premier projet cloud')
+      : t('Nouveau projet cloud')
+
+  const cloudActionTitle = !hasCloudConnection
+    ? t('Connecter Chatons Cloud')
+    : cloudProjects.length === 0
+      ? t('Créer votre premier projet cloud')
+      : t('Créer un nouveau projet cloud')
 
   return (
     <div className="flex w-full shrink-0 items-center justify-center gap-2 px-3 pb-3">
@@ -49,11 +69,11 @@ export function SidebarHeaderActions() {
 
       <button
         type="button"
-        className="sidebar-icon-button"
-        aria-label={t("Connecter Chatons Cloud ou ajouter un projet cloud")}
-        title={t("Connecter Chatons Cloud ou ajouter un projet cloud")}
+        className={`sidebar-icon-button sidebar-cloud-action ${cloudStatus ? `sidebar-cloud-action-${cloudStatus}` : ''}`}
+        aria-label={cloudActionLabel}
+        title={cloudActionTitle}
         onClick={() => {
-          if (state.cloudInstances.length === 0) {
+          if (!hasCloudConnection) {
             void connectCloudInstance()
             return
           }
@@ -61,6 +81,7 @@ export function SidebarHeaderActions() {
         }}
       >
         <Cloud className="h-4 w-4" />
+        {cloudStatus ? <span className={`sidebar-cloud-dot sidebar-cloud-dot-${cloudStatus}`} aria-hidden="true" /> : null}
       </button>
 
       <SortFilterPopover>

@@ -62,6 +62,30 @@
     @apply bg-transparent;
   }
 
+  .dark .topbar-cloud-text {
+    @apply text-[#9fb0cb];
+  }
+
+  .dark .topbar-cloud-chip {
+    background: #173159;
+    color: #c7ddff;
+  }
+
+  .dark .topbar-cloud-tag,
+  .dark .topbar-cloud-quota {
+    background: #171f2c;
+    color: #a4b2c8;
+  }
+
+  .dark .topbar-cloud-quota.is-warning {
+    background: #392216;
+    color: #fdba74;
+  }
+
+  .dark .topbar-cloud-link {
+    @apply text-[#9ec5ff] hover:bg-[#162338];
+  }
+
   .dark .tracing-button {
     @apply text-[#9ca3af];
   }
@@ -90,6 +114,37 @@
 
   .dark .sidebar-icon-button {
     @apply text-[#95a2bb] hover:bg-[#141d2b] hover:text-[#eef3ff] focus-visible:ring-[#2a3448];
+  }
+
+  .dark .empty-thread-state,
+  .dark .empty-thread-subtext {
+    @apply text-[#8ea0bf];
+  }
+
+  .dark .project-cloud-pill {
+    background: #193056;
+    color: #b7d2ff;
+  }
+
+  .dark .project-cloud-tag {
+    background: #1a2332;
+    color: #9fb0cb;
+  }
+
+  .dark .project-cloud-status-connected {
+    background: #102417;
+    color: #86efac;
+  }
+
+  .dark .project-cloud-status-connecting {
+    background: #2f2410;
+    color: #fbbf24;
+  }
+
+  .dark .project-cloud-status-disconnected,
+  .dark .project-cloud-status-error {
+    background: #35161b;
+    color: #fca5a5;
   }
 
   .dark .project-action-button {
@@ -502,6 +557,29 @@
     @apply text-xs text-[#8b9ab5] mt-1;
   }
 
+  .dark .cloud-runtime-panel {
+    @apply border-[#26354d];
+    background: linear-gradient(180deg, #101726 0%, #121b2b 100%);
+  }
+
+  .dark .cloud-runtime-panel-title {
+    @apply text-[#e6ecfa];
+  }
+
+  .dark .cloud-runtime-panel-copy {
+    @apply text-[#9fb0cb];
+  }
+
+  .dark .cloud-runtime-panel-quota {
+    background: #171f2c;
+    color: #a4b2c8;
+  }
+
+  .dark .cloud-runtime-panel-quota.is-warning {
+    background: #392216;
+    color: #fdba74;
+  }
+
   /* Light mode: Create Cloud Project Modal */
   .modal-backdrop {
     @apply fixed inset-0 bg-black/30 z-50;
@@ -513,6 +591,9 @@
 
   .modal-header {
     @apply border-b border-gray-200 px-4 py-3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
   .modal-title {
@@ -980,7 +1061,8 @@
   /* Extension icons loaded as <img> tags don't inherit currentColor,
      so we invert + adjust to approximate the sidebar icon color. */
   .dark img.sidebar-nav-icon {
-    filter: invert(70%) sepia(10%) saturate(500%) hue-rotate(185deg) brightness(90%);
+    filter: invert(70%) sepia(10%) saturate(500%) hue-rotate(185deg)
+      brightness(90%);
   }
 
   .dark .settings-head-title {
@@ -1179,6 +1261,27 @@
   .dark .settings-main-title,
   .dark .settings-card-note {
     @apply text-[#edf1fa];
+  }
+
+  .dark .settings-cloud-instance-card {
+    @apply border-[#2a3345];
+    background: #101722;
+  }
+
+  .dark .settings-cloud-instance-connected {
+    border-color: #214d33;
+    background: #0f1f16;
+  }
+
+  .dark .settings-cloud-instance-connecting {
+    border-color: #5b4720;
+    background: #221c10;
+  }
+
+  .dark .settings-cloud-instance-disconnected,
+  .dark .settings-cloud-instance-error {
+    border-color: #5b252d;
+    background: #221216;
   }
 
   .dark .skills-title {
