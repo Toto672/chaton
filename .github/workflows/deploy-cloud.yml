@@ -112,9 +112,13 @@ jobs:
 
       - name: Create or update GHCR pull secret
         env:
-          GHCR_USERNAME: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ secrets.GHCR_PULL_USERNAME || github.repository_owner }}
+          GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
         run: |
+          if [ -z "$GHCR_TOKEN" ]; then
+            echo "GHCR_PULL_TOKEN secret is empty"
+            exit 1
+          fi
           kubectl -n "${K8S_NAMESPACE}" create secret docker-registry ghcr-auth \
             --docker-server="${REGISTRY}" \
             --docker-username="${GHCR_USERNAME}" \
