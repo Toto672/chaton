@@ -7,6 +7,22 @@ description: Verified documentation changes and rationale for Chatons features a
 
 ## 2026-03-22
 
+### Fixed the cloud onboarding desktop handoff
+
+**Change:** Replaced the cloud web onboarding CTA deep link with `chatons://cloud/connect?base_url=...` and taught the desktop app to translate that link into its own `cloud:startAuth` flow before waiting for the real `chatons://cloud/auth/callback` return.
+
+**Why:** The portal CTA previously opened the desktop app with a callback-shaped URL that contained no valid auth result. That could foreground the app without changing cloud state, leaving users unsure whether the desktop client was connected.
+
+**Files updated:**
+- `landing/src/CloudOnboardingPage.tsx` -- Switched the onboarding CTA to the desktop connect deep link
+- `electron/main.ts` -- Added deep-link handling for `chatons://cloud/connect`
+- `electron/preload.ts` -- Exposed renderer subscription for cloud-connect deep links
+- `src/services/ipc/workspace.ts` -- Added the cloud-connect IPC wrapper
+- `src/features/workspace/store/provider.tsx` -- Starts desktop cloud auth when the cloud-connect deep link arrives
+- `docs/content/developer-guide.mdx` -- Added the supported cloud connect deep link
+- `docs/content/pi-integration.mdx` -- Clarified connect-link versus auth-callback responsibilities
+- `AGENTS.md` -- Documented the onboarding-to-desktop handoff rule
+
 ### Prevented hosted cloud signup from hanging on SMTP timeouts
 
 **Change:** Updated the password-based web auth routes so `cloud-api` no longer waits synchronously on transactional email delivery before returning signup, password-reset, or password-changed responses. Email sends now happen in the background and log explicit delivery failures.

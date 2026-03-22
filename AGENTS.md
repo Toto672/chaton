@@ -71,6 +71,7 @@ For a cloud project:
 - cloud subscription, quota, project access, conversation ownership, and websocket authorization must be derived server-side by the cloud control plane, never trusted from desktop-supplied headers or request bodies
 - internal service-to-service routes between `cloud-api`, `cloud-realtime`, and `runtime-headless` must require a shared service credential; network reachability alone is not sufficient authorization
 - the desktop app must not create a local Pi session as a fallback
+- the cloud web onboarding may open the desktop with `chatons://cloud/connect?base_url=...`; the desktop must then start its own browser auth flow and only treat `chatons://cloud/auth/callback` as the real auth callback
 
 ---
 
