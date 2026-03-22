@@ -1,18 +1,22 @@
 import http from 'node:http'
 import crypto from 'node:crypto'
 import type {
+  AcceptOrganizationInviteRequest,
   AddOrganizationProviderRequest,
   AddOrganizationProviderResponse,
   CloudAccountResponse,
   CloudConversationMessageRecord,
   CloudDesktopAuthExchangeRequest,
   CloudDesktopAuthExchangeResponse,
+  CreateOrganizationInviteRequest,
+  CreateOrganizationInviteResponse,
   CreateCloudConversationRequest,
   CreateCloudConversationResponse,
   CreateCloudProjectRequest,
   CreateCloudProjectResponse,
   GetCloudConversationMessagesResponse,
   HealthResponse,
+  SetActiveOrganizationRequest,
   UpdateOrganizationRequest,
 } from '../../packages/protocol/index.js'
 import type {
@@ -20,6 +24,7 @@ import type {
   CloudSubscriptionPlan,
 } from '../../packages/domain/index.js'
 import {
+  buildOrganizationInviteEmail,
   desktopAuthRequestTtlSeconds,
   oidcClientId,
   oidcClientSecret,
@@ -43,6 +48,7 @@ import { requireAdmin, requireAuthedUser, requireInternalService, requireSubscri
 import { escapeHtml, handleCorsPreflight, html, json, readFormBody, readJsonBody, redirect } from './http.ts'
 import { handleWebAuthRoute } from './web-auth.ts'
 import { handleAdminRoute } from './admin-routes.ts'
+import { sendMail } from './mailer.ts'
 
 async function renderAuthorizePage(params: {
   state: string
@@ -518,6 +524,7 @@ async function handleRequest(
       return
     }
     const organization = await store.updateOrganization(auth.user, {
+      organizationId: body.organizationId,
       name,
       slug,
       plan: body.plan,
@@ -542,6 +549,7 @@ async function handleRequest(
       return
     }
     const result = await store.addOrganizationProvider(auth.user, {
+      organizationId: body.organizationId,
       kind: body.kind,
       label,
       secret,
@@ -555,6 +563,102 @@ async function handleRequest(
       organization: result.organization,
     }
     json(request, response, 201, payload)
+    return
+  }
+
+  if (method === 'POST' && url === '/v1/organization/active') {
+    const auth = await requireAuthedUser(request, response)
+    if (!auth) {
+      return
+    }
+    const body = await readJsonBody<SetActiveOrganizationRequest>(request)
+    const organizationId = body.organizationId?.trim() ?? ''
+    if (!organizationId) {
+      json(request, response, 400, {
+        error: 'invalid_request',
+        message: 'organizationId is required',
+      })
+      return
+    }
+    const activeOrganizationId = await store.setActiveOrganization(auth.user, {
+      organizationId,
+    })
+    if (!activeOrganizationId) {
+      json(request, response, 404, {
+        error: 'not_found',
+        message: 'Organization not found',
+      })
+      return
+    }
+    json(request, response, 200, { ok: true, activeOrganizationId })
+    return
+  }
+
+  if (method === 'POST' && url === '/v1/organization/invites') {
+    const auth = await requireAuthedUser(request, response)
+    if (!auth) {
+      return
+    }
+    const body = await readJsonBody<CreateOrganizationInviteRequest>(request)
+    const organizationId = body.organizationId?.trim() ?? ''
+    const email = body.email?.trim() ?? ''
+    if (!organizationId || !email) {
+      json(request, response, 400, {
+        error: 'invalid_request',
+        message: 'organizationId and email are required',
+      })
+      return
+    }
+    const created = await store.createOrganizationInvite(auth.user, {
+      organizationId,
+      email,
+    })
+    if (!created) {
+      json(request, response, 403, {
+        error: 'forbidden',
+        message: 'Invite creation not allowed',
+      })
+      return
+    }
+    const inviteUrl = new URL('/cloud/accept-invite', publicBaseUrl)
+    inviteUrl.searchParams.set('token', created.token)
+    void sendMail({
+      ...buildOrganizationInviteEmail({
+        inviteUrl: inviteUrl.toString(),
+        organizationName: created.organization.name,
+        inviterName: auth.user.displayName,
+      }),
+      to: created.email,
+    }).catch((error) => {
+      console.error('[cloud-api] organization invite email delivery failed', error)
+    })
+    json(request, response, 201, { ok: true } satisfies CreateOrganizationInviteResponse)
+    return
+  }
+
+  if (method === 'POST' && url === '/v1/organization/invites/accept') {
+    const auth = await requireAuthedUser(request, response)
+    if (!auth) {
+      return
+    }
+    const body = await readJsonBody<AcceptOrganizationInviteRequest>(request)
+    const token = body.token?.trim() ?? ''
+    if (!token) {
+      json(request, response, 400, {
+        error: 'invalid_request',
+        message: 'token is required',
+      })
+      return
+    }
+    const organization = await store.acceptOrganizationInvite(auth.user, { token })
+    if (!organization) {
+      json(request, response, 400, {
+        error: 'invalid_token',
+        message: 'Invalid or expired organization invite',
+      })
+      return
+    }
+    json(request, response, 200, { ok: true, organization })
     return
   }
 

@@ -5,6 +5,7 @@ import {
   getCloudAccount,
   markDesktopConnected,
   refreshCloudAccount,
+  setActiveOrganization,
   upsertOrganization,
 } from "./cloud";
 import { buildLocalizedPath, getCloudCopy, type LanguageCode, LanguageSwitcher } from "./i18n";
@@ -33,8 +34,12 @@ export function CloudOnboardingPage({
   const navigate = useNavigate();
   const copy = getCloudCopy(currentLanguage);
   const [account, setAccount] = useState(() => getCloudAccount());
-  const [orgName, setOrgName] = useState(account?.organizations[0]?.name ?? "");
-  const [orgSlug, setOrgSlug] = useState(account?.organizations[0]?.slug ?? "");
+  const activeOrganization =
+    account?.organizations.find((organization) => organization.id === account.activeOrganizationId) ??
+    account?.organizations[0] ??
+    null;
+  const [orgName, setOrgName] = useState(activeOrganization?.name ?? "");
+  const [orgSlug, setOrgSlug] = useState(activeOrganization?.slug ?? "");
   const [plan, setPlan] = useState<"plus" | "pro" | "max">(account?.plan ?? "pro");
   const [providerKind, setProviderKind] = useState<(typeof PROVIDER_OPTIONS)[number]["id"]>("openai");
   const [providerSecret, setProviderSecret] = useState("");
@@ -43,7 +48,7 @@ export function CloudOnboardingPage({
   const [organizationPending, setOrganizationPending] = useState(false);
   const [providerPending, setProviderPending] = useState(false);
 
-  const organization = account?.organizations[0] ?? null;
+  const organization = activeOrganization;
   const providerCount = organization?.providers.length ?? 0;
   const canConnectDesktop = Boolean(organization && providerCount > 0);
 
@@ -63,9 +68,13 @@ export function CloudOnboardingPage({
     void refreshCloudAccount()
       .then((next) => {
         setAccount(next);
-        if (next?.organizations[0]) {
-          setOrgName(next.organizations[0].name);
-          setOrgSlug(next.organizations[0].slug);
+        const nextActiveOrganization =
+          next?.organizations.find((organization) => organization.id === next.activeOrganizationId) ??
+          next?.organizations[0] ??
+          null;
+        if (nextActiveOrganization) {
+          setOrgName(nextActiveOrganization.name);
+          setOrgSlug(nextActiveOrganization.slug);
         }
         if (next?.plan) {
           setPlan(next.plan);
@@ -108,6 +117,37 @@ export function CloudOnboardingPage({
               <div className="eyebrow">{copy.onboarding.organizationEyebrow}</div>
               <h1 className="hero-title cloud-form-title">{copy.onboarding.organizationTitle}</h1>
               <p className="hero-subtitle">{copy.onboarding.organizationSubtitle}</p>
+              {account.organizations.length > 1 ? (
+                <label className="cloud-field">
+                  <span>Active organization</span>
+                  <select
+                    value={organization?.id ?? ""}
+                    onChange={(event) => {
+                      const nextOrganizationId = event.target.value;
+                      if (!account) {
+                        return;
+                      }
+                      void setActiveOrganization(account, nextOrganizationId).then((next) => {
+                        setAccount(next);
+                        const nextActiveOrganization =
+                          next.organizations.find((item) => item.id === next.activeOrganizationId) ??
+                          next.organizations[0] ??
+                          null;
+                        if (nextActiveOrganization) {
+                          setOrgName(nextActiveOrganization.name);
+                          setOrgSlug(nextActiveOrganization.slug);
+                        }
+                      });
+                    }}
+                  >
+                    {account.organizations.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <form
                 className="cloud-form"
                 onSubmit={(event) => {
@@ -120,7 +160,12 @@ export function CloudOnboardingPage({
                   }
                   setOrganizationPending(true);
                   setOrganizationError("");
-                  void upsertOrganization(account, { name: orgName, slug: orgSlug, plan })
+                  void upsertOrganization(account, {
+                    organizationId: organization?.id ?? undefined,
+                    name: orgName,
+                    slug: orgSlug,
+                    plan,
+                  })
                     .then((next) => {
                       setAccount(next);
                     })

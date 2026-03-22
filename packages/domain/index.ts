@@ -106,6 +106,14 @@ export type CloudUsageRecord = {
   remainingParallelSessions: number
 }
 
+export type CloudAccountRecord = {
+  user: CloudUserRecord
+  usage: CloudUsageRecord
+  plans: CloudSubscriptionRecord[]
+  organizations: OrganizationRecord[]
+  activeOrganizationId: string | null
+}
+
 export type OrganizationRecord = {
   id: string
   slug: string

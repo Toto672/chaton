@@ -7,10 +7,12 @@ on:
       - README.md
       - "**/*.md"
       - "docs/**"
+      - "landing/**"
   pull_request:
     branches: [main]
     paths-ignore:
       - "docs/**"
+      - "landing/**"
 
 jobs:
   determine-version:

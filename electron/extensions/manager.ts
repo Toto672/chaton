@@ -428,6 +428,14 @@ type ResolvedCommand = {
 function resolveNodeCommand(): ResolvedCommand | null {
   const execPath = process.execPath
   if (execPath && fs.existsSync(execPath)) {
+    // Inside Electron, process.execPath points at the Electron/runtime binary.
+    // Force Node compatibility so callers can safely use `-e` and script paths.
+    if (process.versions.electron) {
+      return {
+        command: execPath,
+        env: { ELECTRON_RUN_AS_NODE: '1' },
+      }
+    }
     return { command: execPath }
   }
   const nodeCommand = process.platform === 'win32' ? 'node.exe' : 'node'

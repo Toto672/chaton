@@ -200,6 +200,10 @@ export function CloudSection({ state, onConnect, onRefresh, onUpdateUser, onGran
   const account = state.cloudAccount
   const cloudInstances = state.cloudInstances
   const plans = account?.plans ?? []
+  const activeOrganization =
+    account?.organizations.find((organization) => organization.id === account.activeOrganizationId) ??
+    account?.organizations[0] ??
+    null
 
   const cloudStatusText = useMemo(() => {
     if (cloudInstances.length === 0) {
@@ -247,6 +251,12 @@ export function CloudSection({ state, onConnect, onRefresh, onUpdateUser, onGran
               <div className="settings-row-wrap">
                 <span className="settings-label">Rôle</span>
                 <div className="settings-card-note">{account.user.isAdmin ? 'Admin' : 'Utilisateur'}</div>
+              </div>
+              <div className="settings-row-wrap">
+                <span className="settings-label">Organisation active</span>
+                <div className="settings-card-note">
+                  {activeOrganization ? `${activeOrganization.name} · ${activeOrganization.role}` : 'Aucune'}
+                </div>
               </div>
             </div>
             <div className="settings-actions-row" style={{ marginTop: '16px' }}>

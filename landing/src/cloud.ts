@@ -20,6 +20,7 @@ export type CloudAccount = {
   email: string
   fullName: string
   organizations: CloudOrganization[]
+  activeOrganizationId: string | null
   desktopConnectedAt: string | null
   accessToken?: string
   refreshToken?: string
@@ -66,6 +67,7 @@ function buildAccountFromBootstrap(input: {
     role: "owner" | "admin" | "member" | "billing_viewer"
     providers?: CloudOrganization["providers"]
   }>
+  activeOrganizationId?: string | null
   session?: {
     accessToken: string
     refreshToken: string
@@ -85,6 +87,7 @@ function buildAccountFromBootstrap(input: {
       role: organization.role,
       providers: organization.providers ?? [],
     })),
+    activeOrganizationId: input.activeOrganizationId ?? input.organizations[0]?.id ?? null,
     desktopConnectedAt: input.desktopConnectedAt ?? null,
     accessToken: input.session?.accessToken,
     refreshToken: input.session?.refreshToken,
@@ -139,6 +142,7 @@ export async function signupCloudAccount(input: {
     }),
   })
   const bootstrap = await request<{
+    user: { id: string; email: string; displayName: string; subscription: { id: CloudPlan } }
     organizations: Array<{
       id: string
       name: string
@@ -146,10 +150,12 @@ export async function signupCloudAccount(input: {
       role: "owner" | "admin" | "member" | "billing_viewer"
       providers?: CloudOrganization["providers"]
     }>
+    activeOrganizationId: string | null
   }>("/v1/bootstrap", undefined, session.session.accessToken)
   const account = buildAccountFromBootstrap({
-    user: session.user,
+    user: bootstrap.user,
     organizations: bootstrap.organizations,
+    activeOrganizationId: bootstrap.activeOrganizationId,
     session: session.session,
     baseUrl: DEFAULT_BASE_URL,
   })
@@ -173,6 +179,7 @@ export async function loginCloudAccount(input: {
     }),
   })
   const bootstrap = await request<{
+    user: { id: string; email: string; displayName: string; subscription: { id: CloudPlan } }
     organizations: Array<{
       id: string
       name: string
@@ -180,10 +187,12 @@ export async function loginCloudAccount(input: {
       role: "owner" | "admin" | "member" | "billing_viewer"
       providers?: CloudOrganization["providers"]
     }>
+    activeOrganizationId: string | null
   }>("/v1/bootstrap", undefined, session.session.accessToken)
   const account = buildAccountFromBootstrap({
-    user: session.user,
+    user: bootstrap.user,
     organizations: bootstrap.organizations,
+    activeOrganizationId: bootstrap.activeOrganizationId,
     session: session.session,
     baseUrl: DEFAULT_BASE_URL,
   })
@@ -235,10 +244,12 @@ export async function refreshCloudAccount(): Promise<CloudAccount | null> {
       role: "owner" | "admin" | "member" | "billing_viewer"
       providers?: CloudOrganization["providers"]
     }>
+    activeOrganizationId: string | null
   }>("/v1/bootstrap", undefined, existing.accessToken)
   const next = buildAccountFromBootstrap({
     user: bootstrap.user,
     organizations: bootstrap.organizations,
+    activeOrganizationId: bootstrap.activeOrganizationId,
     session: existing.accessToken && existing.refreshToken && existing.expiresAt
       ? {
           accessToken: existing.accessToken,
@@ -253,9 +264,23 @@ export async function refreshCloudAccount(): Promise<CloudAccount | null> {
   return next
 }
 
+function replaceOrganization(
+  organizations: CloudOrganization[],
+  organization: CloudOrganization,
+): CloudOrganization[] {
+  const index = organizations.findIndex((item) => item.id === organization.id)
+  if (index < 0) {
+    return [...organizations, organization]
+  }
+  const next = [...organizations]
+  next[index] = organization
+  return next
+}
+
 export async function upsertOrganization(
   account: CloudAccount,
   input: {
+    organizationId?: string
     name: string
     slug: string
     plan: CloudPlan
@@ -274,11 +299,19 @@ export async function upsertOrganization(
     }
   }>("/v1/organization", {
     method: "PATCH",
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      organizationId: input.organizationId ?? account.activeOrganizationId,
+      name: input.name,
+      slug: input.slug,
+      plan: input.plan,
+    }),
   }, account.accessToken)
   const next: CloudAccount = {
     ...account,
-    organizations: [response.organization],
+    organizations: replaceOrganization(account.organizations, {
+      ...response.organization,
+      providers: response.organization.providers ?? [],
+    }),
     plan: input.plan,
   }
   writeStorage(next)
@@ -315,9 +348,62 @@ export async function addProviderToOrganization(
   }, account.accessToken)
   const next: CloudAccount = {
     ...account,
-    organizations: [response.organization],
+    organizations: replaceOrganization(account.organizations, {
+      ...response.organization,
+      providers: response.organization.providers ?? [],
+    }),
   }
   writeStorage(next)
+  return next
+}
+
+export async function setActiveOrganization(
+  account: CloudAccount,
+  organizationId: string,
+): Promise<CloudAccount> {
+  if (!account.accessToken) {
+    throw new Error("Missing cloud session")
+  }
+  await request<{ ok: true; activeOrganizationId: string }>("/v1/organization/active", {
+    method: "POST",
+    body: JSON.stringify({ organizationId }),
+  }, account.accessToken)
+  const next = await refreshCloudAccount()
+  if (!next) {
+    throw new Error("Unable to refresh cloud account")
+  }
+  return next
+}
+
+export async function createOrganizationInvite(
+  account: CloudAccount,
+  organizationId: string,
+  email: string,
+): Promise<void> {
+  if (!account.accessToken) {
+    throw new Error("Missing cloud session")
+  }
+  await request<{ ok: true }>("/v1/organization/invites", {
+    method: "POST",
+    body: JSON.stringify({ organizationId, email: email.trim() }),
+  }, account.accessToken)
+}
+
+export async function acceptOrganizationInvite(
+  account: CloudAccount,
+  token: string,
+): Promise<CloudAccount> {
+  if (!account.accessToken) {
+    throw new Error("Missing cloud session")
+  }
+  await request<{ ok: true }>("/v1/organization/invites/accept", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  }, account.accessToken)
+  const next = await refreshCloudAccount()
+  if (!next) {
+    throw new Error("Unable to refresh cloud account")
+  }
   return next
 }
 

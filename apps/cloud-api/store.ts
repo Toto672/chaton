@@ -1,9 +1,12 @@
 import crypto from 'node:crypto'
 import { Pool } from 'pg'
 import type {
+  AcceptOrganizationInviteRequest,
   CloudConversationMessageRecord,
+  CreateOrganizationInviteRequest,
   CreateCloudConversationRequest,
   CreateCloudProjectRequest,
+  SetActiveOrganizationRequest,
 } from '../../packages/protocol/index.js'
 import type {
   CloudConversationRecord,
@@ -38,13 +41,22 @@ export type CloudUserState = {
 }
 
 export type CloudWorkspaceState = {
-  organization: OrganizationRecord
+  organizations: OrganizationRecord[]
+  activeOrganizationId: string | null
   cloudInstance: CloudInstanceRecord
   projectsById: Map<string, CloudProjectRecord>
   conversationsById: Map<string, CloudConversationRecord>
   messagesByConversationId: Map<string, CloudConversationMessageRecord[]>
   providerSecretsById?: Map<string, string>
   repositoryAccessTokenByProjectId?: Map<string, string>
+}
+
+type CloudOrganizationInviteRecord = {
+  organizationId: string
+  email: string
+  inviterUserId: string
+  expiresAt: string
+  acceptedAt: string | null
 }
 
 export type CloudDesktopAuthRequestState = {
@@ -116,9 +128,14 @@ export type CloudStore = {
     },
   ): Promise<CloudUserState | null>
   getWorkspaceState(user: CloudUserState): Promise<CloudWorkspaceState>
+  setActiveOrganization(
+    user: CloudUserState,
+    input: SetActiveOrganizationRequest,
+  ): Promise<string | null>
   updateOrganization(
     user: CloudUserState,
     input: {
+      organizationId?: string
       name: string
       slug: string
       plan?: CloudSubscriptionPlan
@@ -127,6 +144,7 @@ export type CloudStore = {
   addOrganizationProvider(
     user: CloudUserState,
     input: {
+      organizationId?: string
       kind: OrganizationProviderRecord['kind']
       label: string
       secret: string
@@ -190,6 +208,14 @@ export type CloudStore = {
     planId: CloudSubscriptionPlan
     durationDays?: number | null
   }): Promise<CloudUserState | null>
+  createOrganizationInvite(
+    user: CloudUserState,
+    input: CreateOrganizationInviteRequest,
+  ): Promise<{ organization: OrganizationRecord; email: string; token: string } | null>
+  acceptOrganizationInvite(
+    user: CloudUserState,
+    input: AcceptOrganizationInviteRequest,
+  ): Promise<OrganizationRecord | null>
 }
 
 type StoreContext = {
@@ -201,6 +227,15 @@ type CloudRepositoryConfigRecord = {
   defaultBranch: string | null
   authMode: CloudRepositoryAuthMode
   accessToken: string | null
+}
+
+type CloudOrganizationInviteRecord = {
+  organizationId: string
+  email: string
+  inviterUserId: string
+  tokenHash: string
+  expiresAt: string
+  acceptedAt: string | null
 }
 
 function normalizeProviderCredentialType(
@@ -415,7 +450,8 @@ function createDefaultWorkspaceState(
   }
 
   return {
-    organization,
+    organizations: [organization],
+    activeOrganizationId: organization.id,
     cloudInstance,
     projectsById: new Map([[defaultProject.id, defaultProject]]),
     conversationsById: new Map(),
@@ -423,6 +459,29 @@ function createDefaultWorkspaceState(
     providerSecretsById: new Map(),
     repositoryAccessTokenByProjectId: new Map(),
   }
+}
+
+function cloneOrganizationRecord(organization: OrganizationRecord): OrganizationRecord {
+  return {
+    ...organization,
+    providers: [...(organization.providers ?? [])],
+  }
+}
+
+function resolveWorkspaceOrganization(
+  workspace: CloudWorkspaceState,
+  organizationId?: string | null,
+): OrganizationRecord | null {
+  const targetId =
+    organizationId?.trim() ||
+    workspace.activeOrganizationId ||
+    workspace.organizations[0]?.id ||
+    ''
+  const organization = workspace.organizations.find((item) => item.id === targetId) ?? null
+  if (organization && !workspace.activeOrganizationId) {
+    workspace.activeOrganizationId = organization.id
+  }
+  return organization
 }
 
 class MemoryCloudStore implements CloudStore {
@@ -437,6 +496,8 @@ class MemoryCloudStore implements CloudStore {
     DEFAULT_PLANS.map((plan) => [plan.id, clonePlan(plan)]),
   )
   private readonly desktopAuthRequestsByState = new Map<string, CloudDesktopAuthRequestState>()
+  private readonly activeOrganizationIdByUserId = new Map<string, string>()
+  private readonly organizationInvitesByToken = new Map<string, CloudOrganizationInviteRecord>()
   private readonly emailVerificationByTokenHash = new Map<string, {
     userId: string
     expiresAt: string
@@ -586,7 +647,13 @@ class MemoryCloudStore implements CloudStore {
     }
     const workspace = this.workspaceStateByUserId.get(user.id)
     if (workspace) {
-      workspace.organization.role = user.isAdmin ? 'owner' : 'member'
+      if (workspace.organizations[0]) {
+        workspace.organizations[0] = {
+          ...workspace.organizations[0],
+          role: user.isAdmin ? 'owner' : 'member',
+          providers: [...(workspace.organizations[0].providers ?? [])],
+        }
+      }
       workspace.cloudInstance.baseUrl = this.context.publicBaseUrl
     }
     return user
@@ -626,13 +693,34 @@ class MemoryCloudStore implements CloudStore {
   async getWorkspaceState(user: CloudUserState): Promise<CloudWorkspaceState> {
     const existing = this.workspaceStateByUserId.get(user.id)
     if (existing) {
-      existing.organization.role = user.isAdmin ? 'owner' : 'member'
+      existing.activeOrganizationId =
+        this.activeOrganizationIdByUserId.get(user.id) ??
+        existing.activeOrganizationId ??
+        existing.organizations[0]?.id ??
+        null
       existing.cloudInstance.baseUrl = this.context.publicBaseUrl
       return existing
     }
     const created = createDefaultWorkspaceState(user, this.context.publicBaseUrl)
+    this.activeOrganizationIdByUserId.set(
+      user.id,
+      created.activeOrganizationId ?? created.organizations[0]?.id ?? '',
+    )
     this.workspaceStateByUserId.set(user.id, created)
     return created
+  }
+
+  async setActiveOrganization(
+    user: CloudUserState,
+    input: SetActiveOrganizationRequest,
+  ): Promise<string | null> {
+    const workspace = await this.getWorkspaceState(user)
+    if (!workspace.organizations.some((organization) => organization.id === input.organizationId)) {
+      return null
+    }
+    workspace.activeOrganizationId = input.organizationId
+    this.activeOrganizationIdByUserId.set(user.id, input.organizationId)
+    return input.organizationId
   }
 
   async createProject(
@@ -640,11 +728,15 @@ class MemoryCloudStore implements CloudStore {
     input: CreateCloudProjectRequest,
   ): Promise<CloudProjectRecord> {
     const workspace = await this.getWorkspaceState(user)
-    const repository = normalizeRepositoryConfig(input.repository, workspace.organization.name)
+    const organization = workspace.organizations.find((item) => item.id === input.organizationId)
+    if (!organization) {
+      throw new Error('Unknown organization')
+    }
+    const repository = normalizeRepositoryConfig(input.repository, organization.name)
     const project = toProjectRecord({
       id: `project-${crypto.randomUUID()}`,
-      organizationId: workspace.organization.id,
-      organizationName: input.organizationName?.trim() || workspace.organization.name,
+      organizationId: organization.id,
+      organizationName: organization.name,
       name: input.name.trim(),
       kind: getProjectKind(input.kind),
       repository,
@@ -660,31 +752,42 @@ class MemoryCloudStore implements CloudStore {
   async updateOrganization(
     user: CloudUserState,
     input: {
+      organizationId?: string
       name: string
       slug: string
       plan?: CloudSubscriptionPlan
     },
   ): Promise<OrganizationRecord> {
     const workspace = await this.getWorkspaceState(user)
-    workspace.organization = {
-      ...workspace.organization,
+    const targetId =
+      input.organizationId?.trim() ||
+      workspace.activeOrganizationId ||
+      workspace.organizations[0]?.id ||
+      ''
+    const index = workspace.organizations.findIndex((organization) => organization.id === targetId)
+    if (index < 0) {
+      throw new Error('Unknown organization')
+    }
+    workspace.organizations[index] = {
+      ...workspace.organizations[index],
       name: input.name.trim(),
       slug: input.slug.trim(),
-      providers: workspace.organization.providers ?? [],
+      providers: workspace.organizations[index]?.providers ?? [],
     }
     if (input.plan) {
       user.subscriptionPlan = input.plan
       this.usersById.set(user.id, user)
     }
     return {
-      ...workspace.organization,
-      providers: [...(workspace.organization.providers ?? [])],
+      ...workspace.organizations[index],
+      providers: [...(workspace.organizations[index]?.providers ?? [])],
     }
   }
 
   async addOrganizationProvider(
     user: CloudUserState,
     input: {
+      organizationId?: string
       kind: OrganizationProviderRecord['kind']
       label: string
       secret: string
@@ -698,6 +801,15 @@ class MemoryCloudStore implements CloudStore {
     provider: OrganizationProviderRecord
   }> {
     const workspace = await this.getWorkspaceState(user)
+    const targetId =
+      (input as { organizationId?: string }).organizationId?.trim() ||
+      workspace.activeOrganizationId ||
+      workspace.organizations[0]?.id ||
+      ''
+    const index = workspace.organizations.findIndex((organization) => organization.id === targetId)
+    if (index < 0) {
+      throw new Error('Unknown organization')
+    }
     const models = normalizeProviderModels(input.models)
     const provider: OrganizationProviderRecord = {
       id: `provider-${crypto.randomUUID()}`,
@@ -711,18 +823,82 @@ class MemoryCloudStore implements CloudStore {
       supportsCloudRuntime: supportsCloudRuntime(input.kind),
       createdAt: new Date().toISOString(),
     }
-    workspace.organization = {
-      ...workspace.organization,
-      providers: [...(workspace.organization.providers ?? []), provider],
+    workspace.organizations[index] = {
+      ...workspace.organizations[index],
+      providers: [...(workspace.organizations[index]?.providers ?? []), provider],
     }
     workspace.providerSecretsById?.set(provider.id, input.secret.trim())
     return {
       organization: {
-        ...workspace.organization,
-        providers: [...(workspace.organization.providers ?? [])],
+        ...workspace.organizations[index],
+        providers: [...(workspace.organizations[index]?.providers ?? [])],
       },
       provider,
     }
+  }
+
+  async createOrganizationInvite(
+    user: CloudUserState,
+    input: CreateOrganizationInviteRequest,
+  ): Promise<{ organization: OrganizationRecord; email: string; token: string } | null> {
+    const workspace = await this.getWorkspaceState(user)
+    const organization = workspace.organizations.find((item) => item.id === input.organizationId)
+    if (!organization || !['owner', 'admin'].includes(organization.role)) {
+      return null
+    }
+    const token = crypto.randomUUID()
+    this.organizationInvitesByToken.set(token, {
+      organizationId: organization.id,
+      email: input.email.trim().toLowerCase(),
+      inviterUserId: user.id,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      acceptedAt: null,
+    })
+    return {
+      organization: {
+        ...organization,
+        providers: [...(organization.providers ?? [])],
+      },
+      email: input.email.trim().toLowerCase(),
+      token,
+    }
+  }
+
+  async acceptOrganizationInvite(
+    user: CloudUserState,
+    input: AcceptOrganizationInviteRequest,
+  ): Promise<OrganizationRecord | null> {
+    const invite = this.organizationInvitesByToken.get(input.token)
+    if (!invite || invite.acceptedAt || invite.expiresAt <= new Date().toISOString()) {
+      return null
+    }
+    if (invite.email !== user.email.trim().toLowerCase()) {
+      return null
+    }
+    const inviterWorkspace = this.workspaceStateByUserId.get(invite.inviterUserId)
+    const invitedOrganization =
+      inviterWorkspace?.organizations.find((item) => item.id === invite.organizationId) ?? null
+    if (!invitedOrganization) {
+      return null
+    }
+    const workspace = await this.getWorkspaceState(user)
+    if (!workspace.organizations.some((item) => item.id === invitedOrganization.id)) {
+      workspace.organizations.push({
+        ...invitedOrganization,
+        role: 'member',
+        providers: [...(invitedOrganization.providers ?? [])],
+      })
+    }
+    workspace.activeOrganizationId = invitedOrganization.id
+    this.activeOrganizationIdByUserId.set(user.id, invitedOrganization.id)
+    invite.acceptedAt = new Date().toISOString()
+    const organization = workspace.organizations.find((item) => item.id === invitedOrganization.id)
+    return organization
+      ? {
+          ...organization,
+          providers: [...(organization.providers ?? [])],
+        }
+      : null
   }
 
   async createConversation(
@@ -816,7 +992,10 @@ class MemoryCloudStore implements CloudStore {
     const plans = await this.listPlans()
     const subscription = getPlanRecord(plans, user.subscriptionPlan)
     const activeParallelSessions = await this.getActiveParallelSessions(user.id)
-    const providers: OrganizationProviderRuntimeRecord[] = (workspace.organization.providers ?? []).map(
+    const organization =
+      workspace.organizations.find((item) => item.id === (project?.organizationId ?? workspace.activeOrganizationId)) ??
+      workspace.organizations[0]
+    const providers: OrganizationProviderRuntimeRecord[] = (organization?.providers ?? []).map(
       (provider) => ({
         id: provider.id,
         kind: provider.kind,
@@ -840,7 +1019,7 @@ class MemoryCloudStore implements CloudStore {
           subscription.parallelSessionsLimit - activeParallelSessions,
         ),
       },
-      organization: workspace.organization,
+      organization,
       cloudInstance: workspace.cloudInstance,
       project,
       conversation,
@@ -1340,8 +1519,18 @@ class PostgresCloudStore implements CloudStore {
   }
 
   private normalizeWorkspace(user: CloudUserState, workspace: CloudWorkspaceState): CloudWorkspaceState {
-    workspace.organization.role = user.isAdmin ? 'owner' : 'member'
-    workspace.organization.providers = workspace.organization.providers ?? []
+    workspace.organizations = (workspace.organizations.length
+      ? workspace.organizations
+      : [createDefaultWorkspaceState(user, this.context.publicBaseUrl).organizations[0]]
+    ).map((organization, index) => ({
+      ...organization,
+      role: index === 0 ? (user.isAdmin ? 'owner' : organization.role) : organization.role,
+      providers: [...(organization.providers ?? [])],
+    }))
+    workspace.activeOrganizationId =
+      workspace.activeOrganizationId ??
+      workspace.organizations[0]?.id ??
+      null
     workspace.cloudInstance.baseUrl = this.context.publicBaseUrl
     workspace.cloudInstance.authMode = 'oauth'
     workspace.cloudInstance.connectionStatus = 'connected'
@@ -1457,8 +1646,8 @@ class PostgresCloudStore implements CloudStore {
 
     if (!organizationResult.rowCount) {
       const fallback = createDefaultWorkspaceState(user, this.context.publicBaseUrl)
-      await this.upsertNormalizedOrganization(user, fallback.organization)
-      return fallback.organization
+      await this.upsertNormalizedOrganization(user, fallback.organizations[0])
+      return fallback.organizations[0]
     }
 
     const organizationRow = organizationResult.rows[0]
@@ -1937,7 +2126,8 @@ class PostgresCloudStore implements CloudStore {
     )
     const workspace = existing.rowCount
       ? this.normalizeWorkspace(user, {
-          organization: existing.rows[0].organization_json,
+          organizations: [existing.rows[0].organization_json],
+          activeOrganizationId: existing.rows[0].organization_json?.id ?? null,
           cloudInstance: existing.rows[0].cloud_instance_json,
           projectsById: new Map(),
           conversationsById: new Map(),
@@ -1956,13 +2146,13 @@ class PostgresCloudStore implements CloudStore {
       `,
       [
         user.id,
-        JSON.stringify(workspace.organization),
+        JSON.stringify(workspace.organizations[0]),
         JSON.stringify(workspace.cloudInstance),
         new Date().toISOString(),
       ],
     )
 
-    await this.upsertNormalizedOrganization(user, workspace.organization)
+    await this.upsertNormalizedOrganization(user, workspace.organizations[0])
 
     const defaultProjectId = `project-${user.id}-workspace`
     await this.pool.query(
@@ -1975,10 +2165,10 @@ class PostgresCloudStore implements CloudStore {
       [
         defaultProjectId,
         user.id,
-        workspace.organization.id,
-        workspace.organization.name,
+        workspace.organizations[0].id,
+        workspace.organizations[0].name,
         'Cloud Workspace',
-        workspace.organization.name,
+        workspace.organizations[0].name,
         'conversation_only',
         'chat_only',
         JSON.stringify(null),
@@ -2089,7 +2279,8 @@ class PostgresCloudStore implements CloudStore {
     )
 
     return this.normalizeWorkspace(user, {
-      organization,
+      organizations: [organization],
+      activeOrganizationId: organization.id,
       cloudInstance: workspaceResult.rows[0].cloud_instance_json,
       projectsById: new Map(
         projectsResult.rows.map((row) => [
@@ -2147,7 +2338,9 @@ class PostgresCloudStore implements CloudStore {
     input: CreateCloudProjectRequest,
   ): Promise<CloudProjectRecord> {
     await this.ensureWorkspaceExists(user)
-    const organization = await this.getOrganizationForUser(user)
+    const workspace = await this.getWorkspaceState(user)
+    const organization =
+      workspace.organizations.find((item) => item.id === input.organizationId.trim()) ?? null
     if (input.organizationId.trim() !== organization.id) {
       throw new Error('Unknown organization')
     }
@@ -2155,7 +2348,7 @@ class PostgresCloudStore implements CloudStore {
     const project = toProjectRecord({
       id: `project-${crypto.randomUUID()}`,
       organizationId: organization.id,
-      organizationName: input.organizationName?.trim() || organization.name,
+      organizationName: organization.name,
       name: input.name.trim(),
       kind: getProjectKind(input.kind),
       repository,
@@ -2204,13 +2397,21 @@ class PostgresCloudStore implements CloudStore {
   async updateOrganization(
     user: CloudUserState,
     input: {
+      organizationId?: string
       name: string
       slug: string
       plan?: CloudSubscriptionPlan
     },
   ): Promise<OrganizationRecord> {
     await this.ensureWorkspaceExists(user)
-    const current = await this.getOrganizationForUser(user)
+    const workspace = await this.getWorkspaceState(user)
+    const current =
+      workspace.organizations.find(
+        (item) => item.id === (input.organizationId?.trim() || workspace.activeOrganizationId),
+      ) ?? null
+    if (!current) {
+      throw new Error('Unknown organization')
+    }
     const organization: OrganizationRecord = {
       ...current,
       name: input.name.trim(),
@@ -2254,6 +2455,7 @@ class PostgresCloudStore implements CloudStore {
   async addOrganizationProvider(
     user: CloudUserState,
     input: {
+      organizationId?: string
       kind: OrganizationProviderRecord['kind']
       label: string
       secret: string
@@ -2267,7 +2469,14 @@ class PostgresCloudStore implements CloudStore {
     provider: OrganizationProviderRecord
   }> {
     await this.ensureWorkspaceExists(user)
-    const organization = await this.getOrganizationForUser(user)
+    const workspace = await this.getWorkspaceState(user)
+    const organization =
+      workspace.organizations.find(
+        (item) => item.id === (input.organizationId?.trim() || workspace.activeOrganizationId),
+      ) ?? null
+    if (!organization) {
+      throw new Error('Unknown organization')
+    }
     const models = normalizeProviderModels(input.models)
     const provider: OrganizationProviderRecord = {
       id: `provider-${crypto.randomUUID()}`,
@@ -2525,7 +2734,10 @@ class PostgresCloudStore implements CloudStore {
     const plans = await this.listPlans()
     const subscription = getPlanRecord(plans, user.subscriptionPlan)
     const activeParallelSessions = await this.getActiveParallelSessions(user.id)
-    const providers: OrganizationProviderRuntimeRecord[] = (workspace.organization.providers ?? []).map(
+    const organization =
+      workspace.organizations.find((item) => item.id === (project?.organizationId ?? workspace.activeOrganizationId)) ??
+      workspace.organizations[0]
+    const providers: OrganizationProviderRuntimeRecord[] = (organization?.providers ?? []).map(
       (provider) => ({
         id: provider.id,
         kind: provider.kind,
@@ -2549,7 +2761,7 @@ class PostgresCloudStore implements CloudStore {
           subscription.parallelSessionsLimit - activeParallelSessions,
         ),
       },
-      organization: workspace.organization,
+      organization,
       cloudInstance: workspace.cloudInstance,
       project,
       conversation,

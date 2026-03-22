@@ -30,7 +30,10 @@ export function CloudPortalPage({
       });
   }, []);
 
-  const org = account?.organizations[0] ?? null;
+  const org =
+    account?.organizations.find((organization) => organization.id === account.activeOrganizationId) ??
+    account?.organizations[0] ??
+    null;
 
   const steps = useMemo(
     () => [
@@ -141,12 +144,12 @@ export function CloudPortalPage({
                 <p className="cloud-stat-value">{org ? org.name : "New organization"}</p>
               </div>
               <div className="cloud-stat-card">
-                <p className="cloud-stat-label">Providers</p>
-                <p className="cloud-stat-value">{org?.providers.length ?? 0}</p>
+                <p className="cloud-stat-label">Organizations</p>
+                <p className="cloud-stat-value">{account?.organizations.length ?? 0}</p>
               </div>
               <div className="cloud-stat-card">
-                <p className="cloud-stat-label">Status</p>
-                <p className="cloud-stat-value">{org ? "In progress" : "Not started"}</p>
+                <p className="cloud-stat-label">Providers</p>
+                <p className="cloud-stat-value">{org?.providers.length ?? 0}</p>
               </div>
             </div>
           </motion.div>

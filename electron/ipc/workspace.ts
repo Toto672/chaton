@@ -176,6 +176,25 @@ type WorkspacePayload = {
       parallelSessionsLimit: number;
       isDefault?: boolean;
     }>;
+    organizations: Array<{
+      id: string;
+      slug: string;
+      name: string;
+      role: "owner" | "admin" | "member" | "billing_viewer";
+      providers?: Array<{
+        id: string;
+        kind: "openai" | "anthropic" | "google" | "github-copilot";
+        label: string;
+        secretHint: string;
+        baseUrl: string;
+        credentialType: "api_key" | "oauth";
+        models: Array<{ id: string; label: string }>;
+        defaultModel: string | null;
+        supportsCloudRuntime: boolean;
+        createdAt: string;
+      }>;
+    }>;
+    activeOrganizationId: string | null;
   } | null;
   cloudAdminUsers: Array<{
     id: string;

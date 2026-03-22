@@ -234,6 +234,8 @@ type CloudBootstrapResponse = {
 type CloudAccountResponse = {
   user: CloudBootstrapResponse["user"];
   usage: CloudBootstrapResponse["usage"];
+  organizations: CloudBootstrapResponse["organizations"];
+  activeOrganizationId: string | null;
   plans: Array<{
     id: "plus" | "pro" | "max";
     label: string;
@@ -2133,7 +2135,6 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         cloudInstanceId: string;
         name: string;
         organizationId: string;
-        organizationName: string;
         kind: "repository" | "conversation_only";
         repository?: {
           cloneUrl: string;
@@ -2171,7 +2172,6 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
           {
             name: trimmedName,
             organizationId: params.organizationId.trim() || "",
-            organizationName: params.organizationName.trim() || instance.name,
             kind: params.kind,
             repository: params.repository ?? null,
           },

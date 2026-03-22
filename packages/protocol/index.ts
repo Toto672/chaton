@@ -30,6 +30,7 @@ export type EventEnvelope<TPayload> = {
 export type CloudBootstrapResponse = {
   user: CloudUserRecord
   organizations: OrganizationRecord[]
+  activeOrganizationId: string | null
   cloudInstances: CloudInstanceRecord[]
   projects: CloudProjectRecord[]
   conversations: CloudConversationRecord[]
@@ -51,7 +52,6 @@ export type ConnectInstanceRequest = {
 export type CreateCloudProjectRequest = {
   name: string
   organizationId: string
-  organizationName: string
   kind: CloudProjectKind
   repository?: {
     cloneUrl: string
@@ -173,9 +173,32 @@ export type CloudVerifyEmailRequest = {
 }
 
 export type UpdateOrganizationRequest = {
+  organizationId?: string
   name: string
   slug: string
   plan?: CloudSubscriptionPlan
+}
+
+export type SetActiveOrganizationRequest = {
+  organizationId: string
+}
+
+export type CreateOrganizationInviteRequest = {
+  organizationId: string
+  email: string
+}
+
+export type CreateOrganizationInviteResponse = {
+  ok: true
+}
+
+export type AcceptOrganizationInviteRequest = {
+  token: string
+}
+
+export type AcceptOrganizationInviteResponse = {
+  ok: true
+  organization: OrganizationRecord
 }
 
 export type AddOrganizationProviderRequest = {

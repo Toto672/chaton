@@ -190,7 +190,8 @@ export async function buildBootstrapPayload(user: CloudUserState): Promise<Cloud
 
   return {
     user: toCloudUserRecord(user, plans),
-    organizations: [workspace.organization],
+    organizations: workspace.organizations,
+    activeOrganizationId: workspace.activeOrganizationId,
     cloudInstances: [workspace.cloudInstance],
     projects,
     conversations,

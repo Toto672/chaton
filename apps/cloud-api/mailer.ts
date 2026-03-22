@@ -124,3 +124,28 @@ export function buildPasswordChangedEmail(params: {
     `,
   }
 }
+
+export function buildOrganizationInviteEmail(params: {
+  inviteUrl: string
+  organizationName: string
+  inviterName: string
+}): SendMailInput {
+  return {
+    to: '',
+    subject: `You're invited to join ${params.organizationName} on Chatons Cloud`,
+    text: [
+      `Hello,`,
+      '',
+      `${params.inviterName} invited you to join ${params.organizationName} on Chatons Cloud.`,
+      `Accept the invite here: ${params.inviteUrl}`,
+      '',
+      'If you were not expecting this invite, you can ignore this email.',
+    ].join('\n'),
+    html: `
+      <p>Hello,</p>
+      <p>${params.inviterName} invited you to join <strong>${params.organizationName}</strong> on Chatons Cloud.</p>
+      <p><a href="${params.inviteUrl}">Accept organization invite</a></p>
+      <p>If you were not expecting this invite, you can ignore this email.</p>
+    `,
+  }
+}

@@ -78,6 +78,14 @@ export type CloudAccount = {
   user: CloudAccountUser
   usage: CloudUsage
   plans: CloudSubscription[]
+  organizations: Array<{
+    id: string
+    slug: string
+    name: string
+    role: 'owner' | 'admin' | 'member' | 'billing_viewer'
+    providers?: CloudOrganizationProvider[]
+  }>
+  activeOrganizationId: string | null
 }
 
 export type CloudOrganizationProvider = {

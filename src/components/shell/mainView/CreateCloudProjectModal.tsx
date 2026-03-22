@@ -7,12 +7,19 @@ export interface CloudInstance {
   baseUrl: string
 }
 
+export interface CloudOrganizationOption {
+  id: string
+  name: string
+  slug: string
+}
+
 export interface CreateCloudProjectModalProps {
   instances: CloudInstance[]
+  organizations: CloudOrganizationOption[]
+  activeOrganizationId?: string | null
   onConfirm: (data: {
     instanceId: string
     projectName: string
-    organizationName: string
     organizationId: string
     kind: 'repository' | 'conversation_only'
     repository?: {
@@ -27,43 +34,35 @@ export interface CreateCloudProjectModalProps {
 
 export function CreateCloudProjectModal({
   instances,
+  organizations,
+  activeOrganizationId = null,
   onConfirm,
   onCancel,
 }: CreateCloudProjectModalProps) {
   const { t } = useTranslation()
   const [selectedInstanceIndex, setSelectedInstanceIndex] = useState(0)
   const [projectName, setProjectName] = useState('')
-  const [organizationName, setOrganizationName] = useState(
-    instances.length > 0 ? instances[0].name : '',
-  )
   const [organizationId, setOrganizationId] = useState(
-    instances.length > 0
-      ? instances[0].name.toLowerCase().replace(/\s+/g, '-')
-      : '',
+    activeOrganizationId || organizations[0]?.id || '',
   )
   const [kind, setKind] = useState<'repository' | 'conversation_only'>('conversation_only')
   const [cloneUrl, setCloneUrl] = useState('')
   const [defaultBranch, setDefaultBranch] = useState('')
   const [authMode, setAuthMode] = useState<'none' | 'token'>('none')
   const [repoAccessToken, setRepoAccessToken] = useState('')
-
-  const handleOrganizationNameChange = (value: string) => {
-    setOrganizationName(value)
-    // Auto-generate organization ID from name
-    setOrganizationId(value.toLowerCase().replace(/\s+/g, '-'))
-  }
+  const selectedOrganization = organizations.find((item) => item.id === organizationId) ?? null
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!projectName.trim()) return
+    if (!organizationId.trim()) return
     if (kind === 'repository' && !cloneUrl.trim()) return
 
     const selectedInstance = instances[selectedInstanceIndex]
     onConfirm({
       instanceId: selectedInstance.id,
       projectName: projectName.trim(),
-      organizationName: organizationName.trim() || selectedInstance.name,
-      organizationId: organizationId.trim() || organizationName.toLowerCase().replace(/\s+/g, '-'),
+      organizationId: organizationId.trim(),
       kind,
       repository:
         kind === 'repository'
@@ -105,14 +104,7 @@ export function CreateCloudProjectModal({
                   className="form-select"
                   value={selectedInstanceIndex}
                   onChange={(e) => {
-                    const idx = Number.parseInt(e.target.value, 10)
-                    setSelectedInstanceIndex(idx)
-                    // Update defaults when instance changes
-                    const instance = instances[idx]
-                    if (!organizationName || organizationName === instances[selectedInstanceIndex].name) {
-                      setOrganizationName(instance.name)
-                      setOrganizationId(instance.name.toLowerCase().replace(/\s+/g, '-'))
-                    }
+                    setSelectedInstanceIndex(Number.parseInt(e.target.value, 10))
                   }}
                 >
                   {instances.map((instance, index) => (
@@ -156,36 +148,24 @@ export function CreateCloudProjectModal({
               </select>
             </div>
 
-            {/* Organization Name */}
-            <div className="form-group">
-              <label htmlFor="organization-name" className="form-label">
-                {t("Nom de l'organisation")}
-              </label>
-              <input
-                id="organization-name"
-                type="text"
-                className="form-input"
-                value={organizationName}
-                onChange={(e) => handleOrganizationNameChange(e.target.value)}
-                placeholder={instances[selectedInstanceIndex]?.name}
-              />
-            </div>
-
-            {/* Organization ID */}
             <div className="form-group">
               <label htmlFor="organization-id" className="form-label">
-                {t("Identifiant de l'organisation")}
+                {t("Organisation")}
               </label>
-              <input
+              <select
                 id="organization-id"
-                type="text"
-                className="form-input"
+                className="form-select"
                 value={organizationId}
                 onChange={(e) => setOrganizationId(e.target.value)}
-                placeholder={organizationName.toLowerCase().replace(/\s+/g, '-')}
-              />
+              >
+                {organizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organization.name}
+                  </option>
+                ))}
+              </select>
               <span className="form-hint">
-                {t('Utilisé pour les URLs et identifiants API')}
+                {selectedOrganization?.slug ?? t('Sélectionnez une organisation accessible')}
               </span>
             </div>
 
@@ -265,7 +245,7 @@ export function CreateCloudProjectModal({
             <button
               type="submit"
               className="modal-btn modal-btn-primary"
-              disabled={!projectName.trim() || (kind === 'repository' && !cloneUrl.trim())}
+              disabled={!projectName.trim() || !organizationId.trim() || (kind === 'repository' && !cloneUrl.trim())}
             >
               {t('Créer')}
             </button>

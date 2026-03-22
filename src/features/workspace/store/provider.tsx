@@ -637,7 +637,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     async (data: {
       instanceId: string
       projectName: string
-      organizationName: string
       organizationId: string
       kind: 'repository' | 'conversation_only'
       repository?: {
@@ -653,7 +652,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         cloudInstanceId: data.instanceId,
         name: data.projectName,
         organizationId: data.organizationId,
-        organizationName: data.organizationName,
         kind: data.kind,
         repository: data.repository ?? null,
       })
@@ -1571,6 +1569,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       {showCloudProjectModal && (
         <CreateCloudProjectModal
           instances={state.cloudInstances}
+          organizations={state.cloudAccount?.organizations ?? []}
+          activeOrganizationId={state.cloudAccount?.activeOrganizationId ?? null}
           onConfirm={handleCloudProjectConfirm}
           onCancel={() => setShowCloudProjectModal(false)}
         />

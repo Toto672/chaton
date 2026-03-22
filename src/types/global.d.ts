@@ -101,7 +101,6 @@ declare global {
         cloudInstanceId: string
         name: string
         organizationId: string
-        organizationName: string
         kind: "repository" | "conversation_only"
         repository?: {
           cloneUrl: string
