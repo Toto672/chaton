@@ -88,7 +88,16 @@ jobs:
             echo "KUBE_CONFIG secret is empty"
             exit 1
           fi
-          printf '%s' "$KUBE_CONFIG_DATA" | base64 --decode > "$HOME/.kube/config"
+          if printf '%s' "$KUBE_CONFIG_DATA" | base64 --decode > "$HOME/.kube/config" 2>/dev/null; then
+            echo "Decoded kubeconfig from base64 secret"
+          else
+            printf '%s' "$KUBE_CONFIG_DATA" > "$HOME/.kube/config"
+            echo "KUBE_CONFIG secret was not valid base64; wrote it as raw kubeconfig"
+          fi
+          if ! grep -q '^apiVersion:' "$HOME/.kube/config"; then
+            echo "Decoded KUBE_CONFIG does not look like a kubeconfig"
+            exit 1
+          fi
           chmod 600 "$HOME/.kube/config"
           kubectl config get-contexts
           kubectl config current-context
