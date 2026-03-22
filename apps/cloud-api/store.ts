@@ -2016,7 +2016,7 @@ class PostgresCloudStore implements CloudStore {
       cloud_status: CloudProjectRecord['cloudStatus']
     }>(
       `
-        SELECT id, organization_id, organization_name, name, repo_name, project_kind, workspace_capability, repository_json, cloud_status
+        SELECT p.id, p.organization_id, p.organization_name, p.name, p.repo_name, p.project_kind, p.workspace_capability, p.repository_json, p.cloud_status
         FROM cloud_projects p
         INNER JOIN cloud_organization_memberships m
           ON m.organization_id = p.organization_id
