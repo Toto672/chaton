@@ -642,6 +642,19 @@ description: Verified documentation changes and rationale for Chatons features a
 - `docs/content/pi-integration.mdx` -- Documented runtime memory injection behavior at conversation start
 - `docs/content/developer-guide.mdx` -- Documented why memory is injected as steer instead of user text
 
+### Switched conversation memory retrieval to on-demand tools
+
+**Change:** Removed automatic conversation-start memory injection entirely. Memory remains available to the agent through explicit runtime tools such as `memory.search` and `memory.get`, and the tool guidance now makes clear that memory should only be queried when it is likely to help with the active request.
+
+**Why:** Even after moving memory into a separate `steer`, the model could still over-weight that context and treat stale memories as instructions. Requiring the agent to opt into retrieval keeps initial intent cleaner and makes memory usage deliberate instead of ambient.
+
+**Verified files:**
+- `electron/ipc/workspace-handlers.ts` -- Removed automatic first-prompt memory injection
+- `electron/extensions/builtin/memory/chaton.extension.json` -- Updated memory tool guidance toward deliberate retrieval
+- `AGENTS.md` -- Replaced startup injection rule with an on-demand retrieval rule
+- `docs/content/pi-integration.mdx` -- Documented tool-based on-demand memory access
+- `docs/content/developer-guide.mdx` -- Documented the architecture shift away from startup injection
+
 ### Added desktop cloud browser-auth callback flow
 
 **Change:** Wired the desktop cloud connection flow to launch the system browser, receive a `chatons://cloud/auth/callback` deep link, complete the cloud session locally, and refresh the desktop cloud state. The cloud docs were updated to reflect this browser-based desktop auth model.

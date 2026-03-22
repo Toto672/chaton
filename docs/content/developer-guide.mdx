@@ -222,7 +222,7 @@ At session creation, Chatons injects additional system prompts covering:
 
 The runtime exposes `get_access_mode` so the model can re-check the live mode.
 
-Conversation memory retrieval is injected separately from the first user message. Relevant memories are sent as a runtime `steer` message just before the first prompt, with explicit wording that the content is low-confidence background context rather than user intent. This avoids contaminating the user's prompt with stale summaries and reduces false assumptions at turn start.
+Conversation memory retrieval is no longer injected automatically at turn start. The memory extension exposes runtime tools such as `memory.search` and `memory.get`, and the model is expected to call them only when recalled context is likely to help with the active request. This avoids contaminating the opening prompt and reduces false assumptions caused by stale memory being present before the model has decided it needs it.
 
 ### Event Bridge
 

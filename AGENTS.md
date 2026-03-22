@@ -192,21 +192,21 @@ For each conversation, Chatons creates a Pi session with these steps:
 
 For cloud conversations, skip this entire local Pi lifecycle. The desktop app may cache cloud project and conversation state locally for display, but execution belongs to the remote headless Chatons runtime and its control-plane services.
 
-### Memory Context Injection
+### Memory Retrieval
 
-When Chatons retrieves relevant memories for a new conversation, it must inject them as a separate runtime `steer` message before the first user prompt, not by concatenating them into the user's text.
+Chatons must not inject retrieved memories automatically into a new conversation, whether by concatenating them into the user's message or by pushing them as a startup `steer`.
 
 Why this rule exists:
 
-- Appending memory to the first user message makes stale summaries look like fresh user intent
-- That pollutes retrieval context, can mislead the model, and can be re-summarized back into memory
-- A separate `steer` preserves the user's actual message boundary and keeps memory semantically weaker than direct user input
+- Even low-confidence injected memory tends to be over-weighted by the model and can still be interpreted as an instruction
+- Automatic retrieval pollutes the initial reasoning context before the model has decided memory is actually relevant
+- On-demand retrieval keeps the user's actual request as the primary source of intent
 
-Formatting requirements for injected memory:
+Runtime behavior requirements:
 
-- Clearly mark it as internal retrieved memory, not user text
-- State that it is low-confidence and may be stale or wrong
-- Instruct the model to prefer the current user request, repository state, and tool evidence over memory when they conflict
+- Memory should remain available as explicit runtime tools such as `memory.search` and `memory.get`
+- The model should query memory only when recalled context is likely to help with the active request
+- Retrieved memory must be treated as potentially stale or wrong and must yield to the current user request, repository state, and tool evidence
 
 ### Worktree Cleanup Rule
 

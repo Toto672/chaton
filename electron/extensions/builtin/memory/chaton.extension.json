@@ -73,8 +73,10 @@
         "description": "Search Chatons memory using a lightweight local embedding index. Can search global memory, project memory, or both.",
         "promptSnippet": "Search stored memory by semantic similarity.",
         "promptGuidelines": [
+          "Use this tool only when remembered context is likely to matter; do not assume memory should be consulted for every request.",
           "Use this tool before asking the user again for information that may have been remembered.",
           "Prefer scope=project for project questions and scope=global for personalization questions.",
+          "Treat results as fallible background context to verify against the current request, repository state, and tool output.",
           "Use scope=all when both personal and project memory may matter."
         ],
         "parameters": {

@@ -7,7 +7,6 @@ import type {
 import {
   summarizeAndStoreConversation,
   consolidateMemory,
-  buildMemoryContextMessage,
   getMemoryModelPreference,
   setMemoryModelPreference,
 } from "../extensions/runtime/memory-lifecycle.js";
@@ -1047,9 +1046,6 @@ let extensionQueueWorkerInFlight = false;
 let memoryConsolidationWorker: NodeJS.Timeout | null = null;
 let unsubscribePiRuntimeEvents: (() => void) | null = null;
 const cloudRealtimeSockets = new Map<string, WebSocket>();
-
-// Track which conversations have already had memory context injected
-const memoryInjectedConversations = new Set<string>();
 
 function buildHostTerminalEnv(cwd?: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
@@ -4117,55 +4113,6 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
           conversationId,
           message: command.message,
         });
-      }
-
-      // Inject memory context as a separate steer before the first user prompt.
-      // Appending memory to the user's message pollutes intent and can make the
-      // agent treat stale memories as if they came from the user.
-      if (command.type === "prompt") {
-        // Check both in-memory cache and database to handle app restarts
-        const conversation = findConversationById(getDb(), conversationId);
-        const alreadyInjected = memoryInjectedConversations.has(conversationId) ||
-          conversation?.memory_injected === 1;
-        if (!alreadyInjected) {
-          try {
-            const memoryContext = buildMemoryContextMessage(
-              conversationId,
-              command.message,
-            );
-            if (memoryContext) {
-              const steerResponse = await deps.piRuntimeManager.sendCommand(conversationId, {
-                type: "steer",
-                message: memoryContext,
-              });
-              if (!steerResponse.success) {
-                throw new Error(steerResponse.error || "Failed to steer memory context");
-              }
-              console.log("[Memory] Injected memory context as steer for conversation:", conversationId);
-              memoryInjectedConversations.add(conversationId);
-              // Mark conversation as having memory injected
-              const db = getDb();
-              db.prepare(
-                `UPDATE conversations SET memory_injected = ? WHERE id = ?`
-              ).run(1, conversationId);
-
-              // Also update the in-memory conversation cache
-              if (conversation) {
-                conversation.memory_injected = 1;
-              }
-
-              // Notify renderer that memory was appended
-              for (const win of BrowserWindow.getAllWindows()) {
-                win.webContents.send("memory:injected", {
-                  conversationId,
-                  status: "injected",
-                });
-              }
-            }
-          } catch (err) {
-            console.warn("[Memory] Failed to append memory context:", err);
-          }
-        }
       }
 
       return deps.piRuntimeManager.sendCommand(conversationId, command);

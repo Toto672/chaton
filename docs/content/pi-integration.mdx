@@ -238,9 +238,9 @@ At session creation, Chatons appends system prompt guidance about:
 
 For the local `@thibautrey/chatons-channel-even-realities` channel, this includes explicit runtime guidance that the assistant is replying for smart glasses and should default to concise, fast answers suited to a limited display. The glasses transport may send a `model` field, but Chatons ignores it and still uses the conversation's configured model like any other channel thread.
 
-When Chatons retrieves relevant memories for a new conversation, it does not splice them into the user's first message. Instead, it sends them as a separate runtime `steer` message immediately before the first user prompt. This keeps the user's intent clean and prevents stale memory summaries from being misread as fresh user instructions.
+Chatons no longer injects retrieved memories automatically at conversation start. Instead, memory stays available as runtime tools such as `memory.search` and `memory.get`, and the model can query it when the current task would genuinely benefit from recalled context.
 
-Injected memory text is intentionally framed as low-confidence background context. The model is told to treat it as potentially stale, incomplete, or wrong, and to prefer the current user request, repository state, and direct tool evidence whenever they conflict.
+This keeps the initial prompt clean and reduces the chance that stale memory is mistaken for an instruction. Memory results should be treated as fallible background context and verified against the current user request, repository state, and direct tool evidence.
 
 ### Hidden Ephemeral Sessions
 
