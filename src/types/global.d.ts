@@ -122,6 +122,7 @@ declare global {
         | { ok: true; account: import('@/features/workspace/types').CloudAccount | null; users: import('@/features/workspace/types').CloudAccountUser[] }
         | { ok: false; reason: "not_connected" | "forbidden" | "unknown"; message?: string }
       >;
+      logoutCloud: () => Promise<{ ok: true } | { ok: false; reason: "not_connected" }>;
       updateCloudUser: (
         userId: string,
         updates: { subscriptionPlan?: import('@/features/workspace/types').CloudSubscriptionPlan; isAdmin?: boolean },
@@ -1053,6 +1054,7 @@ declare global {
       updateLanguagePreference: (language: string) => Promise<void>;
       detectVscode: () => Promise<{ detected: boolean }>;
       detectExternalCommand: (command: string) => Promise<{ detected: boolean }>;
+      openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
       openExternalApplication: (
         command: string,
         args: string[],

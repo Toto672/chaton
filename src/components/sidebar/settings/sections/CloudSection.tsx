@@ -10,7 +10,6 @@ import type {
 
 type Props = {
   state: WorkspaceState
-  onConnect: (options?: { name?: string; baseUrl?: string }) => Promise<void> | void
   onLogin: () => Promise<void> | void
   onSignup: () => Promise<void> | void
   onRefresh: () => Promise<void> | void
@@ -198,7 +197,7 @@ function UserRow({
   )
 }
 
-export function CloudSection({ state, onConnect, onLogin, onSignup, onRefresh, onLogout, onUpdateUser, onGrantSubscription, onUpdatePlan }: Props) {
+export function CloudSection({ state, onLogin, onSignup, onRefresh, onLogout, onUpdateUser, onGrantSubscription, onUpdatePlan }: Props) {
   const { t } = useTranslation()
   const account = state.cloudAccount
   const cloudInstances = state.cloudInstances
@@ -230,6 +229,35 @@ export function CloudSection({ state, onConnect, onLogin, onSignup, onRefresh, o
   const hasInstances = cloudInstances.length > 0
   const isConnecting = cloudInstances.some((i) => i.connectionStatus === 'connecting')
 
+  // Guard clause for account block - TypeScript narrowing doesn't work inside JSX conditional
+  if (!account) {
+    return (
+      <div style={{ display: 'grid', gap: '16px' }}>
+        <section className="settings-card">
+          <h3 className="settings-card-title">{t('Compte cloud')}</h3>
+          <div className="settings-card-note" style={{ marginBottom: '12px' }}>
+            {cloudStatusText}
+          </div>
+          {!hasInstances && (
+            <div className="settings-actions-row">
+              <button type="button" className="settings-action" onClick={() => void onLogin()}>
+                Se connecter
+              </button>
+              <button type="button" className="settings-action-secondary" onClick={() => void onSignup()}>
+                S'inscrire
+              </button>
+            </div>
+          )}
+          {!hasAccount && hasInstances && isConnecting && (
+            <div className="settings-card-note" style={{ color: 'var(--color-text-secondary)' }}>
+              Connexion en cours... Veuillez patienter.
+            </div>
+          )}
+        </section>
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'grid', gap: '16px' }}>
       <section className="settings-card">
@@ -237,7 +265,7 @@ export function CloudSection({ state, onConnect, onLogin, onSignup, onRefresh, o
         <div className="settings-card-note" style={{ marginBottom: '12px' }}>
           {cloudStatusText}
         </div>
-        {!hasAccount && !hasInstances && (
+        {!hasInstances && (
           <div className="settings-actions-row">
             <button type="button" className="settings-action" onClick={() => void onLogin()}>
               Se connecter
@@ -257,38 +285,38 @@ export function CloudSection({ state, onConnect, onLogin, onSignup, onRefresh, o
             <div className="settings-grid">
               <div className="settings-row-wrap">
                 <span className="settings-label">Nom</span>
-                <div className="settings-card-note">{account.user.displayName}</div>
+                <div className="settings-card-note">{account!.user.displayName}</div>
               </div>
               <div className="settings-row-wrap">
                 <span className="settings-label">Email</span>
-                <div className="settings-card-note">{account.user.email}</div>
+                <div className="settings-card-note">{account!.user.email}</div>
               </div>
               <div className="settings-row-wrap">
                 <span className="settings-label">Abonnement</span>
                 <div className="settings-card-note">
-                  {account.user.subscription.label} · {account.user.subscription.parallelSessionsLimit} sessions parallèles
+                  {account!.user.subscription.label} · {account!.user.subscription.parallelSessionsLimit} sessions parallèles
                 </div>
               </div>
               <div className="settings-row-wrap">
                 <span className="settings-label">Usage actuel</span>
                 <div className="settings-card-note">
-                  {account.usage.activeParallelSessions} actives, {account.usage.remainingParallelSessions} restantes
+                  {account!.usage.activeParallelSessions} actives, {account!.usage.remainingParallelSessions} restantes
                 </div>
               </div>
               <div className="settings-row-wrap">
                 <span className="settings-label">Rôle</span>
-                <div className="settings-card-note">{account.user.isAdmin ? 'Admin' : 'Utilisateur'}</div>
+                <div className="settings-card-note">{account!.user.isAdmin ? 'Admin' : 'Utilisateur'}</div>
               </div>
               <div className="settings-row-wrap">
                 <span className="settings-label">Organisations</span>
                 <div className="settings-card-note">
-                  {account.organizations.length === 0 ? (
+                  {account!.organizations.length === 0 ? (
                     'Aucune'
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      {account.organizations.map((org) => (
+                      {account!.organizations.map((org) => (
                         <div key={org.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {org.id === account.activeOrganizationId && (
+                          {org.id === account!.activeOrganizationId && (
                             <span style={{ color: 'var(--color-accent)', fontWeight: 500 }}>●</span>
                           )}
                           <span>{org.name}</span>

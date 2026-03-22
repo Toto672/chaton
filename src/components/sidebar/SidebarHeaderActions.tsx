@@ -1,7 +1,6 @@
 import {
   Cloud,
   FolderPlus,
-  Plus,
   Search,
   SlidersHorizontal,
 } from "lucide-react";
@@ -16,7 +15,6 @@ export function SidebarHeaderActions() {
     importProject,
     openSettingsToCloud,
     createCloudProject,
-    createConversationGlobal,
     toggleSidebarSearch,
     state,
   } = useWorkspace();
