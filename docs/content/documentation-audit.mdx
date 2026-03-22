@@ -5,6 +5,23 @@ description: Verified documentation changes and rationale for Chatons features a
 
 # Documentation Audit
 
+## 2026-03-22
+
+### Aligned the hosted cloud ingress and public URL guidance with `chatons.ai`
+
+**Change:** Updated the Kubernetes ingress, cloud secret examples, and maintainer/developer docs so the hosted cloud stack uses `cloud.chatons.ai` as the canonical public `cloud-api` and OIDC base URL, keeps `api.chatons.ai` as an optional alias to the same API service, and reserves `realtime.chatons.ai` for websocket traffic to `cloud-realtime`. The cloud secret generator now also emits `CHATONS_CLOUD_PUBLIC_URL`.
+
+**Why:** The cluster rollout had become healthy, but the checked-in ingress still targeted `*.example.com`, and `cloud-api` had no explicit public base URL in its Kubernetes secret contract. Without those changes, DNS/TLS cutover to the real hosted domains would stay inconsistent and server-generated cloud URLs could fall back to `127.0.0.1`.
+
+**Files updated:**
+- `k8s/base/ingress.yaml` -- Replaced the placeholder ingress hosts with `cloud.chatons.ai`, `api.chatons.ai`, and `realtime.chatons.ai`
+- `k8s/base/secrets.example.yaml` -- Added `CHATONS_CLOUD_PUBLIC_URL` to the example cloud secret manifest
+- `scripts/generate-cloud-secrets.js` -- Added `CHATONS_CLOUD_PUBLIC_URL` to generated manifests and updated the usage example to the canonical hosted URL
+- `docs/content/cloud-kubernetes.mdx` -- Documented the canonical public URL plus the hosted ingress host split
+- `docs/content/developer-guide.mdx` -- Documented the intended hosted-domain layout for cloud-api and realtime
+- `docs/content/pi-integration.mdx` -- Documented the required `CHATONS_CLOUD_PUBLIC_URL` setting for hosted cloud deployments
+- `AGENTS.md` -- Added maintainer guidance for the canonical cloud public URL and host aliases
+
 ## 2026-03-21
 
 ### Added an Even Realities glasses channel extension under the user extension home
@@ -687,6 +704,20 @@ description: Verified documentation changes and rationale for Chatons features a
 **Verified files:**
 - `electron/pi-sdk-runtime.ts` -- Enriches generic connection failures from nested SDK causes and rewrites the last errored assistant message before snapshot emission
 - `docs/content/pi-integration.mdx` -- Documented the new runtime error-surfacing behavior for provider transport failures
+
+## 2026-03-21
+
+### Fixed landing cloud auth default base URL
+
+**Change:** Changed the standalone landing cloud client to default its browser signup/login/reset/verify/bootstrap requests to `https://cloud.chatons.ai` instead of `http://127.0.0.1:4000` when `VITE_CHATONS_CLOUD_API_URL` is unset.
+
+**Why:** The hosted landing site must talk to the cloud control plane by default. Falling back to a localhost API made browser signup fail with `ERR_CONNECTION_REFUSED` on the production domain.
+
+**Verified files:**
+- `landing/src/cloud.ts` -- Switched the landing cloud API fallback from localhost to the production cloud host
+- `AGENTS.md` -- Documented the expected default host for landing cloud auth/bootstrap calls
+- `docs/content/pi-integration.mdx` -- Documented the production landing default and env override
+- `docs/content/developer-guide.mdx` -- Documented the production landing default and env override
 
 ## 2026-03-15
 

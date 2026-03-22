@@ -48,7 +48,7 @@ Options:
   --postgres-db <name>      Postgres database (default: chatons)
   --postgres-user <name>    Postgres user (default: chatons)
   --redis-url <url>         Redis URL (default: redis://redis.chatons-cloud.svc.cluster.local:6379)
-  --public-url <url>        Public cloud API URL (used for OIDC issuer fallback)
+  --public-url <url>        Canonical public cloud URL for cloud-api and OIDC (default: https://cloud.chatons.ai)
   --web-url <url>           Browser portal URL (default: --public-url)
   --oidc-client-id <id>     OIDC client id (default: chatons-desktop)
   --smtp-host <host>        SMTP host
@@ -59,7 +59,7 @@ Options:
   --stdout                  Print to stdout instead of writing a file
 
 Example:
-  npm run secrets:cloud -- --output k8s/base/chatons-cloud-secrets.yaml --public-url https://api.chatons.ai --web-url https://cloud.chatons.ai --smtp-host smtp.resend.com --smtp-user resend`);
+  npm run secrets:cloud -- --output k8s/base/chatons-cloud-secrets.yaml --public-url https://cloud.chatons.ai --web-url https://cloud.chatons.ai --smtp-host smtp.resend.com --smtp-user resend`);
 }
 
 function buildManifest(options) {
@@ -89,6 +89,7 @@ function buildManifest(options) {
     DATABASE_URL: databaseUrl,
     REDIS_URL: redisUrl,
     CHATONS_INTERNAL_SERVICE_TOKEN: randomSecret(32),
+    CHATONS_CLOUD_PUBLIC_URL: publicUrl,
     OIDC_CLIENT_ID: oidcClientId,
     OIDC_CLIENT_SECRET: oidcClientSecret,
     OIDC_ISSUER_URL: publicUrl,

@@ -13,11 +13,12 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - api.chatons.example.com
-        - realtime.chatons.example.com
+        - cloud.chatons.ai
+        - api.chatons.ai
+        - realtime.chatons.ai
       secretName: chatons-cloud-tls
   rules:
-    - host: api.chatons.example.com
+    - host: cloud.chatons.ai
       http:
         paths:
           - path: /
@@ -27,7 +28,17 @@ spec:
                 name: cloud-api
                 port:
                   number: 80
-    - host: realtime.chatons.example.com
+    - host: api.chatons.ai
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: cloud-api
+                port:
+                  number: 80
+    - host: realtime.chatons.ai
       http:
         paths:
           - path: /
