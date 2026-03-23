@@ -76,6 +76,7 @@ export function MenuRowWithExtensions({
               iconName={item.icon}
               extensionId={extensionId}
               className="h-4 w-4 object-contain"
+              muted={true}
             />
           ),
           onClick: () => {

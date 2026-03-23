@@ -15,7 +15,7 @@ import {
   listConversationMessagesCache,
 } from '../../db/repos/conversations.js'
 import { memoryUpsert, memorySearch, memoryList } from './memory.js'
-import { parseModelKey } from './helpers.js'
+import { parseModelKey, stripThinkingBlocks } from './helpers.js'
 import type { PiSessionRuntimeManager } from '../../pi-sdk-runtime.js'
 import {
   calculateAutoImportance,
@@ -104,6 +104,8 @@ function extractConversationMetrics(conversationId: string): ConversationMetrics
           .map((part) => part.text)
           .join('\n')
       }
+
+      text = stripThinkingBlocks(text)
       
       // Filter out memory context messages that may have been cached before the fix
       if (text.includes(MEMORY_CONTEXT_MARKER)) continue
@@ -264,7 +266,7 @@ export async function summarizeAndStoreConversation(
       for (const part of content) {
         const p = part as Record<string, unknown> | null
         if (p?.type === 'text' && typeof p.text === 'string') {
-          summary = p.text.trim()
+          summary = stripThinkingBlocks(p.text)
         }
       }
       if (summary) break
@@ -526,14 +528,14 @@ export async function consolidateMemory(
         for (let j = messages.length - 1; j >= 0; j--) {
           const msg = messages[j] as Record<string, unknown> | null
           if (!msg || msg.role !== 'assistant') continue
-          const content = Array.isArray(msg.content) ? msg.content : []
-          for (const part of content) {
-            const p = part as Record<string, unknown> | null
-            if (p?.type === 'text' && typeof p.text === 'string') {
-              resultText = p.text.trim()
-            }
+        const content = Array.isArray(msg.content) ? msg.content : []
+        for (const part of content) {
+          const p = part as Record<string, unknown> | null
+          if (p?.type === 'text' && typeof p.text === 'string') {
+            resultText = stripThinkingBlocks(p.text)
           }
-          if (resultText) break
+        }
+        if (resultText) break
         }
 
         // Parse the consolidated entries
@@ -560,14 +562,21 @@ export async function consolidateMemory(
         }
 
         for (const newEntry of consolidated) {
-          if (!newEntry.content || typeof newEntry.content !== 'string') continue
+          const sanitizedContent =
+            typeof newEntry.content === 'string'
+              ? stripThinkingBlocks(newEntry.content)
+              : ''
+          if (!sanitizedContent) continue
+
+          const sanitizedTitle =
+            typeof newEntry.title === 'string' ? stripThinkingBlocks(newEntry.title) : ''
+
           memoryUpsert({
             scope: scopeConfig.scope,
             projectId: scopeConfig.projectId,
             kind: 'conversation-summary',
-            title:
-              typeof newEntry.title === 'string' ? newEntry.title : 'Consolidated memory',
-            content: newEntry.content,
+            title: sanitizedTitle || 'Consolidated memory',
+            content: sanitizedContent,
             tags: ['auto-summary', 'consolidated'],
             source: 'auto-consolidation',
           })

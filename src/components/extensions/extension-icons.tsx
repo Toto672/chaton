@@ -65,6 +65,23 @@ function staticIconCandidates(extensionId: string): string[] {
 }
 
 /**
+ * Decode a data URL SVG and add inline dimensions so it fills its container.
+ * Returns the SVG HTML string or null if decoding fails.
+ */
+function decodeDataUrlSvg(src: string): string | null {
+  try {
+    const svgContent = decodeURIComponent(src.replace(/^data:image\/svg\+xml,/, ""));
+    // Add inline styles to make SVG fill its container and inherit color
+    return svgContent.replace(
+      "<svg",
+      "<svg style=\"width:100%;height:100%;fill:none;stroke:currentColor\""
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Resolve an extension icon for display.
  *
  * Priority:
@@ -108,18 +125,25 @@ export function getExtensionIcon(
 
 /**
  * Render an extension icon with automatic fallback handling.
+ * Data URL images are decoded and rendered as inline SVGs so they
+ * properly inherit currentColor from the parent container.
  *
  * Tries the primary image source, then each fallback candidate,
  * and finally renders the Puzzle lucide icon if all fail.
+ *
+ * @param muted - When true, applies grayscale filter to image icons to match
+ *                the muted color applied to lucide icons via CSS currentColor.
  */
 export function ExtensionIcon({
   iconName,
   extensionId,
   className,
+  muted = false,
 }: {
   iconName?: string | null;
   extensionId?: string;
   className?: string;
+  muted?: boolean;
 }) {
   const iconValue = getExtensionIcon(iconName, extensionId);
   const [fallbackIndex, setFallbackIndex] = useState(-1);
@@ -144,11 +168,27 @@ export function ExtensionIcon({
   const src =
     fallbackIndex >= 0 ? iconValue.fallbacks?.[fallbackIndex] ?? iconValue.src : iconValue.src;
 
+  // For data URL images, decode and render as inline SVG so currentColor works
+  // This ensures image icons respect the parent's text color for consistent styling
+  if (src.startsWith("data:image/svg+xml")) {
+    const decoded = decodeDataUrlSvg(src);
+    if (decoded) {
+      return (
+        <span
+          className={className}
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+          dangerouslySetInnerHTML={{ __html: decoded }}
+        />
+      );
+    }
+    // Fall back to img tag if decoding fails
+  }
+
   return (
     <img
       src={src}
       alt=""
-      className={className}
+      className={muted ? `${className ?? ""} extension-icon-muted` : className}
       loading="lazy"
       onError={handleError}
     />

@@ -209,6 +209,11 @@
     var layout = ui.el("div", "ce-shell-layout");
 
     var inbox = ui.el("section", "ce-shell-inbox");
+
+    // Sticky header container (title stays fixed)
+    var stickyHeader = ui.el("div", "ce-shell-sticky-header");
+    stickyHeader.style.cssText = "position: sticky; top: 0; z-index: 10; background: inherit;";
+
     var inboxHeader = ui.el("div", "ce-shell-inbox-header");
     var titleWrap = ui.el("div", "ce-shell-title-wrap");
     titleWrap.appendChild(ui.el("h1", "ce-shell-title", "Automatisations"));
@@ -218,8 +223,10 @@
     newBtn.id = "newBtn";
     newBtn.classList.add("ce-shell-new-btn");
     inboxHeader.appendChild(newBtn);
-    inbox.appendChild(inboxHeader);
+    stickyHeader.appendChild(inboxHeader);
+    inbox.appendChild(stickyHeader);
 
+    // Scrollable list sections
     var scheduledSection = ui.el("section", "ce-shell-section");
     scheduledSection.appendChild(ui.el("h2", "ce-shell-section-title", "Actives"));
     var scheduledList = ui.el("div", "ce-shell-list");

@@ -69,6 +69,26 @@ export function parseModelKey(modelKey: string): { provider: string; modelId: st
   return { provider, modelId }
 }
 
+const THINKING_BLOCK_PATTERNS = [
+  /<thinking\b[^>]*>[\s\S]*?<\/thinking>/gi,
+  /<think\b[^>]*>[\s\S]*?<\/think>/gi,
+]
+
+export function stripThinkingBlocks(text: string): string {
+  if (!text) return text
+
+  let result = text
+  for (const pattern of THINKING_BLOCK_PATTERNS) {
+    result = result.replace(pattern, '')
+  }
+
+  return result
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\n+/, '')
+    .replace(/\n+$/, '')
+    .trim()
+}
+
 /**
  * Parse natural language cron patterns and convert them to standard cron expressions.
  * Examples:
