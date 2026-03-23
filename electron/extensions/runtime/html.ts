@@ -7,7 +7,7 @@ import { listExtensionManifests } from './registry.js'
 import { ensureExtensionServerStarted } from './server.js'
 import { EXTENSION_UI_BRIDGE_SCRIPT } from './ui-bridge.js'
 
-export function getExtensionMainViewHtml(viewId: string): { ok: true; html: string } | { ok: false; message: string } {
+export function getExtensionMainViewHtml(viewId: string): { ok: true; html: string; baseUrl: string } | { ok: false; message: string } {
   const manifests = listExtensionManifests()
   const match = manifests
     .flatMap((manifest) =>
@@ -89,73 +89,26 @@ export function getExtensionMainViewHtml(viewId: string): { ok: true; html: stri
 
   try {
     let html = fs.readFileSync(targetPath, 'utf8')
-    const baseDir = path.dirname(targetPath)
+    const pathPart = relativePath
+    const basePath = path.posix.dirname(`/${pathPart}`)
+    const baseUrl = `chaton-extension://${encodeURIComponent(extensionId)}${basePath === '/' ? '/' : `${basePath}/`}`
 
     appendExtensionLog(extensionId, 'info', 'script_inlining.start', {
       targetPath,
-      baseDir,
-    })
-
-    // Inline scripts - CRITICAL: scripts MUST be inlined or they won't load from srcDoc
-    html = html.replace(/<script\s+[^>]*src=["']([^"']+)["'][^>]*>\s*<\/script>/gi, (match, srcRaw: string) => {
-      const src = String(srcRaw || '')
-      appendExtensionLog(extensionId, 'info', 'script_inlining.found', { src })
-      
-      // Skip external URLs
-      if (/^https?:\/\//i.test(src) || src.startsWith('data:')) {
-        appendExtensionLog(extensionId, 'info', 'script_inlining.skip_external', { src })
-        return match
-      }
-      
-      const scriptPath = path.resolve(baseDir, src)
-      const fileExists = fs.existsSync(scriptPath)
-      const isValid = scriptPath.startsWith(path.resolve(baseDir)) && fileExists
-      
-      appendExtensionLog(extensionId, 'info', 'script_inlining.resolve', {
-        src,
-        scriptPath,
-        baseDir: path.resolve(baseDir),
-        isValid,
-      })
-      
-      if (!isValid) {
-        // Critical: if we can't inline, the script will fail to load from srcDoc
-        appendExtensionLog(extensionId, 'warn', 'script_inlining.failed', { src, scriptPath, fileExists })
-        return `<!-- ERROR: Could not inline script: ${src} -->`
-      }
-      
-      const content = fs.readFileSync(scriptPath, 'utf8')
-      appendExtensionLog(extensionId, 'info', 'script_inlining.success', {
-        src,
-        contentLength: content.length,
-      })
-      return `<script>\n${content}\n</script>`
-    })
-
-    // Inline stylesheets
-    html = html.replace(/<link\s+[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi, (match, hrefRaw: string) => {
-      const href = String(hrefRaw || '')
-      if (/^https?:\/\//i.test(href) || href.startsWith('data:')) {
-        return match
-      }
-      const cssPath = path.resolve(baseDir, href)
-      if (!cssPath.startsWith(path.resolve(baseDir)) || !fs.existsSync(cssPath)) {
-        return `<!-- Stylesheet not found: ${href} -->`
-      }
-      const content = fs.readFileSync(cssPath, 'utf8')
-      return `<style>\n${content}\n</style>`
+      baseUrl,
     })
 
     // Inject UI bridge script
     const escapedBridge = EXTENSION_UI_BRIDGE_SCRIPT.replace(/<\/script/gi, '<\\/script')
+    const baseTag = `<base href="${baseUrl}">`
 
     if (/<head[^>]*>/i.test(html)) {
-      html = html.replace(/<head[^>]*>/i, (matchTag) => `${matchTag}\n<script>\n${escapedBridge}\n</script>`)
+      html = html.replace(/<head[^>]*>/i, (matchTag) => `${matchTag}\n${baseTag}\n<script>\n${escapedBridge}\n</script>`)
     } else {
-      html = `<script>\n${escapedBridge}\n</script>\n${html}`
+      html = `${baseTag}\n<script>\n${escapedBridge}\n</script>\n${html}`
     }
 
-    return { ok: true, html }
+    return { ok: true, html, baseUrl }
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : String(error) }
   }

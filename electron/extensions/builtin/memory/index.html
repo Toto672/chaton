@@ -1,13 +1,23 @@
 <!doctype html>
-<html lang="fr">
+<html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mémoire</title>
+    <title id="pageTitle">Memory</title>
+    <script>
+      // Set HTML lang attribute and page title based on browser locale
+      (function() {
+        var lang = navigator.language || navigator.userLanguage || 'fr';
+        var base = lang.split('-')[0].toLowerCase();
+        var title = base === 'fr' ? 'Mémoire' : 'Memory';
+        document.documentElement.lang = base;
+        document.getElementById('pageTitle').textContent = title;
+      })();
+    </script>
   </head>
   <body>
     <div id="app" class="ce-root"></div>
-    <script src="../automation/components.js"></script>
+    <script src="./components.js"></script>
     <script src="./index.js"></script>
   </body>
 </html>

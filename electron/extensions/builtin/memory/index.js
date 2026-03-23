@@ -1,9 +1,281 @@
-(function () {
+export function mountMemoryApp(root) {
   var EXTENSION_ID = "@chaton/memory";
   var ui = window.chatonExtensionComponents;
 
   if (!ui) throw new Error("chatonExtensionComponents is required");
   ui.ensureStyles();
+
+  // =========================================================================
+  // i18n - Internationalization
+  // =========================================================================
+
+  var translations = {
+    fr: {
+      // App title
+      appTitle: "Mémoire",
+
+      // Fatal error messages
+      fatalErrorTitle: "Impossible de charger la vue Mémoire",
+      fatalErrorDefault: "Une erreur inconnue est survenue.",
+
+      // Time relative labels
+      timeNow: "À l'instant",
+      timeMinute: " min",
+      timeHour: " h",
+      timeDay: " j",
+      timeMonth: " mois",
+      dateUnknown: "Date inconnue",
+
+      // Kind labels
+      kindPreference: "Préférence",
+      kindFact: "Fait",
+      kindProfile: "Profil",
+      kindDecision: "Décision",
+      kindContext: "Contexte",
+      kindDefault: "Fait",
+
+      // Scope labels
+      scopeGlobal: "Globale",
+      scopeProject: "Projet",
+
+      // Buttons
+      btnNew: "+ Nouveau",
+      btnSearch: "Rechercher",
+      btnArchive: "Archiver",
+      btnUnarchive: "Désarchiver",
+      btnDelete: "Supprimer",
+      btnCancel: "Annuler",
+      btnSave: "Enregistrer",
+
+      // Search
+      searchPlaceholder: "Rechercher dans la mémoire…",
+
+      // Filters - Scope
+      filterScopeAll: "Toutes",
+      filterScopeGlobal: "Globales",
+      filterScopeProject: "Projets",
+
+      // Filters - Kind
+      filterKindAll: "Tous les types",
+      filterKindPreference: "Préférences",
+      filterKindFact: "Faits",
+      filterKindProfile: "Profils",
+      filterKindDecision: "Décisions",
+      filterKindContext: "Contexte",
+
+      // Empty states
+      emptySelectMemory: "Sélectionnez une mémoire",
+      emptySelectDescription: "Choisissez une entrée dans la liste pour voir ses détails, ou créez une nouvelle mémoire.",
+      emptyNoMemory: "Aucune mémoire trouvée.",
+
+      // Entry list
+      entrySuffix: "entrée",
+      entriesSuffix: "entrées",
+      untitled: "Sans titre",
+
+      // Modal - Create
+      modalCreateTitle: "Ajouter une mémoire",
+      modalCreateDescription: "Enregistrez une préférence, un fait, une décision ou tout autre contexte que Chatons devra retenir.",
+      labelScope: "Portée",
+      labelProject: "Projet",
+      labelKind: "Type",
+      labelTitle: "Titre",
+      labelTags: "Tags",
+      labelContent: "Contenu",
+      placeholderTitle: "Titre court et descriptif",
+      placeholderTags: "style, utilisateur, workflow",
+      placeholderContent: "L'utilisateur préfère des réponses concises avec des exemples de code.",
+      helpProjectRequired: "Requis pour un scope projet.",
+      helpTagsSeparator: "Séparez les tags par des virgules.",
+
+      // Modal - Scope options
+      scopeGlobalOption: "Globale",
+      scopeProjectOption: "Projet",
+
+      // Modal - Kind options
+      kindFactOption: "Fait",
+      kindPreferenceOption: "Préférence",
+      kindProfileOption: "Profil",
+      kindDecisionOption: "Décision",
+      kindContextOption: "Contexte",
+
+      // Detail panel
+      detailUpdated: "mis à jour",
+      badgeArchived: "Archivée",
+
+      // Detail sections
+      sectionContent: "Contenu",
+      sectionTags: "Tags",
+      sectionMetadata: "Métadonnées",
+
+      // Metadata labels
+      metaId: "ID",
+      metaScope: "Portée",
+      metaType: "Type",
+      metaProject: "Projet",
+      metaSource: "Source",
+      metaSourceManual: "Manuelle",
+      metaCreated: "Créée le",
+      metaUpdated: "Mis à jour",
+      metaLastAccess: "Dernier accès",
+      metaAccessCount: "Nombre d'accès",
+
+      // Projects dropdown
+      projectNone: "Aucun",
+      projectDefault: "Projet",
+
+      // Error messages
+      errorLoadProjects: "Impossible de charger la liste des projets.",
+      errorLoadEntries: "Impossible de charger les entrées mémoire.",
+    },
+
+    en: {
+      // App title
+      appTitle: "Memory",
+
+      // Fatal error messages
+      fatalErrorTitle: "Unable to load Memory view",
+      fatalErrorDefault: "An unknown error occurred.",
+
+      // Time relative labels
+      timeNow: "Just now",
+      timeMinute: " min",
+      timeHour: " h",
+      timeDay: " d",
+      timeMonth: " mo",
+      dateUnknown: "Unknown date",
+
+      // Kind labels
+      kindPreference: "Preference",
+      kindFact: "Fact",
+      kindProfile: "Profile",
+      kindDecision: "Decision",
+      kindContext: "Context",
+      kindDefault: "Fact",
+
+      // Scope labels
+      scopeGlobal: "Global",
+      scopeProject: "Project",
+
+      // Buttons
+      btnNew: "+ New",
+      btnSearch: "Search",
+      btnArchive: "Archive",
+      btnUnarchive: "Unarchive",
+      btnDelete: "Delete",
+      btnCancel: "Cancel",
+      btnSave: "Save",
+
+      // Search
+      searchPlaceholder: "Search in memory…",
+
+      // Filters - Scope
+      filterScopeAll: "All",
+      filterScopeGlobal: "Global",
+      filterScopeProject: "Projects",
+
+      // Filters - Kind
+      filterKindAll: "All types",
+      filterKindPreference: "Preferences",
+      filterKindFact: "Facts",
+      filterKindProfile: "Profiles",
+      filterKindDecision: "Decisions",
+      filterKindContext: "Context",
+
+      // Empty states
+      emptySelectMemory: "Select a memory",
+      emptySelectDescription: "Choose an entry from the list to view its details, or create a new memory.",
+      emptyNoMemory: "No memories found.",
+
+      // Entry list
+      entrySuffix: "entry",
+      entriesSuffix: "entries",
+      untitled: "Untitled",
+
+      // Modal - Create
+      modalCreateTitle: "Add a memory",
+      modalCreateDescription: "Record a preference, fact, decision, or any other context that Chatons should remember.",
+      labelScope: "Scope",
+      labelProject: "Project",
+      labelKind: "Type",
+      labelTitle: "Title",
+      labelTags: "Tags",
+      labelContent: "Content",
+      placeholderTitle: "Short descriptive title",
+      placeholderTags: "style, user, workflow",
+      placeholderContent: "The user prefers concise responses with code examples.",
+      helpProjectRequired: "Required for project scope.",
+      helpTagsSeparator: "Separate tags with commas.",
+
+      // Modal - Scope options
+      scopeGlobalOption: "Global",
+      scopeProjectOption: "Project",
+
+      // Modal - Kind options
+      kindFactOption: "Fact",
+      kindPreferenceOption: "Preference",
+      kindProfileOption: "Profile",
+      kindDecisionOption: "Decision",
+      kindContextOption: "Context",
+
+      // Detail panel
+      detailUpdated: "updated",
+      badgeArchived: "Archived",
+
+      // Detail sections
+      sectionContent: "Content",
+      sectionTags: "Tags",
+      sectionMetadata: "Metadata",
+
+      // Metadata labels
+      metaId: "ID",
+      metaScope: "Scope",
+      metaType: "Type",
+      metaProject: "Project",
+      metaSource: "Source",
+      metaSourceManual: "Manual",
+      metaCreated: "Created",
+      metaUpdated: "Updated",
+      metaLastAccess: "Last accessed",
+      metaAccessCount: "Access count",
+
+      // Projects dropdown
+      projectNone: "None",
+      projectDefault: "Project",
+
+      // Error messages
+      errorLoadProjects: "Unable to load project list.",
+      errorLoadEntries: "Unable to load memory entries.",
+    },
+  };
+
+  // Detect locale from browser, default to French
+  var currentLocale = (function () {
+    var lang = navigator.language || navigator.userLanguage || "fr";
+    var base = lang.split("-")[0].toLowerCase();
+    // Check if we have translations for this language
+    if (translations[base]) {
+      return base;
+    }
+    return "fr";
+  })();
+
+  function t(key) {
+    var locale = translations[currentLocale];
+    if (locale && locale[key] !== undefined) {
+      return locale[key];
+    }
+    // Fallback to French
+    if (translations.fr[key] !== undefined) {
+      return translations.fr[key];
+    }
+    // Return key as last resort
+    return key;
+  }
+
+  // =========================================================================
+  // End i18n
+  // =========================================================================
 
   function createSvgIcon(pathDefs, size) {
     if (typeof ui.createSvgIcon === "function") {
@@ -58,7 +330,7 @@
   // Memory uses shared shell classes from components.js
   // No additional CSS needed - all styles are in components.js
 
-  var app = document.getElementById("app");
+  var app = root || document.getElementById("app");
   if (!app) {
     throw new Error("memory root #app not found");
   }
@@ -76,11 +348,11 @@
     card.style.display = "block";
     card.style.maxWidth = "720px";
 
-    var title = ui.el("h2", "ce-shell-detail-title", "Impossible de charger la vue Mémoire");
+    var title = ui.el("h2", "ce-shell-detail-title", t("fatalErrorTitle"));
     var body = ui.el(
       "p",
       "ce-shell-detail-meta",
-      String(message || "Une erreur inconnue est survenue."),
+      String(message || t("fatalErrorDefault")),
     );
 
     card.appendChild(title);
@@ -120,22 +392,24 @@
 
   function nowRel(iso) {
     var ts = Date.parse(iso);
-    if (!Number.isFinite(ts)) return "Date inconnue";
+    if (!Number.isFinite(ts)) return t("dateUnknown");
     var diff = Date.now() - ts;
     var minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return "À l'instant";
-    if (minutes < 60) return minutes + " min";
+    if (minutes < 1) return t("timeNow");
+    if (minutes < 60) return minutes + t("timeMinute");
     var hours = Math.floor(diff / 3600000);
-    if (hours < 24) return hours + " h";
+    if (hours < 24) return hours + t("timeHour");
     var days = Math.floor(diff / 86400000);
-    if (days < 30) return days + " j";
-    return Math.floor(days / 30) + " mois";
+    if (days < 30) return days + t("timeDay");
+    return Math.floor(days / 30) + t("timeMonth");
   }
 
   function fmtDate(iso) {
     var ts = Date.parse(iso || "");
-    if (!Number.isFinite(ts)) return "Date inconnue";
-    return new Date(ts).toLocaleString("fr-FR", {
+    if (!Number.isFinite(ts)) return t("dateUnknown");
+    // Use current locale for date formatting
+    var localeMap = { fr: "fr-FR", en: "en-US" };
+    return new Date(ts).toLocaleString(localeMap[currentLocale] || "en-US", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -146,17 +420,17 @@
 
   function kindLabel(kind) {
     var map = {
-      preference: "Préférence",
-      fact: "Fait",
-      profile: "Profil",
-      decision: "Décision",
-      context: "Contexte",
+      preference: t("kindPreference"),
+      fact: t("kindFact"),
+      profile: t("kindProfile"),
+      decision: t("kindDecision"),
+      context: t("kindContext"),
     };
-    return map[kind] || kind || "fact";
+    return map[kind] || kind || t("kindDefault");
   }
 
   function scopeLabel(scope) {
-    return scope === "global" ? "Globale" : "Projet";
+    return scope === "global" ? t("scopeGlobal") : t("scopeProject");
   }
 
   // Build the shell layout
@@ -168,6 +442,9 @@
 
     // --- LEFT: Inbox / list pane ---
     var inbox = ui.el("section", "ce-shell-inbox");
+
+    // Fixed header container (title, search, filters) - not scrollable
+    var headerWrap = ui.el("div", "ce-shell-header-wrap");
 
     // Header
     var inboxHeader = ui.el("div", "ce-shell-inbox-header");
@@ -184,14 +461,14 @@
       "M19.967 17.484A4 4 0 0 1 18 18",
     ], 24);
     titleWrap.appendChild(brainIcon);
-    titleWrap.appendChild(ui.el("h1", "ce-shell-title", "Mémoire"));
+    titleWrap.appendChild(ui.el("h1", "ce-shell-title", t("appTitle")));
     inboxHeader.appendChild(titleWrap);
 
-    var newBtn = ui.createButton({ text: "+ Nouveau", variant: "ghost" });
+    var newBtn = ui.createButton({ text: t("btnNew"), variant: "ghost" });
     newBtn.id = "newBtn";
     newBtn.classList.add("ce-shell-new-btn");
     inboxHeader.appendChild(newBtn);
-    inbox.appendChild(inboxHeader);
+    headerWrap.appendChild(inboxHeader);
 
     // Search bar
     var searchWrap = ui.el("div", "ce-shell-search-wrap");
@@ -199,13 +476,13 @@
     var searchInput = ui.el("input", "ce-shell-search-input");
     searchInput.id = "searchInput";
     searchInput.type = "text";
-    searchInput.placeholder = "Rechercher dans la mémoire…";
+    searchInput.placeholder = t("searchPlaceholder");
     searchRow.appendChild(searchInput);
-    var searchBtn = ui.createButton({ text: "Rechercher", variant: "outline" });
+    var searchBtn = ui.createButton({ text: t("btnSearch"), variant: "outline" });
     searchBtn.id = "searchBtn";
     searchRow.appendChild(searchBtn);
     searchWrap.appendChild(searchRow);
-    inbox.appendChild(searchWrap);
+    headerWrap.appendChild(searchWrap);
 
     // Filters
     var filters = ui.el("div", "ce-shell-filters");
@@ -213,9 +490,9 @@
     var scopeSelect = ui.el("select", "ce-shell-filter-select");
     scopeSelect.id = "scopeFilter";
     [
-      ["all", "Toutes"],
-      ["global", "Globales"],
-      ["project", "Projets"],
+      ["all", t("filterScopeAll")],
+      ["global", t("filterScopeGlobal")],
+      ["project", t("filterScopeProject")],
     ].forEach(function (entry) {
       var opt = ui.el("option", "", entry[1]);
       opt.value = entry[0];
@@ -226,12 +503,12 @@
     var kindSelect = ui.el("select", "ce-shell-filter-select");
     kindSelect.id = "kindFilter";
     [
-      ["", "Tous les types"],
-      ["preference", "Préférences"],
-      ["fact", "Faits"],
-      ["profile", "Profils"],
-      ["decision", "Décisions"],
-      ["context", "Contexte"],
+      ["", t("filterKindAll")],
+      ["preference", t("filterKindPreference")],
+      ["fact", t("filterKindFact")],
+      ["profile", t("filterKindProfile")],
+      ["decision", t("filterKindDecision")],
+      ["context", t("filterKindContext")],
     ].forEach(function (entry) {
       var opt = ui.el("option", "", entry[1]);
       opt.value = entry[0];
@@ -243,9 +520,10 @@
     countLabel.id = "entryCount";
     filters.appendChild(countLabel);
 
-    inbox.appendChild(filters);
+    headerWrap.appendChild(filters);
+    inbox.appendChild(headerWrap);
 
-    // Memory list
+    // Memory list (scrollable)
     var listSection = ui.el("section", "ce-shell-section");
     var memList = ui.el("div", "ce-shell-list");
     memList.id = "memList";
@@ -266,13 +544,13 @@
     emptyIcon.classList.add("ce-shell-empty-icon");
     detailEmpty.appendChild(emptyIcon);
     detailEmpty.appendChild(
-      ui.el("p", "ce-shell-empty-title", "Sélectionnez une mémoire"),
+      ui.el("p", "ce-shell-empty-title", t("emptySelectMemory")),
     );
     detailEmpty.appendChild(
       ui.el(
         "p",
         "ce-shell-empty-copy",
-        "Choisissez une entrée dans la liste pour voir ses détails, ou créez une nouvelle mémoire.",
+        t("emptySelectDescription"),
       ),
     );
 
@@ -290,10 +568,10 @@
     detailTitleWrap.appendChild(detailMeta);
 
     var detailActions = ui.el("div", "ce-shell-detail-actions");
-    var archiveBtn = ui.createButton({ text: "Archiver", variant: "outline" });
+    var archiveBtn = ui.createButton({ text: t("btnArchive"), variant: "outline" });
     archiveBtn.id = "archiveBtn";
     var deleteBtn = ui.createButton({
-      text: "Supprimer",
+      text: t("btnDelete"),
       variant: "ghost",
       className: "ce-shell-danger-btn",
     });
@@ -325,14 +603,14 @@
 
     var modal = ui.el("div", "ce-modal ce-modal--compact");
     var modalHeader = ui.el("div", "ce-modal__header");
-    var modalTitle = ui.el("h3", "ce-modal__title", "Ajouter une mémoire");
+    var modalTitle = ui.el("h3", "ce-modal__title", t("modalCreateTitle"));
     modalTitle.id = "modalTitle";
     modalHeader.appendChild(modalTitle);
     modalHeader.appendChild(
       ui.el(
         "p",
         "ce-modal__description",
-        "Enregistrez une préférence, un fait, une décision ou tout autre contexte que Chatons devra retenir.",
+        t("modalCreateDescription"),
       ),
     );
     modal.appendChild(modalHeader);
@@ -343,78 +621,77 @@
     var createScope = ui.el("select", "ce-select");
     createScope.id = "createScope";
     [
-      ["global", "Globale"],
-      ["project", "Projet"],
+      ["global", t("scopeGlobalOption")],
+      ["project", t("scopeProjectOption")],
     ].forEach(function (entry) {
       var opt = ui.el("option", "", entry[1]);
       opt.value = entry[0];
       createScope.appendChild(opt);
     });
     modalGrid.appendChild(
-      ui.createField({ label: "Portée", input: createScope }),
+      ui.createField({ label: t("labelScope"), input: createScope }),
     );
 
     var createProject = ui.el("select", "ce-select");
     createProject.id = "createProject";
     modalGrid.appendChild(
       ui.createField({
-        label: "Projet",
+        label: t("labelProject"),
         input: createProject,
-        help: "Requis pour un scope projet.",
+        help: t("helpProjectRequired"),
       }),
     );
 
     var createKind = ui.el("select", "ce-select");
     createKind.id = "createKind";
     [
-      ["fact", "Fait"],
-      ["preference", "Préférence"],
-      ["profile", "Profil"],
-      ["decision", "Décision"],
-      ["context", "Contexte"],
+      ["fact", t("kindFactOption")],
+      ["preference", t("kindPreferenceOption")],
+      ["profile", t("kindProfileOption")],
+      ["decision", t("kindDecisionOption")],
+      ["context", t("kindContextOption")],
     ].forEach(function (entry) {
       var opt = ui.el("option", "", entry[1]);
       opt.value = entry[0];
       createKind.appendChild(opt);
     });
     modalGrid.appendChild(
-      ui.createField({ label: "Type", input: createKind }),
+      ui.createField({ label: t("labelKind"), input: createKind }),
     );
 
     var createTitle = ui.el("input", "ce-input");
     createTitle.id = "createTitle";
-    createTitle.placeholder = "Titre court et descriptif";
+    createTitle.placeholder = t("placeholderTitle");
     modalGrid.appendChild(
-      ui.createField({ label: "Titre", input: createTitle }),
+      ui.createField({ label: t("labelTitle"), input: createTitle }),
     );
 
     primaryFields.appendChild(modalGrid);
 
     var createTags = ui.el("input", "ce-input");
     createTags.id = "createTags";
-    createTags.placeholder = "style, utilisateur, workflow";
+    createTags.placeholder = t("placeholderTags");
     primaryFields.appendChild(
       ui.createField({
-        label: "Tags",
+        label: t("labelTags"),
         input: createTags,
-        help: "Séparez les tags par des virgules.",
+        help: t("helpTagsSeparator"),
       }),
     );
 
     var createContent = ui.el("textarea", "ce-textarea ce-textarea--short");
     createContent.id = "createContent";
-    createContent.placeholder =
-      "L'utilisateur préfère des réponses concises en français avec des exemples de code.";
+    createContent.placeholder = t("placeholderContent");
     primaryFields.appendChild(
-      ui.createField({ label: "Contenu", input: createContent }),
+      ui.createField({ label: t("labelContent"), input: createContent }),
     );
 
     modal.appendChild(primaryFields);
 
     var modalFooter = ui.el("div", "ce-shell-modal-footer");
-    var cancelBtn = ui.createButton({ text: "Annuler", variant: "ghost" });
+    var cancelBtn = ui.createButton({ text: t("btnCancel"), variant: "ghost" });
     cancelBtn.id = "cancelBtn";
-    var createBtn = ui.createButton({ text: "Enregistrer", variant: "default" });
+    var createBtn = ui.createButton({ text: t("btnSave"), variant: "default" });
     createBtn.id = "createBtn";
     modalFooter.appendChild(cancelBtn);
     modalFooter.appendChild(createBtn);
@@ -490,7 +767,7 @@
 
     var main = ui.el("div", "ce-shell-row-main");
     main.appendChild(
-      ui.el("span", "ce-shell-row-title", entry.title || "Sans titre"),
+      ui.el("span", "ce-shell-row-title", entry.title || t("untitled")),
     );
     main.appendChild(
       ui.el("p", "ce-shell-row-meta", clamp(entry.content || "", 100)),
@@ -511,13 +788,15 @@
 
     if (!state.entries || !state.entries.length) {
       refs.memList.appendChild(
-        ui.el("div", "ce-shell-subempty", "Aucune mémoire trouvée."),
+        ui.el("div", "ce-shell-subempty", t("emptyNoMemory")),
       );
       refs.entryCount.textContent = "";
       return;
     }
 
-    refs.entryCount.textContent = state.entries.length + " entrée" + (state.entries.length > 1 ? "s" : "");
+    var count = state.entries.length;
+    var suffix = count > 1 ? t("entriesSuffix") : t("entrySuffix");
+    refs.entryCount.textContent = count + " " + suffix;
 
     state.entries.forEach(function (entry) {
       refs.memList.appendChild(renderRow(entry));
@@ -555,18 +834,20 @@
     }
 
     refs.detailEmpty.style.display = "none";
-    refs.detailCard.style.display = "block";
+    refs.detailCard.style.display = "flex";
 
-    refs.detailTitle.textContent = entry.title || "Sans titre";
+    refs.detailTitle.textContent = entry.title || t("untitled");
     refs.detailMeta.textContent =
       scopeLabel(entry.scope) +
       " · " +
       kindLabel(entry.kind) +
-      " · mis à jour " +
+      " · " +
+      t("detailUpdated") +
+      " " +
       nowRel(entry.updatedAt);
 
     // Update archive button text
-    refs.archiveBtn.textContent = entry.archived ? "Désarchiver" : "Archiver";
+    refs.archiveBtn.textContent = entry.archived ? t("btnUnarchive") : t("btnArchive");
 
     clearChildren(refs.detailBody);
 
@@ -583,7 +864,7 @@
     );
     if (entry.archived) {
       summary.appendChild(
-        ui.createBadge({ text: "Archivée", variant: "secondary" }),
+        ui.createBadge({ text: t("badgeArchived"), variant: "secondary" }),
       );
     }
     if (entry.source) {
@@ -594,7 +875,7 @@
     refs.detailBody.appendChild(summary);
 
     // Content block
-    var contentTitle = ui.el("p", "ce-shell-detail-section-title", "Contenu");
+    var contentTitle = ui.el("p", "ce-shell-detail-section-title", t("sectionContent"));
     refs.detailBody.appendChild(contentTitle);
     var contentBlock = ui.el(
       "div",
@@ -605,7 +886,7 @@
 
     // Tags
     if (entry.tags && entry.tags.length > 0) {
-      var tagsTitle = ui.el("p", "ce-shell-detail-section-title", "Tags");
+      var tagsTitle = ui.el("p", "ce-shell-detail-section-title", t("sectionTags"));
       refs.detailBody.appendChild(tagsTitle);
       var tagsWrap = ui.el("div", "ce-shell-tags");
       entry.tags.forEach(function (tag) {
@@ -617,28 +898,28 @@
     }
 
     // Metadata grid
-    var metaTitle = ui.el("p", "ce-shell-detail-section-title", "Métadonnées");
+    var metaTitle = ui.el("p", "ce-shell-detail-section-title", t("sectionMetadata"));
     refs.detailBody.appendChild(metaTitle);
 
     var grid = ui.el("div", "ce-shell-kv-grid");
-    appendKv(grid, "ID", entry.id, true);
-    appendKv(grid, "Portée", scopeLabel(entry.scope), false);
-    appendKv(grid, "Type", kindLabel(entry.kind), false);
+    appendKv(grid, t("metaId"), entry.id, true);
+    appendKv(grid, t("metaScope"), scopeLabel(entry.scope), false);
+    appendKv(grid, t("metaType"), kindLabel(entry.kind), false);
     if (entry.projectId) {
       var projectName = "";
       state.projects.forEach(function (p) {
         if (p.id === entry.projectId) projectName = p.name || p.repoName || "";
       });
-      appendKv(grid, "Projet", projectName || entry.projectId, false);
+      appendKv(grid, t("metaProject"), projectName || entry.projectId, false);
     }
-    appendKv(grid, "Source", entry.source || "Manuelle", false);
-    appendKv(grid, "Créée le", fmtDate(entry.createdAt), false);
-    appendKv(grid, "Mis à jour", fmtDate(entry.updatedAt), false);
+    appendKv(grid, t("metaSource"), entry.source || t("metaSourceManual"), false);
+    appendKv(grid, t("metaCreated"), fmtDate(entry.createdAt), false);
+    appendKv(grid, t("metaUpdated"), fmtDate(entry.updatedAt), false);
     if (entry.lastAccessedAt) {
-      appendKv(grid, "Dernier accès", fmtDate(entry.lastAccessedAt), false);
+      appendKv(grid, t("metaLastAccess"), fmtDate(entry.lastAccessedAt), false);
     }
     if (typeof entry.accessCount === "number" && entry.accessCount > 0) {
-      appendKv(grid, "Nombre d'accès", String(entry.accessCount), false);
+      appendKv(grid, t("metaAccessCount"), String(entry.accessCount), false);
     }
     refs.detailBody.appendChild(grid);
   }
@@ -654,16 +935,16 @@
     if (!res || !res.ok) {
       throw new Error(
         (res && res.error && res.error.message) ||
-          "Impossible de charger la liste des projets.",
+          t("errorLoadProjects"),
       );
     }
     state.projects = res.data || [];
     clearChildren(refs.createProject);
-    var empty = ui.el("option", "", "Aucun");
+    var empty = ui.el("option", "", t("projectNone"));
     empty.value = "";
     refs.createProject.appendChild(empty);
     state.projects.forEach(function (project) {
-      var opt = ui.el("option", "", project.name || project.repoName || "Projet");
+      var opt = ui.el("option", "", project.name || project.repoName || t("projectDefault"));
       opt.value = project.id;
       refs.createProject.appendChild(opt);
     });
@@ -691,7 +972,7 @@
     if (!res || !res.ok) {
       throw new Error(
         (res && res.error && res.error.message) ||
-          "Impossible de charger les entrées mémoire.",
+          t("errorLoadEntries"),
       );
     }
 
@@ -835,4 +1116,11 @@
     console.error("[memory] initial load failed", error);
     showFatalError(error && error.message ? error.message : String(error));
   });
-})();
+}
+
+if (typeof window !== "undefined") {
+  var autoRoot = document.getElementById("app");
+  if (autoRoot) {
+    mountMemoryApp(autoRoot);
+  }
+}

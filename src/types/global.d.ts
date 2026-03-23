@@ -785,7 +785,7 @@ declare global {
       registerExtensionUi: () => Promise<{ ok: true; entries: unknown[] }>;
       getExtensionMainViewHtml: (
         viewId: string,
-      ) => Promise<{ ok: boolean; html?: string; message?: string }>;
+      ) => Promise<{ ok: boolean; html?: string; baseUrl?: string; message?: string }>;
       installExtension: (id: string) => Promise<{
         ok: boolean;
         message?: string;
@@ -1208,21 +1208,11 @@ declare global {
       setTitleModelPreference: (
         modelKey: string | null,
       ) => Promise<{ ok: boolean }>;
-      setConversationMemoryInjected: (
-        conversationId: string,
-        injected: boolean,
-      ) => Promise<{ ok: boolean }>;
       onMemorySaving: (
         listener: (payload: {
           conversationId: string;
           status: "started" | "completed" | "skipped" | "error";
           memoryId?: string | null;
-        }) => void,
-      ) => () => void;
-      onMemoryInjected: (
-        listener: (payload: {
-          conversationId: string;
-          status: "injected";
         }) => void,
       ) => () => void;
       // Autocomplete model preference

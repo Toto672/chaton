@@ -508,10 +508,6 @@ contextBridge.exposeInMainWorld("chaton", {
     }>,
   setTitleModelPreference: (modelKey: string | null) =>
     ipcRenderer.invoke("title:setModelPreference", modelKey),
-  setConversationMemoryInjected: (conversationId: string, injected: boolean) =>
-    ipcRenderer.invoke("setConversationMemoryInjected", conversationId, injected) as Promise<{
-      ok: boolean;
-    }>,
   onMemorySaving: (
     listener: (payload: {
       conversationId: string;
@@ -530,24 +526,6 @@ contextBridge.exposeInMainWorld("chaton", {
     ipcRenderer.on("memory:saving", wrapped);
     return () => {
       ipcRenderer.removeListener("memory:saving", wrapped);
-    };
-  },
-  onMemoryInjected: (
-    listener: (payload: {
-      conversationId: string;
-      status: "injected";
-    }) => void,
-  ) => {
-    const wrapped = (_event: unknown, payload: unknown) =>
-      listener(
-        payload as {
-          conversationId: string;
-          status: "injected";
-        },
-      );
-    ipcRenderer.on("memory:injected", wrapped);
-    return () => {
-      ipcRenderer.removeListener("memory:injected", wrapped);
     };
   },
   // Autocomplete model preference

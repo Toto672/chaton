@@ -1,7 +1,7 @@
 {
   "id": "@chaton/memory",
   "name": "Chatons Memory",
-  "version": "1.0.7",
+  "version": "1.1.1",
   "capabilities": [
     "ui.menu",
     "ui.mainView",
@@ -13,7 +13,7 @@
     "menuItems": [
       {
         "id": "memory.menu",
-        "label": "Mémoire",
+        "label": "Memory",
         "icon": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z'/%3E%3Cpath d='M8 11h8M8 15h8'/%3E%3Ccircle cx='12' cy='8' r='1'/%3E%3C/svg%3E",
         "location": "sidebar",
         "order": 11,
@@ -23,9 +23,20 @@
     "mainViews": [
       {
         "viewId": "memory.main",
-        "title": "Mémoire",
-        "webviewUrl": "chaton-extension://@chaton/memory/index.html",
+        "title": "Memory",
+        "webviewUrl": "chaton-extension://@chaton/memory/dist/react-index.html",
         "initialRoute": "/"
+      }
+    ],
+    "quickActions": [
+      {
+        "id": "memory.create",
+        "title": "Add a memory",
+        "description": "Opens the Memory view on the create panel.",
+        "deeplink": {
+          "viewId": "memory.main",
+          "target": "open-create-memory"
+        }
       }
     ]
   },
@@ -34,9 +45,11 @@
       { "name": "memory.upsert", "version": "1.0.0" },
       { "name": "memory.search", "version": "1.0.0" },
       { "name": "memory.get", "version": "1.0.0" },
+      { "name": "memory.markUsed", "version": "1.0.0" },
       { "name": "memory.update", "version": "1.0.0" },
       { "name": "memory.delete", "version": "1.0.0" },
-      { "name": "memory.list", "version": "1.0.0" }
+      { "name": "memory.list", "version": "1.0.0" },
+      { "name": "memory.stats", "version": "1.0.0" }
     ]
   },
   "llm": {
@@ -106,6 +119,18 @@
         }
       },
       {
+        "name": "memory.markUsed",
+        "label": "Mark memory used",
+        "description": "Explicitly reinforce a memory because it was used in the answer.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string", "description": "Memory entry id." }
+          },
+          "required": ["id"]
+        }
+      },
+      {
         "name": "memory.update",
         "label": "Update memory entry",
         "description": "Update an existing memory entry by id and refresh its embedding.",
@@ -146,6 +171,21 @@
             "kind": { "type": "string" },
             "limit": { "type": "number" },
             "includeArchived": { "type": "boolean" }
+          }
+        }
+      },
+      {
+        "name": "memory.stats",
+        "label": "Memory stats",
+        "description": "Return aggregate memory counts and breakdowns for UI and diagnostics.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "scope": { "type": "string", "description": "global, project, or all." },
+            "projectId": { "type": "string" },
+            "kind": { "type": "string" },
+            "includeArchived": { "type": "boolean" },
+            "includeSuperseded": { "type": "boolean" }
           }
         }
       }

@@ -14,6 +14,10 @@ type MemoryEntry = {
   createdAt?: string
 }
 
+type MemoryStats = {
+  total: number
+}
+
 export function MemoryInsights() {
   const { t } = useTranslation()
   const { setAssistantView } = useWorkspace()
@@ -27,20 +31,22 @@ export function MemoryInsights() {
     void (async () => {
       setLoading(true)
       try {
-        // Query memory extension KV to get stored memories
-        const result = await workspaceIpc.extensionHostCall(
-          '@chaton/memory',
-          'memory.list',
-          { scope: 'global', limit: 5 },
-        )
+        const [statsResult, listResult] = await Promise.all([
+          workspaceIpc.extensionHostCall('@chaton/memory', 'memory.stats', { scope: 'global' }),
+          workspaceIpc.extensionHostCall('@chaton/memory', 'memory.list', { scope: 'global', limit: 5 }),
+        ])
 
         if (cancelled) return
 
-        if (result.ok && result.data) {
-          const data = result.data as MemoryEntry[]
+        if (statsResult.ok && statsResult.data) {
+          const stats = statsResult.data as MemoryStats
+          setTotalCount(typeof stats?.total === 'number' ? stats.total : 0)
+        }
+
+        if (listResult.ok && listResult.data) {
+          const data = listResult.data as MemoryEntry[]
           const entries = Array.isArray(data) ? data : []
           setMemories(entries)
-          setTotalCount(entries.length)
         }
       } catch {
         // Memory extension may not be installed

@@ -25,7 +25,7 @@ Extensions add features to Chatons: sidebar views, LLM tools, storage, event han
 
 ## 1. What an Extension Is
 
-A Chatons extension is a folder containing a manifest (`manifest.json` or `chaton.extension.json`), HTML, CSS, and JavaScript files. Extensions run inside isolated webview iframes with access to a set of host APIs.
+A Chatons extension is a folder or npm package containing a manifest (`manifest.json` or `chaton.extension.json`), packaged UI assets, and optional runtime/server code. Extensions run inside isolated webview iframes with access to a set of host APIs.
 
 **Manifest file naming:** Chatons looks for either `manifest.json` (preferred) or `chaton.extension.json` (legacy). Both formats are supported. If both exist, `manifest.json` takes priority.
 
@@ -61,7 +61,7 @@ Chatons ships two built-in extensions:
 - `@chaton/automation` -- Automation rules engine
 - `@chaton/memory` -- Persistent memory store
 
-These are bundled with the app and do not appear in the user extension folder.
+These are bundled with the app and do not appear in the user extension folder. Their UIs use the same packaged-asset model available to third-party extensions.
 
 ### Registry
 
@@ -120,7 +120,7 @@ Every extension needs a `chaton.extension.json` file. This is the manifest -- it
       {
         "viewId": "myext.main",
         "title": "My Extension",
-        "webviewUrl": "chaton-extension://@yourname/chatons-my-ext/index.html",
+        "webviewUrl": "chaton-extension://@yourname/chatons-my-ext/dist/index.html",
         "initialRoute": "/"
       }
     ]
@@ -179,7 +179,7 @@ Every extension needs a `chaton.extension.json` file. This is the manifest -- it
     mainViews?: [{
       viewId: string            // Unique view ID
       title: string             // Display title
-      webviewUrl: string        // URL to load (chaton-extension://...)
+      webviewUrl: string        // URL to load (chaton-extension://...), typically a built HTML entry such as dist/index.html
       initialRoute?: string     // Initial route path
     }]
     quickActions?: [{
@@ -246,6 +246,19 @@ Every extension needs a `chaton.extension.json` file. This is the manifest -- it
   }
 }
 ```
+
+### Packaged UI assets
+
+The preferred extension UI format is now a prebuilt web app.
+
+That means:
+
+- Build your UI ahead of time, usually into `dist/`
+- Point `webviewUrl` at the built HTML entry
+- Ship the built assets in the npm package
+- Do not depend on Chatons running your bundler on the user's machine
+
+The runtime injects the Chatons bridge into the loaded HTML and serves relative JS/CSS/assets through `chaton-extension://<extension-id>/...`, so React and other bundler-based UIs can resolve chunks and assets normally.
 
 ---
 

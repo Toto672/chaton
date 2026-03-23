@@ -1,4 +1,4 @@
-(function () {
+export function mountAutomationApp(root) {
   var EXTENSION_ID = "@chaton/automation";
   var MODEL_KEY = "dashboard:automation-model";
   var ui = window.chatonExtensionComponents;
@@ -33,7 +33,7 @@
     }
   }
 
-  var app = document.getElementById("app");
+  var app = root || document.getElementById("app");
   var state = {
     rules: [],
     runs: [],
@@ -1056,7 +1056,7 @@
       }
 
       refs.detailEmpty.style.display = "none";
-      refs.detailCard.style.display = "block";
+      refs.detailCard.style.display = "flex";
       refs.detailTitle.textContent = rule.name || "Automatisation";
       refs.detailMeta.textContent =
         triggerLabel(rule.trigger) + " - mise a jour " + nowRel(rule.updatedAt);
@@ -1074,7 +1074,7 @@
     }
 
     refs.detailEmpty.style.display = "none";
-    refs.detailCard.style.display = "block";
+    refs.detailCard.style.display = "flex";
     refs.detailTitle.textContent = run.status === "error" ? "Execution en erreur" : "Execution terminee";
     refs.detailMeta.textContent =
       triggerLabel(run.eventTopic || "") + " - " + nowRel(run.createdAt);
@@ -1614,4 +1614,11 @@
   }
 
   loadModels().then(load);
-})();
+}
+
+if (typeof window !== "undefined") {
+  var autoRoot = document.getElementById("app");
+  if (autoRoot) {
+    mountAutomationApp(autoRoot);
+  }
+}

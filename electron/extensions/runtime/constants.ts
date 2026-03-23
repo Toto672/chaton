@@ -76,7 +76,7 @@ export const AUTOMATION_MANIFEST: ExtensionManifest = {
       {
         viewId: 'automation.main',
         title: 'Automatisations',
-        webviewUrl: 'chaton-extension://@chaton/automation/index.html',
+        webviewUrl: 'chaton-extension://@chaton/automation/dist/react-index.html',
         initialRoute: '/',
       },
     ],

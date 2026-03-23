@@ -521,6 +521,14 @@ function syncOutputToString(value: string | Buffer | null | undefined): string {
   return ''
 }
 
+function hasPackageBuildScript(packageJson: Record<string, unknown> | null): boolean {
+  if (!packageJson) return false
+  const scripts = packageJson.scripts
+  if (!scripts || typeof scripts !== 'object' || Array.isArray(scripts)) return false
+  const buildScript = (scripts as Record<string, unknown>).build
+  return typeof buildScript === 'string' && buildScript.trim().length > 0
+}
+
 /**
  * Check if a command is available in the system PATH.
  * Returns true if the command can be found, false otherwise.
@@ -2024,6 +2032,30 @@ export function publishChatonsExtension(id: string, npmToken?: string) {
     console.error(errorMessage)
     getLogManager().log('error', 'electron', errorMessage, { extensionId: id })
     return { ok: false as const, message: 'npm command not found. Please install Node.js and npm to publish extensions.' }
+  }
+
+  if (hasPackageBuildScript(packageJson)) {
+    fs.appendFileSync(logPath, `\n🛠 Running package build script before publish...\n`)
+    const buildResult = spawnSyncResolvedCommand(npm, ['run', 'build'], {
+      cwd: publishCwd,
+      env: spawnEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
+    })
+    const buildStdout = syncOutputToString(buildResult.stdout)
+    const buildStderr = syncOutputToString(buildResult.stderr)
+    if (buildStdout) fs.appendFileSync(logPath, buildStdout)
+    if (buildStderr) fs.appendFileSync(logPath, buildStderr)
+    if (buildResult.status !== 0) {
+      const message = `Package build failed${typeof buildResult.status === 'number' ? ` (code ${buildResult.status})` : ''}`
+      fs.appendFileSync(logPath, `\n❌ ${message}\n`)
+      getLogManager().log('error', 'electron', `Extension publish failed for ${id}: ${message}`, {
+        extensionId: id,
+        publishCwd,
+      })
+      return { ok: false as const, message }
+    }
+    fs.appendFileSync(logPath, `✓ Build completed successfully.\n`)
   }
 
   const child = spawnResolvedCommand(npm, ['publish', '--access', 'public'], {

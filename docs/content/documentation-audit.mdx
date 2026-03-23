@@ -5,6 +5,59 @@ description: Verified documentation changes and rationale for Chatons features a
 
 # Documentation Audit
 
+## 2026-03-23
+
+### Switched extension main views to packaged web-app assets and added pre-publish builds
+
+**Change:** Updated the extension runtime so main-view HTML still runs through iframe `srcDoc` for bridge compatibility, but now receives a real `chaton-extension://<extension-id>/...` asset base. This allows packaged JS, CSS, images, fonts, and module chunks to resolve normally from extension directories. The builtin automation and memory extensions now ship React-built UI bundles in `dist/`, and publishing from the Chatons UI now runs `npm run build` first when the extension package defines a `build` script.
+
+**Why:** The old extension UI pipeline worked best for pure hand-written HTML/JS but was brittle for React and other bundlers because chunk loading and relative assets did not have a stable runtime base.
+
+**Files updated:**
+- `electron/main.ts` -- Added `chaton-extension://` protocol handling
+- `electron/extensions/runtime/html.ts` -- Added packaged asset base injection
+- `electron/extensions/runtime/manifest.ts` -- Improved builtin extension asset resolution
+- `electron/extensions/builtin/automation/chaton.extension.json` -- Switched to built `dist/` UI entry
+- `electron/extensions/builtin/memory/chaton.extension.json` -- Switched to built `dist/` UI entry
+- `electron/extensions/manager.ts` -- Ran package build scripts before UI-triggered publish
+- `docs/content/extensions/index.mdx` -- Documented packaged extension assets
+- `docs/content/extensions/publishing.mdx` -- Documented pre-publish builds
+- `docs/content/extensions/ui-library.mdx` -- Clarified packaged-entry bridge behavior
+- `docs/content/developer-guide.mdx` -- Documented packaged extension asset protocol registration
+- `docs/content/pi-integration.mdx` -- Documented packaged extension asset loading
+
+## 2026-03-23
+
+### Reworked memory into a structured cross-runtime system
+
+**Change:** Replaced the old desktop-only, summary-heavy memory path with a shared structured memory model used by both desktop and cloud runtimes. Desktop memory now stores structured fields such as `topicKey`, `confidence`, `reinforcedAt`, `lastUsedAt`, `timesUsed`, provenance, status, and visibility. Retrieval now uses local FTS plus metadata-aware reranking and supports correct mixed-scope search. Cloud memory is now persisted by `cloud-api`, and `runtime-headless` exposes the same memory tools by forwarding requests to authenticated control-plane routes.
+
+**Why:** The previous implementation wrote one summary blob per run, tried to clean duplication later, and diverged between desktop and cloud behavior. The new design stores higher-signal typed memories, keeps retrieval tool-driven, and moves durable cloud memory state into the control plane so memory semantics stay consistent across runtimes.
+
+**Verified files:**
+- `packages/memory/index.js` -- Added shared memory kinds, fingerprinting, reranking, capture prompt generation, and structured capture parsing helpers
+- `packages/memory/index.d.ts` -- Added shared type declarations for the memory core
+- `packages/domain/index.ts` -- Added shared memory record and stats types
+- `packages/protocol/index.ts` -- Added memory CRUD/search/stats request and response types
+- `electron/db/migrations/028_memory_overhaul.sql` -- Added additive desktop memory columns and FTS index
+- `electron/extensions/runtime/memory.ts` -- Replaced desktop memory storage, FTS retrieval, mixed-scope filtering, reinforcement, and stats behavior
+- `electron/extensions/runtime/memory-lifecycle.ts` -- Replaced summary/consolidation flow with structured capture queueing, capture checkpoints, and maintenance
+- `electron/extensions/runtime.ts` -- Exposed `memory.markUsed` and `memory.stats`, and wired startup maintenance/capture flushing
+- `electron/extensions/builtin/memory/chaton.extension.json` -- Declared the new memory tools
+- `electron/ipc/workspace-handlers.ts` -- Switched post-run memory behavior to queued capture instead of immediate summary/consolidation
+- `apps/cloud-api/store.ts` -- Added cloud memory persistence, search, stats, and internal capture upsert support for both in-memory and Postgres stores
+- `apps/cloud-api/server.ts` -- Added authenticated memory CRUD/search/stats endpoints plus an internal capture/upsert route
+- `apps/runtime-headless/server.ts` -- Added remote memory tool forwarding for cloud Pi sessions
+- `src/components/assistant/MemoryInsights.tsx` -- Switched dashboard count to `memory.stats` plus preview list
+- `src/components/assistant/AssistantMemoryView.tsx` -- Surfaced confidence, provenance, status, visibility, and last-used metadata
+- `src/components/shell/MemorySavingBadge.tsx` -- Removed the obsolete memory-injected badge path
+- `src/services/ipc/workspace.ts` -- Removed stale renderer memory-injection IPC wrappers
+- `src/types/global.d.ts` -- Removed stale preload typing for memory-injection events
+- `electron/preload.ts` -- Removed stale memory-injection preload hooks
+- `AGENTS.md` -- Updated maintainer guidance for structured memory capture and cross-runtime memory tools
+- `docs/content/pi-integration.mdx` -- Documented structured memory capture and cloud control-plane memory ownership
+- `docs/content/developer-guide.mdx` -- Documented `memory.stats`, structured capture, and shared cloud memory ownership
+
 ## 2026-03-22
 
 ### Cloud Onboarding UI Redesign

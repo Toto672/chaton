@@ -13,6 +13,12 @@ type MemoryEntry = {
   kind?: string
   tags?: string[]
   scope?: string
+  topicKey?: string
+  confidence?: number
+  sourceConversationId?: string | null
+  status?: string
+  visibility?: string
+  lastUsedAt?: string | null
   createdAt?: string
   updatedAt?: string
 }
@@ -137,6 +143,24 @@ export function AssistantMemoryView() {
                   <div className="ad-memory-full-meta">
                     {memory.kind && <span className="ad-memory-tag">{memory.kind}</span>}
                     {memory.scope && <span className="ad-memory-tag">{memory.scope}</span>}
+                    {memory.status && <span className="ad-memory-tag">{memory.status}</span>}
+                    {memory.visibility && <span className="ad-memory-tag">{memory.visibility}</span>}
+                    {typeof memory.confidence === 'number' && (
+                      <span className="ad-memory-tag">
+                        {`confidence ${Math.round(memory.confidence * 100)}%`}
+                      </span>
+                    )}
+                    {memory.sourceConversationId && (
+                      <span className="ad-memory-tag">
+                        {`source ${memory.sourceConversationId}`}
+                      </span>
+                    )}
+                    {memory.lastUsedAt && (
+                      <span className="ad-memory-tag">
+                        {`used ${new Date(memory.lastUsedAt).toLocaleDateString()}`}
+                      </span>
+                    )}
+                    {memory.topicKey && <span className="ad-memory-tag">{memory.topicKey}</span>}
                     {(memory.tags ?? []).map((tag) => (
                       <span key={tag} className="ad-memory-tag">{tag}</span>
                     ))}

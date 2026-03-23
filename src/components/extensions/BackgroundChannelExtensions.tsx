@@ -17,6 +17,7 @@ type LoadedView = {
   extensionId: string
   viewId: string
   html: string
+  baseUrl?: string
   title: string
 }
 
@@ -76,7 +77,13 @@ export function BackgroundChannelExtensions({ children }: { children: React.Reac
         if (htmlResult.ok && htmlResult.html) {
           const ref: React.RefObject<HTMLIFrameElement | null> = { current: null }
           iframeRefs.current.set(viewId, ref)
-          loaded.push({ extensionId: ext.id, viewId, html: htmlResult.html, title: entry?.mainViews?.[0]?.title || '' })
+          loaded.push({
+            extensionId: ext.id,
+            viewId,
+            html: htmlResult.html,
+            baseUrl: htmlResult.baseUrl,
+            title: entry?.mainViews?.[0]?.title || '',
+          })
         }
       }
       setViews(loaded)

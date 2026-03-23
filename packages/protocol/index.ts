@@ -13,6 +13,10 @@ import type {
   CloudSubscriptionRecord,
   CloudUsageRecord,
   CloudUserRecord,
+  MemoryKind,
+  MemoryRecord,
+  MemoryScope,
+  MemoryStatsRecord,
   OrganizationRecord,
 } from '../domain/index.js'
 
@@ -269,3 +273,68 @@ export type RealtimeServerEvent =
   | EventEnvelope<CloudInstanceStatusPayload>
   | EventEnvelope<ConversationChunkPayload>
   | EventEnvelope<ConversationEventPayload>
+
+export type MemorySearchRequest = {
+  query: string
+  scope?: 'global' | 'project' | 'all'
+  projectId?: string | null
+  limit?: number
+  kind?: MemoryKind | null
+  tags?: string[] | null
+  includeArchived?: boolean
+}
+
+export type MemoryListRequest = {
+  scope?: MemoryScope | 'all'
+  projectId?: string | null
+  kind?: MemoryKind | null
+  limit?: number
+  includeArchived?: boolean
+}
+
+export type MemoryUpsertRequest = {
+  id?: string
+  scope: MemoryScope
+  projectId?: string | null
+  kind?: MemoryKind | null
+  title?: string | null
+  content: string
+  tags?: string[] | null
+  source?: string | null
+  conversationId?: string | null
+  topicKey?: string | null
+  confidence?: number | null
+  visibility?: 'private' | 'shared' | null
+}
+
+export type MemoryUpdateRequest = {
+  id: string
+  title?: string | null
+  content?: string | null
+  kind?: MemoryKind | null
+  tags?: string[] | null
+  archived?: boolean | null
+  status?: 'active' | 'superseded' | null
+  topicKey?: string | null
+  confidence?: number | null
+  visibility?: 'private' | 'shared' | null
+}
+
+export type MemoryStatsResponse = MemoryStatsRecord
+
+export type MemorySearchResult = MemoryRecord & {
+  score: number
+  matchReasons: string[]
+}
+
+export type MemorySearchResponse = {
+  items: MemorySearchResult[]
+}
+
+export type MemoryListResponse = {
+  items: MemoryRecord[]
+}
+
+export type MemoryGetResponse = {
+  item: MemoryRecord | null
+}

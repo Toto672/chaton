@@ -16,6 +16,10 @@ import type {
   CreateCloudProjectResponse,
   GetCloudConversationMessagesResponse,
   HealthResponse,
+  MemoryListRequest,
+  MemorySearchRequest,
+  MemoryUpdateRequest,
+  MemoryUpsertRequest,
   SetActiveOrganizationRequest,
   UpdateOrganizationRequest,
 } from '../../packages/protocol/index.js'
@@ -825,6 +829,142 @@ async function handleRequest(
     return
   }
 
+  if (method === 'GET' && url === '/v1/memory') {
+    const auth = await requireAuthedUser(request, response)
+    if (!auth) {
+      return
+    }
+    const parsed = new URL(url, `http://127.0.0.1:${port}`)
+    const items = await store.listMemory(auth.user, {
+      scope: (parsed.searchParams.get('scope')?.trim() as MemoryListRequest['scope']) ?? 'all',
+      projectId: parsed.searchParams.get('projectId')?.trim() || null,
+      kind: parsed.searchParams.get('kind')?.trim() as MemoryListRequest['kind'],
+      includeArchived: parsed.searchParams.get('includeArchived') === 'true',
+      limit: Number.parseInt(parsed.searchParams.get('limit') ?? '50', 10),
+    })
+    json(request, response, 200, { items })
+    return
+  }
+
+  if (method === 'GET' && url.startsWith('/v1/memory/search')) {
+    const auth = await requireAuthedUser(request, response)
+    if (!auth) {
+      return
+    }
+    const parsed = new URL(url, `http://127.0.0.1:${port}`)
+    const query = parsed.searchParams.get('query')?.trim() ?? ''
+    if (!query) {
+      json(request, response, 400, {
+        error: 'invalid_request',
+        message: 'query is required',
+      })
+      return
+    }
+    const items = await store.searchMemory(auth.user, {
+      query,
+      scope: (parsed.searchParams.get('scope')?.trim() as MemorySearchRequest['scope']) ?? 'all',
+      projectId: parsed.searchParams.get('projectId')?.trim() || null,
+      kind: parsed.searchParams.get('kind')?.trim() as MemorySearchRequest['kind'],
+      includeArchived: parsed.searchParams.get('includeArchived') === 'true',
+      limit: Number.parseInt(parsed.searchParams.get('limit') ?? '10', 10),
+      tags: parsed.searchParams.getAll('tag'),
+    })
+    json(request, response, 200, { items })
+    return
+  }
+
+  if (method === 'GET' && url.startsWith('/v1/memory/stats')) {
+    const auth = await requireAuthedUser(request, response)
+    if (!auth) {
+      return
+    }
+    const parsed = new URL(url, `http://127.0.0.1:${port}`)
+    const payload = await store.getMemoryStats(auth.user, {
+      scope: (parsed.searchParams.get('scope')?.trim() as MemoryListRequest['scope']) ?? 'all',
+      projectId: parsed.searchParams.get('projectId')?.trim() || null,
+      kind: parsed.searchParams.get('kind')?.trim() as MemoryListRequest['kind'],
+      includeArchived: parsed.searchParams.get('includeArchived') === 'true',
+    })
+    json(request, response, 200, payload)
+    return
+  }
+
+  if (method === 'POST' && url === '/v1/memory') {
+    const auth = await requireAuthedUser(request, response)
+    if (!auth) {
+      return
+    }
+    const body = await readJsonBody<MemoryUpsertRequest>(request)
+    const item = await store.upsertMemory(auth.user, body)
+    if (!item) {
+      json(request, response, 400, {
+        error: 'invalid_request',
+        message: 'Unable to store memory',
+      })
+      return
+    }
+    json(request, response, 201, { item })
+    return
+  }
+
+  if (method === 'GET' && url.match(/^\/v1\/memory\/[^/]+$/)) {
+    const auth = await requireAuthedUser(request, response)
+    if (!auth) {
+      return
+    }
+    const parsed = new URL(url, `http://127.0.0.1:${port}`)
+    const memoryId = parsed.pathname.split('/').filter(Boolean)[2] ?? ''
+    const item = await store.getMemory(auth.user, memoryId)
+    if (!item) {
+      json(request, response, 404, {
+        error: 'not_found',
+        message: 'Memory not found',
+      })
+      return
+    }
+    json(request, response, 200, { item })
+    return
+  }
+
+  if (method === 'PATCH' && url.match(/^\/v1\/memory\/[^/]+$/)) {
+    const auth = await requireAuthedUser(request, response)
+    if (!auth) {
+      return
+    }
+    const parsed = new URL(url, `http://127.0.0.1:${port}`)
+    const memoryId = parsed.pathname.split('/').filter(Boolean)[2] ?? ''
+    const body = await readJsonBody<MemoryUpdateRequest>(request)
+    const item = await store.updateMemory(auth.user, { ...body, id: memoryId })
+    if (!item) {
+      json(request, response, 404, {
+        error: 'not_found',
+        message: 'Memory not found',
+      })
+      return
+    }
+    json(request, response, 200, { item })
+    return
+  }
+
+  if (method === 'DELETE' && url.match(/^\/v1\/memory\/[^/]+$/)) {
+    const auth = await requireAuthedUser(request, response)
+    if (!auth) {
+      return
+    }
+    const parsed = new URL(url, `http://127.0.0.1:${port}`)
+    const memoryId = parsed.pathname.split('/').filter(Boolean)[2] ?? ''
+    const deleted = await store.deleteMemory(auth.user, memoryId)
+    if (!deleted) {
+      json(request, response, 404, {
+        error: 'not_found',
+        message: 'Memory not found',
+      })
+      return
+    }
+    json(request, response, 200, { ok: true })
+    return
+  }
+
   if (method === 'POST' && url === '/v1/internal/runtime/access') {
     if (!requireInternalService(request, response)) {
       return
@@ -851,6 +991,38 @@ async function handleRequest(
       return
     }
     json(request, response, 200, grant satisfies CloudRuntimeAccessGrant)
+    return
+  }
+
+  if (method === 'POST' && url === '/v1/internal/memory/upsert') {
+    if (!requireInternalService(request, response)) {
+      return
+    }
+    const body = await readJsonBody<{
+      organizationId: string
+      userId: string
+      input: MemoryUpsertRequest
+    }>(request)
+    if (!body.organizationId?.trim() || !body.userId?.trim() || !body.input) {
+      json(request, response, 400, {
+        error: 'invalid_request',
+        message: 'organizationId, userId, and input are required',
+      })
+      return
+    }
+    const item = await store.internalUpsertMemory({
+      organizationId: body.organizationId.trim(),
+      userId: body.userId.trim(),
+      input: body.input,
+    })
+    if (!item) {
+      json(request, response, 404, {
+        error: 'not_found',
+        message: 'Unable to upsert memory',
+      })
+      return
+    }
+    json(request, response, 200, { item })
     return
   }
 

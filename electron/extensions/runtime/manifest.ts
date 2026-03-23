@@ -59,9 +59,20 @@ export function getExtensionRoot(extensionId: string) {
   return runtimeState.extensionRoots.get(extensionId) ?? path.join(EXTENSIONS_DIR, extensionId)
 }
 
+function getBuiltinDir(extensionId: string): string | null {
+  if (extensionId === BUILTIN_AUTOMATION_ID) return BUILTIN_AUTOMATION_DIR
+  if (extensionId === BUILTIN_MEMORY_ID) return BUILTIN_MEMORY_DIR
+  if (extensionId === BUILTIN_BROWSER_ID) return BUILTIN_BROWSER_DIR
+  if (extensionId === BUILTIN_IDE_LAUNCHER_ID) return BUILTIN_IDE_LAUNCHER_DIR
+  if (extensionId === BUILTIN_TPS_MONITOR_ID) return BUILTIN_TPS_MONITOR_DIR
+  return null
+}
+
 export function getExtensionRootCandidates(extensionId: string): string[] {
   const scopedParts = extensionId.split('/')
+  const builtinDir = getBuiltinDir(extensionId)
   return [
+    builtinDir,
     runtimeState.extensionRoots.get(extensionId),
     path.join(EXTENSIONS_DIR, extensionId),
     path.join(EXTENSIONS_DIR, 'extensions', extensionId),
@@ -88,15 +99,6 @@ export function readManifestFromExtensionDir(extensionId: string): { manifest: E
       }
     }
   }
-  return null
-}
-
-function getBuiltinDir(extensionId: string): string | null {
-  if (extensionId === BUILTIN_AUTOMATION_ID) return BUILTIN_AUTOMATION_DIR
-  if (extensionId === BUILTIN_MEMORY_ID) return BUILTIN_MEMORY_DIR
-  if (extensionId === BUILTIN_BROWSER_ID) return BUILTIN_BROWSER_DIR
-  if (extensionId === BUILTIN_IDE_LAUNCHER_ID) return BUILTIN_IDE_LAUNCHER_DIR
-  if (extensionId === BUILTIN_TPS_MONITOR_ID) return BUILTIN_TPS_MONITOR_DIR
   return null
 }
 

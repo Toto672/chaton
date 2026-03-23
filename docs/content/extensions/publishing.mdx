@@ -51,7 +51,7 @@ Your extension folder must contain:
 |------|----------|-------------|
 | `chaton.extension.json` | Yes | Extension manifest |
 | `package.json` | Yes | npm package metadata |
-| `index.html` | Yes | Extension UI entry point |
+| Built UI assets | Yes | Usually a `dist/` folder containing your HTML entry and bundled assets |
 | `README.md` | Recommended | Usage instructions for users |
 | `LICENSE` | Recommended | License file (MIT recommended) |
 
@@ -122,7 +122,7 @@ npm whoami
 npm pack --dry-run
 ```
 
-This shows what files will be included in the package. Make sure your HTML, CSS, JS, and manifest are listed.
+This shows what files will be included in the package. Make sure your built UI assets, manifest, and runtime files are listed.
 
 ### 6. Publish
 
@@ -151,7 +151,8 @@ Chatons also supports publishing from the Extensions panel:
 2. Find your extension in the list
 3. Click the publish action
 4. Enter your npm token if prompted
-5. Chatons runs `npm publish` for you
+5. If your `package.json` has a `build` script, Chatons runs `npm run build` first
+6. Chatons runs `npm publish` for you
 
 **Note:** Only locally installed extensions (not npm-installed ones) can be published this way. The extension must have a valid `package.json` and its `installSource` must be `localPath`.
 

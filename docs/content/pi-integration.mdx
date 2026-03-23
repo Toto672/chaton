@@ -27,10 +27,11 @@ Chatons wraps Pi with:
 - Per-conversation runtime lifecycle management
 - SQLite database for app-level persistence
 - React UI and workspace state
-- Extension runtime for third-party integrations, including sidebar, main-view, quick-action, and topbar UI contributions, plus compact topbar widget hosting with standardized context delivery for richer extension controls
+- Extension runtime for third-party integrations, including sidebar, main-view, quick-action, and topbar UI contributions, plus compact topbar widget hosting with standardized context delivery for richer extension controls. Main-view HTML now supports packaged JS/CSS/assets resolved from `chaton-extension://<extension-id>/...`, which allows framework-built UIs from npm-installed extension packages.
 
 Cloud projects are the main exception to this local-runtime architecture. They do not create or use a local Pi runtime. In cloud mode, the desktop app is only a client for a remote Chatons runtime hosted by the cloud service, and provider credentials remain organization-owned in the cloud. `runtime-headless` now materializes a managed Pi agent directory from the cloud control-plane grant and serves a real Pi session remotely, rather than a synthetic reply path. For repository-backed cloud projects, the remote runtime now keeps a managed project source checkout and creates a dedicated Git worktree per conversation instead of cloning a separate repository per session. Cloud access is now gated by a cloud subscription on the authenticated user account, and the chosen tier limits how many remote cloud sessions that user may run in parallel. That quota is derived server-side by `cloud-api`; the desktop no longer sends or decides the effective parallel-session limit.
 The cloud control plane also owns cloud project, conversation, and transcript state. The desktop may cache that state locally for rendering, but the bootstrap API and cloud conversation message endpoints remain the server-side source of truth for cloud threads.
+Cloud memory now follows the same ownership model. Durable structured memory records live in `cloud-api`, and `runtime-headless` exposes memory tools by forwarding to authenticated control-plane endpoints instead of keeping a separate local memory store.
 The web onboarding flow at `cloud.chatons.ai` follows the same ownership model: browser signup/login and organization/provider setup are only presentation flows around `cloud-api`, and provider secrets entered there remain cloud-owned instead of being copied into the desktop Pi environment.
 When that web onboarding needs to hand off into the desktop app, it should open `chatons://cloud/connect?base_url=...`. That link is only a desktop launch trigger; the desktop must start its own OIDC flow from there and only complete cloud auth after receiving the real `chatons://cloud/auth/callback` deep link.
 That OIDC flow now depends on the browser already having a valid Chatons Cloud web session. If the user is not signed in on the web, `cloud-api` redirects `/oidc/authorize` to the normal `/cloud/login` or `/cloud/signup` experience with a `return_to` link back to the exact authorize request. The authorize page itself is a consent screen that shows the signed-in account and asks the user to approve or deny desktop access; it no longer asks for freeform email or display-name input.
@@ -239,7 +240,7 @@ At session creation, Chatons appends system prompt guidance about:
 
 For the local `@thibautrey/chatons-channel-even-realities` channel, this includes explicit runtime guidance that the assistant is replying for smart glasses and should default to concise, fast answers suited to a limited display. The glasses transport may send a `model` field, but Chatons ignores it and still uses the conversation's configured model like any other channel thread.
 
-Chatons no longer injects retrieved memories automatically at conversation start. Instead, memory stays available as runtime tools such as `memory.search` and `memory.get`, and the model can query it when the current task would genuinely benefit from recalled context.
+Chatons no longer injects retrieved memories automatically at conversation start. Instead, memory stays available as runtime tools such as `memory.search`, `memory.get`, `memory.markUsed`, and `memory.stats`, and the model can query it when the current task would genuinely benefit from recalled context.
 
 This keeps the initial prompt clean and reduces the chance that stale memory is mistaken for an instruction. Memory results should be treated as fallible background context and verified against the current user request, repository state, and direct tool evidence.
 
@@ -249,9 +250,11 @@ Some internal LLM features reuse the same Pi runtime path through short-lived hi
 
 This is used for:
 
-- Memory summarization and consolidation
+- Structured memory capture and maintenance
 - AI conversation-title refinement
 - Channel message ingestion subagents used by channel extensions
+
+Memory capture is now structured rather than summary-only. Completed conversations enqueue a capture checkpoint, hidden Pi sessions extract typed memories such as decisions, preferences, facts, profile notes, repo conventions, and task state, and the runtime only keeps a fallback summary when no higher-signal structured item covers the same topic.
 
 ---
 

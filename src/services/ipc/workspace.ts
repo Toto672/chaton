@@ -640,7 +640,7 @@ export const workspaceIpc = {
     getApi().registerExtensionUi(),
   getExtensionMainViewHtml: (
     viewId: string,
-  ): Promise<{ ok: boolean; html?: string; message?: string }> =>
+  ): Promise<{ ok: boolean; html?: string; baseUrl?: string; message?: string }> =>
     getApi().getExtensionMainViewHtml(viewId),
   installExtension: (
     id: string,
@@ -1108,14 +1108,6 @@ export const workspaceIpc = {
       memoryId?: string | null;
     }) => void,
   ) => getApi().onMemorySaving(listener),
-  onMemoryInjected: (
-    listener: (payload: {
-      conversationId: string;
-      status: "injected";
-    }) => void,
-  ) => getApi().onMemoryInjected(listener),
-  setConversationMemoryInjected: (conversationId: string, injected: boolean): Promise<{ ok: boolean }> =>
-    getApi().setConversationMemoryInjected(conversationId, injected),
 
   // Autocomplete model preference
   getAutocompleteModelPreference: (): Promise<{ ok: boolean; enabled: boolean; modelKey: string | null }> =>

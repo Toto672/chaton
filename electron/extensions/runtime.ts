@@ -32,7 +32,9 @@ import {
   memoryDelete,
   memoryGet,
   memoryList,
+  memoryMarkUsed,
   memorySearch,
+  memoryStats,
   memoryUpdate,
   memoryUpsert,
 } from "./runtime/memory.js";
@@ -45,6 +47,7 @@ import {
   chatonsUpdateProjectVisibility,
 } from "./runtime/projects.js";
 import {
+  flushQueuedMemoryCaptures,
   startMemoryCleanupScheduler,
   stopMemoryCleanupScheduler,
 } from "./runtime/memory-lifecycle.js";
@@ -277,7 +280,8 @@ export function initializeExtensionsRuntime() {
   // Initialize cron scheduler for automation tasks
   void automationRuntime.initializeCronTasks();
   // Initialize memory cleanup scheduler (Chetna-inspired Ebbinghaus curve)
-  startMemoryCleanupScheduler();
+  startMemoryCleanupScheduler(undefined, getPiRuntimeManager());
+  void flushQueuedMemoryCaptures(getPiRuntimeManager()).catch(() => undefined);
 }
 
 export function subscribeExtension(
@@ -463,9 +467,11 @@ export function extensionsCall(
     if (apiName === "memory.upsert") return memoryUpsert(payload);
     if (apiName === "memory.search") return memorySearch(payload);
     if (apiName === "memory.get") return memoryGet(payload);
+    if (apiName === "memory.markUsed") return memoryMarkUsed(payload);
     if (apiName === "memory.update") return memoryUpdate(payload);
     if (apiName === "memory.delete") return memoryDelete(payload);
     if (apiName === "memory.list") return memoryList(payload);
+    if (apiName === "memory.stats") return memoryStats(payload);
   }
 
   if (extensionId === BUILTIN_BROWSER_ID) {

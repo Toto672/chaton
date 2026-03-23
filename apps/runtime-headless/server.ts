@@ -16,12 +16,17 @@ import {
   ModelRegistry,
   SessionManager,
   SettingsManager,
+  type ToolDefinition,
   type AgentSession,
 } from '@mariozechner/pi-coding-agent'
 import type { CloudRuntimeAccessGrant } from '../../packages/domain/index.js'
 import type {
   CloudConversationMessageRecord,
   CloudRuntimeSessionCreateResponse,
+  MemoryListRequest,
+  MemorySearchRequest,
+  MemoryUpdateRequest,
+  MemoryUpsertRequest,
 } from '../../packages/protocol/index.js'
 import { createRuntimeStore, type RuntimeMessage, type RuntimeSession } from './store.ts'
 
@@ -115,6 +120,267 @@ async function execGit(args: string[], cwd?: string): Promise<void> {
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`git ${args.join(' ')} failed: ${message}`)
   }
+}
+
+async function cloudMemoryRequest<T>(
+  pathName: string,
+  options: {
+    method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+    accessToken?: string
+    internal?: boolean
+    body?: unknown
+    query?: Record<string, string | number | boolean | null | undefined>
+  },
+): Promise<T> {
+  const base = new URL(pathName, cloudApiBaseUrl)
+  for (const [key, value] of Object.entries(options.query ?? {})) {
+    if (value === undefined || value === null || value === '') continue
+    base.searchParams.set(key, String(value))
+  }
+  const headers: Record<string, string> = {}
+  if (options.internal) {
+    headers.authorization = `Bearer ${internalServiceToken}`
+  } else if (options.accessToken) {
+    headers.authorization = `Bearer ${options.accessToken}`
+  }
+  if (options.body !== undefined) {
+    headers['content-type'] = 'application/json'
+  }
+
+  const response = await fetch(base.toString(), {
+    method: options.method ?? 'GET',
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  })
+  if (!response.ok) {
+    throw new Error(`${options.method ?? 'GET'} ${base.pathname} failed: ${response.status}`)
+  }
+  return (await response.json()) as T
+}
+
+function createCloudMemoryTools(
+  runtimeSession: RuntimeSession,
+  grant: CloudRuntimeAccessGrant,
+): ToolDefinition[] {
+  const accessToken = runtimeSession.accessToken
+  const defaultProjectId = runtimeSession.projectId ?? grant.project?.id ?? null
+
+  return [
+    {
+      name: 'memory.search',
+      label: 'Search memory',
+      description: 'Search Chatons cloud memory across user and project context.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string' },
+          scope: { type: 'string' },
+          projectId: { type: 'string' },
+          limit: { type: 'number' },
+          kind: { type: 'string' },
+          includeArchived: { type: 'boolean' },
+        },
+        required: ['query'],
+      } as never,
+      execute: async (_toolCallId, params) => {
+        const payload = await cloudMemoryRequest<{ items: unknown[] }>('/v1/memory/search', {
+          method: 'GET',
+          accessToken,
+          query: {
+            query: (params as MemorySearchRequest).query,
+            scope: (params as MemorySearchRequest).scope ?? 'all',
+            projectId: (params as MemorySearchRequest).projectId ?? defaultProjectId,
+            limit: (params as MemorySearchRequest).limit ?? 10,
+            kind: (params as MemorySearchRequest).kind ?? undefined,
+            includeArchived: (params as MemorySearchRequest).includeArchived === true,
+          },
+        })
+        return {
+          content: [{ type: 'text', text: JSON.stringify(payload.items ?? [], null, 2) }],
+          details: { ok: true, data: payload.items ?? [] },
+        } as never
+      },
+    },
+    {
+      name: 'memory.list',
+      label: 'List memories',
+      description: 'List Chatons cloud memory entries.',
+      parameters: {
+        type: 'object',
+        properties: {
+          scope: { type: 'string' },
+          projectId: { type: 'string' },
+          kind: { type: 'string' },
+          limit: { type: 'number' },
+          includeArchived: { type: 'boolean' },
+        },
+      } as never,
+      execute: async (_toolCallId, params) => {
+        const request = params as MemoryListRequest
+        const payload = await cloudMemoryRequest<{ items: unknown[] }>('/v1/memory', {
+          method: 'GET',
+          accessToken,
+          query: {
+            scope: request.scope ?? 'all',
+            projectId: request.projectId ?? defaultProjectId,
+            kind: request.kind ?? undefined,
+            limit: request.limit ?? 50,
+            includeArchived: request.includeArchived === true,
+          },
+        })
+        return {
+          content: [{ type: 'text', text: JSON.stringify(payload.items ?? [], null, 2) }],
+          details: { ok: true, data: payload.items ?? [] },
+        } as never
+      },
+    },
+    {
+      name: 'memory.get',
+      label: 'Get memory',
+      description: 'Fetch one Chatons cloud memory entry by id.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+        },
+        required: ['id'],
+      } as never,
+      execute: async (_toolCallId, params) => {
+        const payload = await cloudMemoryRequest<{ item: unknown }>(`/v1/memory/${encodeURIComponent((params as { id: string }).id)}`, {
+          method: 'GET',
+          accessToken,
+        })
+        return {
+          content: [{ type: 'text', text: JSON.stringify(payload.item ?? null, null, 2) }],
+          details: { ok: true, data: payload.item ?? null },
+        } as never
+      },
+    },
+    {
+      name: 'memory.upsert',
+      label: 'Store memory',
+      description: 'Create or update Chatons cloud memory.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          scope: { type: 'string' },
+          projectId: { type: 'string' },
+          kind: { type: 'string' },
+          title: { type: 'string' },
+          content: { type: 'string' },
+          tags: { type: 'array', items: { type: 'string' } },
+          source: { type: 'string' },
+          conversationId: { type: 'string' },
+          topicKey: { type: 'string' },
+          confidence: { type: 'number' },
+          visibility: { type: 'string' },
+        },
+        required: ['scope', 'content'],
+      } as never,
+      execute: async (_toolCallId, params) => {
+        const request = params as MemoryUpsertRequest
+        const payload = await cloudMemoryRequest<{ item: unknown }>('/v1/memory', {
+          method: 'POST',
+          accessToken,
+          body: {
+            ...request,
+            projectId: request.projectId ?? defaultProjectId,
+          },
+        })
+        return {
+          content: [{ type: 'text', text: JSON.stringify(payload.item ?? null, null, 2) }],
+          details: { ok: true, data: payload.item ?? null },
+        } as never
+      },
+    },
+    {
+      name: 'memory.update',
+      label: 'Update memory',
+      description: 'Update Chatons cloud memory metadata.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          title: { type: 'string' },
+          content: { type: 'string' },
+          kind: { type: 'string' },
+          tags: { type: 'array', items: { type: 'string' } },
+          archived: { type: 'boolean' },
+          status: { type: 'string' },
+          topicKey: { type: 'string' },
+          confidence: { type: 'number' },
+          visibility: { type: 'string' },
+        },
+        required: ['id'],
+      } as never,
+      execute: async (_toolCallId, params) => {
+        const request = params as MemoryUpdateRequest
+        const payload = await cloudMemoryRequest<{ item: unknown }>(`/v1/memory/${encodeURIComponent(request.id)}`, {
+          method: 'PATCH',
+          accessToken,
+          body: request,
+        })
+        return {
+          content: [{ type: 'text', text: JSON.stringify(payload.item ?? null, null, 2) }],
+          details: { ok: true, data: payload.item ?? null },
+        } as never
+      },
+    },
+    {
+      name: 'memory.delete',
+      label: 'Delete memory',
+      description: 'Delete Chatons cloud memory.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+        },
+        required: ['id'],
+      } as never,
+      execute: async (_toolCallId, params) => {
+        const payload = await cloudMemoryRequest<{ ok: boolean }>(`/v1/memory/${encodeURIComponent((params as { id: string }).id)}`, {
+          method: 'DELETE',
+          accessToken,
+        })
+        return {
+          content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
+          details: { ok: true, data: payload },
+        } as never
+      },
+    },
+    {
+      name: 'memory.stats',
+      label: 'Memory stats',
+      description: 'Return cloud memory counts and breakdowns.',
+      parameters: {
+        type: 'object',
+        properties: {
+          scope: { type: 'string' },
+          projectId: { type: 'string' },
+          kind: { type: 'string' },
+          includeArchived: { type: 'boolean' },
+        },
+      } as never,
+      execute: async (_toolCallId, params) => {
+        const request = params as MemoryListRequest
+        const payload = await cloudMemoryRequest<unknown>('/v1/memory/stats', {
+          method: 'GET',
+          accessToken,
+          query: {
+            scope: request.scope ?? 'all',
+            projectId: request.projectId ?? defaultProjectId,
+            kind: request.kind ?? undefined,
+            includeArchived: request.includeArchived === true,
+          },
+        })
+        return {
+          content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
+          details: { ok: true, data: payload },
+        } as never
+      },
+    },
+  ]
 }
 
 async function ensureProjectSourceCheckout(
@@ -451,6 +717,7 @@ async function createRuntimeAgent(
           createWriteTool(workingDir),
         ]
       : []
+  const memoryTools = createCloudMemoryTools(runtimeSession, grant)
 
   const defaultProvider =
     runtimeSession.modelProvider ??
@@ -477,7 +744,7 @@ async function createRuntimeAgent(
     settingsManager,
     resourceLoader,
     sessionManager,
-    tools,
+    tools: [...tools, ...memoryTools],
     ...(model ? { model } : {}),
     thinkingLevel: (runtimeSession.thinkingLevel ?? 'medium') as never,
   })

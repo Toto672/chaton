@@ -6,7 +6,7 @@ global.__dirname = path.dirname(__filename);
 global.__filename = __filename;
 
 import electron from "electron";
-const { BrowserWindow, app, shell, Notification } = electron;
+const { BrowserWindow, app, shell, Notification, protocol, net } = electron;
 import {
   getLanguagePreference,
   getWindowBounds,
@@ -37,6 +37,20 @@ app.setName("Chatons");
 // On macOS the protocol is handled via open-url events; on Windows/Linux
 // it falls back to the single-instance lock / command-line argv.
 const PROTOCOL_PREFIX = "chatons";
+const EXTENSION_PROTOCOL_PREFIX = "chaton-extension";
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: EXTENSION_PROTOCOL_PREFIX,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
 if (process.defaultApp) {
   // In development, register with the full path to the electron binary
   if (process.argv.length >= 2) {
@@ -361,6 +375,74 @@ if (!gotTheLock) {
 }
 
 app.whenReady().then(async () => {
+  protocol.handle(EXTENSION_PROTOCOL_PREFIX, async (request) => {
+    try {
+      if (request.method === 'OPTIONS') {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers': '*',
+          },
+        });
+      }
+
+      const url = new URL(request.url);
+      const extensionId = decodeURIComponent(url.host || '');
+      const rawPath = decodeURIComponent(url.pathname || '/');
+      const relativePath = rawPath.replace(/^\/+/, '');
+      if (!extensionId || !relativePath) {
+        return new Response('Not found', {
+          status: 404,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+          },
+        });
+      }
+
+      const { getExtensionRootCandidates } = await import('./extensions/runtime/manifest.js');
+      const roots = getExtensionRootCandidates(extensionId);
+      for (const root of roots) {
+        const candidate = path.resolve(root, relativePath);
+        if (!candidate.startsWith(path.resolve(root))) {
+          continue;
+        }
+        try {
+          const response = await net.fetch(`file://${candidate}`);
+          if (response.ok) {
+            const headers = new Headers(response.headers);
+            headers.set('Access-Control-Allow-Origin', '*');
+            headers.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+            headers.set('Access-Control-Allow-Headers', '*');
+            headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+            return new Response(response.body, {
+              status: response.status,
+              statusText: response.statusText,
+              headers,
+            });
+          }
+        } catch {
+          // Continue trying other candidate roots.
+        }
+      }
+      return new Response('Not found', {
+        status: 404,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    } catch (error) {
+      console.error('Failed to resolve extension asset request:', request.url, error);
+      return new Response('Bad request', {
+        status: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    }
+  });
+
   if (process.platform === "darwin" && app.dock) {
     app.dock.setIcon(appIconPath);
   }

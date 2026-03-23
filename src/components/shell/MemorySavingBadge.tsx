@@ -5,16 +5,13 @@ import { useTranslation } from 'react-i18next'
 import { workspaceIpc } from '@/services/ipc/workspace'
 
 type MemorySavingStatus = 'started' | 'completed' | 'skipped' | 'error'
-type MemoryInjectedStatus = 'injected'
 
 /**
- * Floating badge shown briefly when a conversation is auto-saved to memory
- * or when memory context is injected.
+ * Floating badge shown briefly when a conversation capture is saved to memory.
  * Displays temporary status messages then disappears after completion.
  */
 export function MemorySavingBadge({ conversationId }: { conversationId: string | null }) {
   const [savingStatus, setSavingStatus] = useState<MemorySavingStatus | null>(null)
-  const [injectedStatus, setInjectedStatus] = useState<MemoryInjectedStatus | null>(null)
   const { t } = useTranslation()
 
   useEffect(() => {
@@ -31,18 +28,8 @@ export function MemorySavingBadge({ conversationId }: { conversationId: string |
       }
     })
 
-    const unsubInjected = workspaceIpc.onMemoryInjected((payload) => {
-      if (payload.conversationId !== conversationId) return
-      setInjectedStatus('injected')
-
-      // Auto-dismiss after a delay
-      const timer = setTimeout(() => setInjectedStatus(null), 2000)
-      return () => clearTimeout(timer)
-    })
-
     return () => {
       unsubSaving()
-      unsubInjected()
     }
   }, [conversationId])
 
@@ -72,19 +59,6 @@ export function MemorySavingBadge({ conversationId }: { conversationId: string |
         >
           <Brain className="h-3 w-3" />
           <span>{t('Saved to memory')}</span>
-        </motion.div>
-      )}
-      {injectedStatus === 'injected' && (
-        <motion.div
-          key="memory-injected-badge"
-          className="memory-saving-badge memory-saving-badge--done"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.25, ease: 'easeOut' }}
-        >
-          <Brain className="h-3 w-3" />
-          <span>{t('Memory injected')}</span>
         </motion.div>
       )}
     </AnimatePresence>

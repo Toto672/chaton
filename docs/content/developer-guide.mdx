@@ -19,7 +19,7 @@ Chatons is an Electron desktop application with five layers:
 | **React renderer** | Application UI, state management, i18n |
 | **Pi runtime bridge** | Per-conversation AI sessions, tool execution |
 | **SQLite storage** | App data, caches, extension KV/queue, automation rules, memory |
-| **Extension runtime** | Built-in and user-installed extensions, LLM tools, channels |
+| **Extension runtime** | Built-in and user-installed extensions, LLM tools, channels, packaged extension web apps |
 
 ### Key Entry Points
 
@@ -80,7 +80,7 @@ Stored settings: `assistantName`, `assistantUserName`, `assistantChannelId`, `as
 | `QuickActions` | 4 hardcoded actions (talk, schedule, memory, settings) |
 | `ChannelsStatus` | Extension list filtered by `kind: "channel"`, queries `channelStatus` from UI entries |
 | `RecentActivity` | 5 most recent conversations sorted by `lastMessageAt` |
-| `MemoryInsights` | Calls `memory.list` on `@chaton/memory` extension, shows 5 entries |
+| `MemoryInsights` | Calls `memory.stats` plus `memory.list` on `@chaton/memory`, shows an accurate count and 5-entry preview |
 | `AutomationsSummary` | Calls `automation.list_scheduled_tasks` on `@chaton/automation`, shows rules |
 
 ---
@@ -108,9 +108,10 @@ Stored settings: `assistantName`, `assistantUserName`, `assistantChannelId`, `as
 
 1. Set app name to `Chatons`
 2. Register `chatons://` protocol handler for deep links
-3. Override `userData` path to `<appData>/Chatons`
-4. Initialize Sentry telemetry (disabled in dev mode, gated by consent)
-5. On `app.whenReady()`:
+3. Register `chaton-extension://` for packaged extension assets
+4. Override `userData` path to `<appData>/Chatons`
+5. Initialize Sentry telemetry (disabled in dev mode, gated by consent)
+6. On `app.whenReady()`:
    - Bootstrap Pi agent directory (`ensurePiAgentBootstrapped()`)
    - Initialize logging
    - Initialize Pi manager
@@ -168,7 +169,7 @@ For Pi CLI commands (model sync, skill management):
 
 All CLI executions force `PI_CODING_AGENT_DIR` to the managed directory.
 
-Internal one-shot LLM tasks should not default to this CLI path when they need the same runtime semantics as a normal conversation. Memory summarization and AI title refinement use short-lived hidden Pi runtimes instead, so model selection, auth reloads, and provider behavior match the main conversation flow.
+Internal one-shot LLM tasks should not default to this CLI path when they need the same runtime semantics as a normal conversation. Structured memory capture and AI title refinement use short-lived hidden Pi runtimes instead, so model selection, auth reloads, and provider behavior match the main conversation flow.
 
 ### Model Scoping
 
@@ -186,6 +187,7 @@ For full details, see [Pi Integration](/pi-integration).
 
 This local runtime lifecycle applies only to local conversations. Cloud conversations may appear in the same workspace state, but they must not start a local Pi runtime. Their source of truth is the connected cloud instance plus its authenticated bootstrap payload. Remote execution now lives in `apps/runtime-headless/server.ts`, which materializes a managed Pi agent directory from the internal control-plane access grant and runs a real Pi session server-side. For repository-backed cloud projects, that remote runtime now maintains a shared project source checkout and a per-conversation Git worktree instead of a session-local clone. The authenticated cloud account now also carries a subscription tier and current usage counters, which the desktop exposes in Settings while the cloud control plane remains the only authority for quota enforcement and session admission.
 Cloud projects, cloud conversations, and cloud message history are all owned by the cloud control plane. The Electron main process can mirror them into local SQLite for startup hydration and renderer compatibility, but cloud creation and transcript persistence must go through `cloud-api` rather than being synthesized locally.
+Cloud memory now follows the same rule. `cloud-api` owns durable memory persistence and stats, while `runtime-headless` exposes the same memory tool contract as desktop by forwarding remote tool calls to authenticated cloud memory routes.
 The Postgres-backed cloud control plane now also stores normalized organization, membership, and provider rows alongside the older compatibility workspace blob. Access checks for the main project/conversation/message paths have started moving to membership-based joins, and the main cloud entity tables now also persist explicit `organization_id` values. The current compatibility bootstrap still exposes a single organization view, selected from the caller's memberships with owner-first ordering, so the full shared-organization data model migration is still in progress.
 The browser-facing `cloud.chatons.ai` surface follows the same rule: signup, login, organization setup, provider setup, and desktop handoff are now implemented inside the `landing/` app, but they still call back into `cloud-api` as the source of truth. The landing app is presentation and browser-session glue, not a second control plane.
 In production, that landing client should default its web auth/bootstrap base URL to `https://cloud.chatons.ai`; alternate environments can still override it through `VITE_CHATONS_CLOUD_API_URL`.
@@ -419,7 +421,7 @@ This is entirely offline -- no external embedding service or model download need
 
 After completed conversations, Chatons now runs a lightweight background analyzer that looks for repeated request patterns with a strong automation upside.
 
-- It runs alongside memory summarization, after normal conversation completion
+- It runs alongside structured memory capture, after normal conversation completion
 - It stores small local counters in app settings rather than full extra transcripts
 - It only suggests from a small allowlist of patterns that Chatons is explicitly prepared to automate
 - It suppresses suggestions when a matching automation already exists and rate-limits repeated prompts

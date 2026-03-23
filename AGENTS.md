@@ -204,9 +204,10 @@ Why this rule exists:
 
 Runtime behavior requirements:
 
-- Memory should remain available as explicit runtime tools such as `memory.search` and `memory.get`
+- Memory should remain available as explicit runtime tools such as `memory.search`, `memory.get`, `memory.markUsed`, and `memory.stats`
 - The model should query memory only when recalled context is likely to help with the active request
 - Retrieved memory must be treated as potentially stale or wrong and must yield to the current user request, repository state, and tool evidence
+- Desktop and cloud runtimes should expose the same memory tool semantics; cloud memory persistence belongs to `cloud-api`, and `runtime-headless` should forward memory tool calls through authenticated control-plane APIs rather than owning its own durable memory store
 
 ### Worktree Cleanup Rule
 
@@ -218,7 +219,7 @@ Chatons also creates short-lived hidden Pi sessions for internal LLM tasks that 
 
 Current examples:
 
-- **Memory summarization/consolidation** via `electron/extensions/runtime/memory-lifecycle.ts`
+- **Structured memory capture** via `electron/extensions/runtime/memory-lifecycle.ts`
 - **Conversation auto-title refinement** via `electron/ipc/workspace-title.ts`
 - **Channel ingestion subagents** via `channels.ingestMessage`, including local channel extensions such as the Even Realities glasses bridge
 

@@ -29,7 +29,7 @@ async function copyElectronAssets() {
       force: true 
     });
 
-    // Copy builtin extension UI assets (plain JS/HTML, no renderer build step).
+    // Copy builtin extension assets, including packaged dist bundles for React-backed UIs.
     await cp('electron/extensions/builtin', 'dist-electron/extensions/builtin', {
       recursive: true,
       force: true

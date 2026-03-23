@@ -5,8 +5,9 @@ import type {
   RpcResponse,
 } from "../pi-sdk-runtime.js";
 import {
-  summarizeAndStoreConversation,
-  consolidateMemory,
+  captureConversationMemoryNow,
+  enqueueConversationMemoryCapture,
+  flushQueuedMemoryCaptures,
   getMemoryModelPreference,
   setMemoryModelPreference,
 } from "../extensions/runtime/memory-lifecycle.js";
@@ -1066,7 +1067,7 @@ type RegisterWorkspaceHandlersDeps = {
 
 let extensionQueueWorker: NodeJS.Timeout | null = null;
 let extensionQueueWorkerInFlight = false;
-let memoryConsolidationWorker: NodeJS.Timeout | null = null;
+let memoryCaptureWorker: NodeJS.Timeout | null = null;
 let unsubscribePiRuntimeEvents: (() => void) | null = null;
 const cloudRealtimeSockets = new Map<string, WebSocket>();
 
@@ -1466,18 +1467,17 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
     });
   }, 1500);
 
-  // Memory consolidation runs every 30 minutes
-  if (memoryConsolidationWorker) {
-    clearInterval(memoryConsolidationWorker);
+  if (memoryCaptureWorker) {
+    clearInterval(memoryCaptureWorker);
   }
-  const CONSOLIDATION_INTERVAL_MS = 30 * 60 * 1000;
-  memoryConsolidationWorker = setInterval(() => {
-    void consolidateMemory(
-      deps.piRuntimeManager as unknown as Parameters<typeof consolidateMemory>[0],
+  const MEMORY_CAPTURE_POLL_MS = 60 * 1000;
+  memoryCaptureWorker = setInterval(() => {
+    void flushQueuedMemoryCaptures(
+      deps.piRuntimeManager as unknown as Parameters<typeof flushQueuedMemoryCaptures>[0],
     ).catch((err) =>
-      console.warn("[Memory] Consolidation cycle failed:", err),
+      console.warn("[Memory] Capture queue flush failed:", err),
     );
-  }, CONSOLIDATION_INTERVAL_MS);
+  }, MEMORY_CAPTURE_POLL_MS);
 
   unsubscribePiRuntimeEvents?.();
   unsubscribePiRuntimeEvents = deps.piRuntimeManager.subscribe((event: PiRendererEvent) => {
@@ -1497,8 +1497,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         )
         .catch(() => undefined);
 
-      // Auto-summarize conversation to memory (fire-and-forget)
-      // Skip ephemeral/hidden conversations (automations, memory tasks, channels)
+      // Queue structured memory capture for normal conversations.
       const convForMemory = findConversationById(getDb(), event.conversationId);
       const isEphemeral =
         !convForMemory ||
@@ -1507,35 +1506,21 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         event.conversationId.startsWith("memory-") ||
         event.conversationId.startsWith("__channel_subagent__");
       if (!isEphemeral) {
-        // Notify renderer that memory save is starting
         for (const win of BrowserWindow.getAllWindows()) {
           win.webContents.send("memory:saving", {
             conversationId: event.conversationId,
             status: "started",
           });
         }
-        void summarizeAndStoreConversation(
-          event.conversationId,
-          deps.piRuntimeManager as unknown as Parameters<typeof summarizeAndStoreConversation>[1],
-        )
-          .then((memoryId) => {
-            for (const win of BrowserWindow.getAllWindows()) {
-              win.webContents.send("memory:saving", {
-                conversationId: event.conversationId,
-                status: memoryId ? "completed" : "skipped",
-                memoryId,
-              });
-            }
-          })
-          .catch((err) => {
-            console.warn("[Memory] Auto-summarize failed:", err);
-            for (const win of BrowserWindow.getAllWindows()) {
-              win.webContents.send("memory:saving", {
-                conversationId: event.conversationId,
-                status: "error",
-              });
-            }
-          });
+        const queued = enqueueConversationMemoryCapture(event.conversationId);
+        if (!queued.queued) {
+          for (const win of BrowserWindow.getAllWindows()) {
+            win.webContents.send("memory:saving", {
+              conversationId: event.conversationId,
+              status: "skipped",
+            });
+          }
+        }
 
         void Promise.resolve(
           maybeSuggestAutomationForConversation(event.conversationId, hostCall),
@@ -3403,6 +3388,26 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
           reason: "conversation_not_found" as const,
         };
       }
+      void captureConversationMemoryNow(
+        conversationId,
+        deps.piRuntimeManager as unknown as Parameters<typeof captureConversationMemoryNow>[1],
+      )
+        .then((result) => {
+          for (const win of BrowserWindow.getAllWindows()) {
+            win.webContents.send("memory:saving", {
+              conversationId,
+              status: result.stored > 0 ? "completed" : "skipped",
+            });
+          }
+        })
+        .catch(() => {
+          for (const win of BrowserWindow.getAllWindows()) {
+            win.webContents.send("memory:saving", {
+              conversationId,
+              status: "error",
+            });
+          }
+        });
       if (conversation.worktree_path && conversation.worktree_path.trim()) {
         const project = conversation.project_id
           ? listProjects(db).find((item) => item.id === conversation.project_id)
@@ -4361,9 +4366,9 @@ export async function stopWorkspaceHandlers(piRuntimeManager: {
     extensionQueueWorker = null;
   }
   extensionQueueWorkerInFlight = false;
-  if (memoryConsolidationWorker) {
-    clearInterval(memoryConsolidationWorker);
-    memoryConsolidationWorker = null;
+  if (memoryCaptureWorker) {
+    clearInterval(memoryCaptureWorker);
+    memoryCaptureWorker = null;
   }
   if (unsubscribePiRuntimeEvents) {
     unsubscribePiRuntimeEvents();

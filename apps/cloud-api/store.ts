@@ -6,6 +6,10 @@ import type {
   CreateOrganizationInviteRequest,
   CreateCloudConversationRequest,
   CreateCloudProjectRequest,
+  MemoryListRequest,
+  MemorySearchRequest,
+  MemoryUpdateRequest,
+  MemoryUpsertRequest,
   SetActiveOrganizationRequest,
 } from '../../packages/protocol/index.js'
 import type {
@@ -20,10 +24,24 @@ import type {
   CloudSubscriptionGrantRecord,
   CloudSubscriptionRecord,
   CloudUsageRecord,
+  MemoryRecord,
+  MemoryStatsRecord,
   OrganizationProviderRecord,
   OrganizationProviderRuntimeRecord,
   OrganizationRecord,
 } from '../../packages/domain/index.js'
+import {
+  buildMemoryFingerprint,
+  buildMemorySearchText,
+  buildTopicKey,
+  MEMORY_SCHEMA_VERSION,
+  MEMORY_STATUS,
+  MEMORY_VISIBILITY,
+  normalizeMemoryKind,
+  rerankMemoryCandidates,
+  shouldSupersedeKind,
+  summarizeMemoryStats,
+} from '../../packages/memory/index.js'
 
 export type CloudUserState = {
   id: string
@@ -49,6 +67,7 @@ export type CloudWorkspaceState = {
   messagesByConversationId: Map<string, CloudConversationMessageRecord[]>
   providerSecretsById?: Map<string, string>
   repositoryAccessTokenByProjectId?: Map<string, string>
+  memoriesById?: Map<string, MemoryRecord>
 }
 
 type CloudOrganizationInviteRecord = {
@@ -171,6 +190,34 @@ export type CloudStore = {
     conversationId: string,
     messages: CloudConversationMessageRecord[],
   ): Promise<CloudConversationMessageRecord[] | null>
+  listMemory(
+    user: CloudUserState,
+    input: MemoryListRequest,
+  ): Promise<MemoryRecord[]>
+  searchMemory(
+    user: CloudUserState,
+    input: MemorySearchRequest,
+  ): Promise<Array<MemoryRecord & { score: number; matchReasons: string[] }>>
+  getMemory(
+    user: CloudUserState,
+    memoryId: string,
+  ): Promise<MemoryRecord | null>
+  upsertMemory(
+    user: CloudUserState,
+    input: MemoryUpsertRequest & { organizationId?: string | null },
+  ): Promise<MemoryRecord | null>
+  updateMemory(
+    user: CloudUserState,
+    input: MemoryUpdateRequest,
+  ): Promise<MemoryRecord | null>
+  deleteMemory(
+    user: CloudUserState,
+    memoryId: string,
+  ): Promise<boolean>
+  getMemoryStats(
+    user: CloudUserState,
+    input: MemoryListRequest,
+  ): Promise<MemoryStatsRecord>
   getActiveParallelSessions(userId: string): Promise<number>
   authorizeAccess(params: {
     accessToken: string
@@ -178,6 +225,11 @@ export type CloudStore = {
     projectId?: string | null
     conversationId?: string | null
   }): Promise<CloudRuntimeAccessGrant | null>
+  internalUpsertMemory(params: {
+    organizationId: string
+    userId: string
+    input: MemoryUpsertRequest
+  }): Promise<MemoryRecord | null>
   createDesktopAuthRequest(request: CloudDesktopAuthRequestState): Promise<void>
   getDesktopAuthRequest(state: string): Promise<CloudDesktopAuthRequestState | null>
   authorizeDesktopAuthRequest(params: {
@@ -458,6 +510,7 @@ function createDefaultWorkspaceState(
     messagesByConversationId: new Map(),
     providerSecretsById: new Map(),
     repositoryAccessTokenByProjectId: new Map(),
+    memoriesById: new Map(),
   }
 }
 
@@ -466,6 +519,194 @@ function cloneOrganizations(organizations: OrganizationRecord[]): OrganizationRe
     ...organization,
     providers: [...(organization.providers ?? [])],
   }))
+}
+
+function cloneMemoryRecord(record: MemoryRecord): MemoryRecord {
+  return {
+    ...record,
+    tags: [...record.tags],
+    ownership: { ...record.ownership },
+  }
+}
+
+function toMemoryRecord(params: {
+  id: string
+  organizationId: string | null
+  userId: string | null
+  projectId: string | null
+  scope: 'global' | 'project'
+  title: string | null
+  content: string
+  tags: string[]
+  kind?: string | null
+  source?: string | null
+  sourceConversationId?: string | null
+  topicKey?: string | null
+  confidence?: number | null
+  visibility?: 'private' | 'shared' | null
+  status?: 'active' | 'superseded' | null
+  originType?: string | null
+  fingerprint?: string | null
+  archived?: boolean
+  createdAt?: string
+  updatedAt?: string
+  reinforcedAt?: string | null
+  lastUsedAt?: string | null
+  timesUsed?: number
+}): MemoryRecord {
+  const now = new Date().toISOString()
+  const kind = normalizeMemoryKind(params.kind)
+  const topicKey = buildTopicKey({
+    topicKey: params.topicKey,
+    kind,
+    title: params.title,
+    content: params.content,
+    tags: params.tags,
+  })
+  return {
+    id: params.id,
+    scope: params.scope,
+    kind,
+    title: params.title,
+    content: params.content.trim(),
+    tags: [...params.tags],
+    topicKey,
+    confidence:
+      typeof params.confidence === 'number' && Number.isFinite(params.confidence)
+        ? Math.min(1, Math.max(0, params.confidence))
+        : 0.5,
+    schemaVersion: MEMORY_SCHEMA_VERSION,
+    reinforcedAt: params.reinforcedAt ?? null,
+    lastUsedAt: params.lastUsedAt ?? null,
+    timesUsed: params.timesUsed ?? 0,
+    sourceConversationId: params.sourceConversationId ?? null,
+    originType: params.originType?.trim() || 'manual',
+    status: params.status === MEMORY_STATUS.SUPERSEDED ? 'superseded' : 'active',
+    visibility: params.visibility === MEMORY_VISIBILITY.SHARED ? 'shared' : 'private',
+    fingerprint:
+      params.fingerprint?.trim() ||
+      buildMemoryFingerprint({
+        scope: params.scope,
+        organizationId: params.organizationId,
+        userId: params.userId,
+        projectId: params.projectId,
+        kind,
+        topicKey,
+        title: params.title,
+        content: params.content,
+        tags: params.tags,
+      }),
+    archived: params.archived === true,
+    source: params.source?.trim() || 'manual',
+    createdAt: params.createdAt ?? now,
+    updatedAt: params.updatedAt ?? now,
+    ownership: {
+      organizationId: params.organizationId,
+      userId: params.userId,
+      projectId: params.projectId,
+    },
+  }
+}
+
+function canAccessMemoryRecord(
+  record: MemoryRecord,
+  params: {
+    organizationId: string | null
+    userId: string
+    projectId?: string | null
+  },
+): boolean {
+  if (record.ownership.organizationId !== params.organizationId) return false
+  if (record.scope === 'global') return record.ownership.userId === params.userId
+  if (!params.projectId) return true
+  return record.ownership.projectId === params.projectId
+}
+
+type CloudMemoryRow = {
+  id: string
+  organization_id: string | null
+  user_id: string | null
+  project_id: string | null
+  scope: 'global' | 'project'
+  kind: string | null
+  title: string | null
+  content: string
+  tags_json: string[] | null
+  topic_key: string | null
+  confidence: number | null
+  schema_version: number | null
+  reinforced_at: string | Date | null
+  last_used_at: string | Date | null
+  times_used: number | null
+  source_conversation_id: string | null
+  origin_type: string | null
+  status: 'active' | 'superseded' | null
+  visibility: 'private' | 'shared' | null
+  fingerprint: string | null
+  archived: boolean | null
+  source: string | null
+  created_at: string | Date
+  updated_at: string | Date
+  last_seen_at?: string | Date | null
+  fts_rank?: number | null
+}
+
+function toIsoString(value: string | Date | null | undefined): string | null {
+  if (value == null) return null
+  return typeof value === 'string' ? value : value.toISOString()
+}
+
+function toMemoryRecordFromRow(row: CloudMemoryRow): MemoryRecord {
+  return toMemoryRecord({
+    id: row.id,
+    organizationId: row.organization_id,
+    userId: row.user_id,
+    projectId: row.project_id,
+    scope: row.scope === 'project' ? 'project' : 'global',
+    kind: row.kind,
+    title: row.title,
+    content: row.content,
+    tags: Array.isArray(row.tags_json) ? row.tags_json : [],
+    source: row.source ?? 'manual',
+    sourceConversationId: row.source_conversation_id,
+    topicKey: row.topic_key,
+    confidence: row.confidence,
+    visibility: row.visibility,
+    status: row.status,
+    originType: row.origin_type,
+    fingerprint: row.fingerprint,
+    archived: row.archived === true,
+    createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
+    updatedAt: toIsoString(row.updated_at) ?? new Date().toISOString(),
+    reinforcedAt: toIsoString(row.reinforced_at),
+    lastUsedAt: toIsoString(row.last_used_at),
+    timesUsed: row.times_used ?? 0,
+  })
+}
+
+function buildMemoryTagsText(tags: string[]): string {
+  return tags
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .join(' ')
+}
+
+function buildMemorySearchDocumentParts(input: {
+  title: string | null
+  content: string
+  topicKey: string
+  tagsText: string
+  kind: string
+}): string {
+  return [
+    input.title?.trim() ?? '',
+    input.content.trim(),
+    input.topicKey.trim(),
+    input.tagsText.trim(),
+    normalizeMemoryKind(input.kind),
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 
 class MemoryCloudStore implements CloudStore {
@@ -938,6 +1179,245 @@ class MemoryCloudStore implements CloudStore {
     return normalized
   }
 
+  async listMemory(
+    user: CloudUserState,
+    input: MemoryListRequest,
+  ): Promise<MemoryRecord[]> {
+    const workspace = await this.getWorkspaceState(user)
+    const activeOrganizationId =
+      workspace.activeOrganizationId ?? workspace.organizations[0]?.id ?? null
+    const scope = input.scope ?? 'all'
+    const kind = input.kind ? normalizeMemoryKind(input.kind) : null
+    const includeArchived = input.includeArchived === true
+
+    return Array.from(workspace.memoriesById?.values() ?? [])
+      .filter((record) => canAccessMemoryRecord(record, {
+        organizationId: activeOrganizationId,
+        userId: user.id,
+        projectId: input.projectId ?? null,
+      }))
+      .filter((record) => scope === 'all' || record.scope === scope)
+      .filter((record) => !kind || record.kind === kind)
+      .filter((record) => includeArchived || !record.archived)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .slice(0, Math.max(1, input.limit ?? 50))
+      .map(cloneMemoryRecord)
+  }
+
+  async searchMemory(
+    user: CloudUserState,
+    input: MemorySearchRequest,
+  ): Promise<Array<MemoryRecord & { score: number; matchReasons: string[] }>> {
+    const listed = await this.listMemory(user, {
+      scope: input.scope ?? 'all',
+      projectId: input.projectId ?? null,
+      kind: input.kind ?? null,
+      includeArchived: input.includeArchived === true,
+      limit: 1000,
+    })
+    const tags = Array.isArray(input.tags) ? input.tags.map((tag) => tag.toLowerCase()) : []
+    const filtered = listed.filter((record) => {
+      if (record.status === 'superseded') return false
+      if (tags.length === 0) return true
+      const lowerTags = record.tags.map((tag) => tag.toLowerCase())
+      return tags.every((tag) => lowerTags.includes(tag))
+    })
+    return rerankMemoryCandidates({
+      query: input.query,
+      limit: Math.max(1, input.limit ?? 10),
+      candidates: filtered.map((record) => ({
+        ...record,
+        ftsRank: Math.min(
+          1,
+          buildMemorySearchText(record)
+            .toLowerCase()
+            .includes(input.query.trim().toLowerCase())
+            ? 0.85
+            : 0.45,
+        ),
+      })),
+    }).map((record) => ({ ...cloneMemoryRecord(record), score: record.score, matchReasons: [...record.matchReasons] }))
+  }
+
+  async getMemory(
+    user: CloudUserState,
+    memoryId: string,
+  ): Promise<MemoryRecord | null> {
+    const workspace = await this.getWorkspaceState(user)
+    const record = workspace.memoriesById?.get(memoryId)
+    if (!record) return null
+    if (!canAccessMemoryRecord(record, {
+      organizationId: workspace.activeOrganizationId ?? workspace.organizations[0]?.id ?? null,
+      userId: user.id,
+      projectId: record.ownership.projectId,
+    })) {
+      return null
+    }
+    record.lastUsedAt = new Date().toISOString()
+    record.timesUsed += 1
+    record.reinforcedAt = record.lastUsedAt
+    record.updatedAt = record.lastUsedAt
+    workspace.memoriesById?.set(memoryId, cloneMemoryRecord(record))
+    return cloneMemoryRecord(record)
+  }
+
+  async upsertMemory(
+    user: CloudUserState,
+    input: MemoryUpsertRequest & { organizationId?: string | null },
+  ): Promise<MemoryRecord | null> {
+    const workspace = await this.getWorkspaceState(user)
+    const organizationId =
+      input.organizationId?.trim() ||
+      workspace.activeOrganizationId ||
+      workspace.organizations[0]?.id ||
+      null
+    const scope = input.scope === 'project' ? 'project' : 'global'
+    const projectId = scope === 'project' ? input.projectId?.trim() || null : null
+    const tags = Array.isArray(input.tags)
+      ? input.tags.filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0).map((tag) => tag.trim())
+      : []
+    const title = typeof input.title === 'string' && input.title.trim() ? input.title.trim() : null
+    const content = input.content?.trim?.() ?? ''
+    if (!content) return null
+
+    const kind = normalizeMemoryKind(input.kind)
+    const topicKey = buildTopicKey({
+      topicKey: input.topicKey,
+      kind,
+      title,
+      content,
+      tags,
+    })
+    const fingerprint = buildMemoryFingerprint({
+      scope,
+      organizationId,
+      userId: scope === 'global' ? user.id : null,
+      projectId,
+      kind,
+      topicKey,
+      title,
+      content,
+      tags,
+    })
+
+    const existing = Array.from(workspace.memoriesById?.values() ?? []).find(
+      (record) => record.fingerprint === fingerprint && !record.archived && record.status === 'active',
+    )
+
+    if (shouldSupersedeKind(kind)) {
+      for (const record of workspace.memoriesById?.values() ?? []) {
+        if (record.fingerprint === fingerprint && record.id !== existing?.id) {
+          record.status = 'superseded'
+          record.updatedAt = new Date().toISOString()
+          workspace.memoriesById?.set(record.id, cloneMemoryRecord(record))
+        }
+      }
+    }
+
+    const next = toMemoryRecord({
+      id: existing?.id ?? input.id?.trim() ?? `memory-${crypto.randomUUID()}`,
+      organizationId,
+      userId: scope === 'global' ? user.id : null,
+      projectId,
+      scope,
+      kind,
+      title,
+      content,
+      tags,
+      source: input.source ?? 'manual',
+      sourceConversationId: input.conversationId ?? null,
+      topicKey,
+      confidence: input.confidence ?? null,
+      visibility:
+        input.visibility === 'shared' || scope === 'project' ? 'shared' : 'private',
+      status: 'active',
+      originType: existing?.originType ?? 'manual',
+      fingerprint,
+      archived: false,
+      createdAt: existing?.createdAt,
+      updatedAt: new Date().toISOString(),
+      reinforcedAt: existing?.reinforcedAt ?? null,
+      lastUsedAt: existing?.lastUsedAt ?? null,
+      timesUsed: existing?.timesUsed ?? 0,
+    })
+    workspace.memoriesById?.set(next.id, cloneMemoryRecord(next))
+    return cloneMemoryRecord(next)
+  }
+
+  async updateMemory(
+    user: CloudUserState,
+    input: MemoryUpdateRequest,
+  ): Promise<MemoryRecord | null> {
+    const workspace = await this.getWorkspaceState(user)
+    const existing = workspace.memoriesById?.get(input.id)
+    if (!existing) return null
+    if (!canAccessMemoryRecord(existing, {
+      organizationId: workspace.activeOrganizationId ?? workspace.organizations[0]?.id ?? null,
+      userId: user.id,
+      projectId: existing.ownership.projectId,
+    })) {
+      return null
+    }
+
+    const next = toMemoryRecord({
+      id: existing.id,
+      organizationId: existing.ownership.organizationId,
+      userId: existing.ownership.userId,
+      projectId: existing.ownership.projectId,
+      scope: existing.scope,
+      kind: input.kind ?? existing.kind,
+      title: input.title === undefined ? existing.title : input.title,
+      content: input.content === undefined ? existing.content : input.content,
+      tags: Array.isArray(input.tags) ? input.tags : existing.tags,
+      source: existing.source,
+      sourceConversationId: existing.sourceConversationId,
+      topicKey: input.topicKey ?? existing.topicKey,
+      confidence: input.confidence ?? existing.confidence,
+      visibility: input.visibility ?? existing.visibility,
+      status: input.status ?? existing.status,
+      originType: existing.originType,
+      fingerprint: existing.fingerprint,
+      archived: input.archived ?? existing.archived,
+      createdAt: existing.createdAt,
+      updatedAt: new Date().toISOString(),
+      reinforcedAt: existing.reinforcedAt,
+      lastUsedAt: existing.lastUsedAt,
+      timesUsed: existing.timesUsed,
+    })
+    workspace.memoriesById?.set(next.id, cloneMemoryRecord(next))
+    return cloneMemoryRecord(next)
+  }
+
+  async deleteMemory(
+    user: CloudUserState,
+    memoryId: string,
+  ): Promise<boolean> {
+    const workspace = await this.getWorkspaceState(user)
+    const existing = workspace.memoriesById?.get(memoryId)
+    if (!existing) return false
+    if (!canAccessMemoryRecord(existing, {
+      organizationId: workspace.activeOrganizationId ?? workspace.organizations[0]?.id ?? null,
+      userId: user.id,
+      projectId: existing.ownership.projectId,
+    })) {
+      return false
+    }
+    workspace.memoriesById?.delete(memoryId)
+    return true
+  }
+
+  async getMemoryStats(
+    user: CloudUserState,
+    input: MemoryListRequest,
+  ): Promise<MemoryStatsRecord> {
+    const records = await this.listMemory(user, {
+      ...input,
+      limit: 100000,
+      includeArchived: input.includeArchived === true,
+    })
+    return summarizeMemoryStats(records)
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async getActiveParallelSessions(__userId: string): Promise<number> {
     return 0
@@ -1019,6 +1499,19 @@ class MemoryCloudStore implements CloudStore {
               accessToken: workspace.repositoryAccessTokenByProjectId?.get(project.id) ?? null,
             },
     }
+  }
+
+  async internalUpsertMemory(params: {
+    organizationId: string
+    userId: string
+    input: MemoryUpsertRequest
+  }): Promise<MemoryRecord | null> {
+    const user = await this.getUserById(params.userId)
+    if (!user) return null
+    return this.upsertMemory(user, {
+      ...params.input,
+      organizationId: params.organizationId,
+    })
   }
 
   async createDesktopAuthRequest(request: CloudDesktopAuthRequestState): Promise<void> {
@@ -1327,6 +1820,46 @@ class PostgresCloudStore implements CloudStore {
       );
       CREATE INDEX IF NOT EXISTS cloud_organization_invites_organization_id_idx
         ON cloud_organization_invites(organization_id);
+      CREATE TABLE IF NOT EXISTS cloud_memories (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT,
+        user_id TEXT REFERENCES cloud_users(id) ON DELETE CASCADE,
+        project_id TEXT REFERENCES cloud_projects(id) ON DELETE CASCADE,
+        scope TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT,
+        content TEXT NOT NULL,
+        tags_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+        topic_key TEXT NOT NULL,
+        confidence DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+        schema_version INTEGER NOT NULL DEFAULT 1,
+        reinforced_at TIMESTAMPTZ,
+        last_used_at TIMESTAMPTZ,
+        times_used INTEGER NOT NULL DEFAULT 0,
+        source_conversation_id TEXT REFERENCES cloud_conversations(id) ON DELETE SET NULL,
+        origin_type TEXT NOT NULL DEFAULT 'manual',
+        status TEXT NOT NULL DEFAULT 'active',
+        visibility TEXT NOT NULL DEFAULT 'private',
+        fingerprint TEXT NOT NULL,
+        archived BOOLEAN NOT NULL DEFAULT FALSE,
+        source TEXT NOT NULL DEFAULT 'manual',
+        search_document TSVECTOR,
+        last_seen_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS cloud_memories_org_scope_status_idx
+        ON cloud_memories(organization_id, scope, status, archived, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS cloud_memories_user_scope_idx
+        ON cloud_memories(user_id, scope, archived, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS cloud_memories_project_scope_idx
+        ON cloud_memories(project_id, scope, archived, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS cloud_memories_fingerprint_idx
+        ON cloud_memories(fingerprint);
+      CREATE INDEX IF NOT EXISTS cloud_memories_source_conversation_idx
+        ON cloud_memories(source_conversation_id);
+      CREATE INDEX IF NOT EXISTS cloud_memories_search_document_idx
+        ON cloud_memories USING GIN(search_document);
     `)
 
     await this.pool.query(`
@@ -1356,6 +1889,55 @@ class PostgresCloudStore implements CloudStore {
       ADD COLUMN IF NOT EXISTS complimentary_expires_at TIMESTAMPTZ;
       ALTER TABLE cloud_sessions
       ADD COLUMN IF NOT EXISTS active_organization_id TEXT
+    `)
+
+    await this.pool.query(`
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS organization_id TEXT;
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS user_id TEXT;
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS project_id TEXT;
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS scope TEXT NOT NULL DEFAULT 'global';
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'fact';
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS title TEXT;
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS content TEXT NOT NULL DEFAULT '';
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS tags_json JSONB NOT NULL DEFAULT '[]'::jsonb;
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS topic_key TEXT NOT NULL DEFAULT 'memory';
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS confidence DOUBLE PRECISION NOT NULL DEFAULT 0.5;
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS schema_version INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS reinforced_at TIMESTAMPTZ;
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS times_used INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS source_conversation_id TEXT;
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS origin_type TEXT NOT NULL DEFAULT 'manual';
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'private';
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS fingerprint TEXT NOT NULL DEFAULT '';
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual';
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS search_document TSVECTOR;
+      ALTER TABLE cloud_memories
+      ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ
     `)
 
     await this.pool.query(`
@@ -1404,6 +1986,26 @@ class PostgresCloudStore implements CloudStore {
            OR code_challenge IS NULL
            OR code_challenge_method IS NULL
            OR scope IS NULL
+      `,
+    )
+    await this.pool.query(
+      `
+        UPDATE cloud_memories
+        SET search_document = to_tsvector(
+          'simple',
+          concat_ws(
+            ' ',
+            coalesce(title, ''),
+            coalesce(content, ''),
+            coalesce(topic_key, ''),
+            coalesce(array_to_string(ARRAY(
+              SELECT jsonb_array_elements_text(tags_json)
+            ), ' '), ''),
+            coalesce(kind, '')
+          )
+        )
+        WHERE search_document IS NULL
+           OR fingerprint = ''
       `,
     )
     await this.pool.query(
@@ -1536,7 +2138,130 @@ class PostgresCloudStore implements CloudStore {
     workspace.cloudInstance.lastError = null
     workspace.providerSecretsById = workspace.providerSecretsById ?? new Map()
     workspace.repositoryAccessTokenByProjectId = workspace.repositoryAccessTokenByProjectId ?? new Map()
+    workspace.memoriesById = workspace.memoriesById ?? new Map()
     return workspace
+  }
+
+  private async listMemoryRowsForUser(params: {
+    userId: string
+    organizationId: string | null
+    scope?: MemoryListRequest['scope']
+    projectId?: string | null
+    kind?: MemoryListRequest['kind']
+    includeArchived?: boolean
+    limit?: number
+  }): Promise<CloudMemoryRow[]> {
+    await this.init()
+    const scope = params.scope ?? 'all'
+    const includeArchived = params.includeArchived === true
+    const queryParams: Array<string | number | boolean | null> = [params.userId, params.organizationId]
+    const clauses = [
+      'm.organization_id = $2',
+      `(
+        (m.scope = 'global' AND m.user_id = $1)
+        OR
+        (m.scope = 'project' AND EXISTS (
+          SELECT 1
+          FROM cloud_projects p
+          INNER JOIN cloud_organization_memberships membership
+            ON membership.organization_id = p.organization_id
+          WHERE p.id = m.project_id
+            AND membership.user_id = $1
+        ))
+      )`,
+    ]
+
+    if (scope === 'global') {
+      clauses.push(`m.scope = 'global'`)
+    } else if (scope === 'project') {
+      clauses.push(`m.scope = 'project'`)
+    }
+
+    if (params.projectId) {
+      queryParams.push(params.projectId)
+      const projectParam = `$${queryParams.length}`
+      if (scope === 'project') {
+        clauses.push(`m.project_id = ${projectParam}`)
+      } else if (scope === 'all') {
+        clauses.push(`(m.scope = 'global' OR m.project_id = ${projectParam})`)
+      }
+    }
+
+    if (params.kind) {
+      queryParams.push(normalizeMemoryKind(params.kind))
+      clauses.push(`m.kind = $${queryParams.length}`)
+    }
+
+    if (!includeArchived) {
+      clauses.push(`m.archived = FALSE`)
+    }
+
+    queryParams.push(Math.max(1, params.limit ?? 50))
+
+    const result = await this.pool.query<CloudMemoryRow>(
+      `
+        SELECT
+          m.id,
+          m.organization_id,
+          m.user_id,
+          m.project_id,
+          m.scope,
+          m.kind,
+          m.title,
+          m.content,
+          m.tags_json,
+          m.topic_key,
+          m.confidence,
+          m.schema_version,
+          m.reinforced_at,
+          m.last_used_at,
+          m.times_used,
+          m.source_conversation_id,
+          m.origin_type,
+          m.status,
+          m.visibility,
+          m.fingerprint,
+          m.archived,
+          m.source,
+          m.created_at,
+          m.updated_at,
+          m.last_seen_at
+        FROM cloud_memories m
+        WHERE ${clauses.join('\n          AND ')}
+        ORDER BY m.updated_at DESC
+        LIMIT $${queryParams.length}
+      `,
+      queryParams,
+    )
+    return result.rows
+  }
+
+  private async markMemoryUsed(memoryId: string): Promise<void> {
+    await this.pool.query(
+      `
+        UPDATE cloud_memories
+        SET last_used_at = NOW(),
+            reinforced_at = NOW(),
+            times_used = GREATEST(0, COALESCE(times_used, 0)) + 1,
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [memoryId],
+    )
+  }
+
+  private async markMemorySeen(memoryIds: string[]): Promise<void> {
+    if (memoryIds.length === 0) {
+      return
+    }
+    await this.pool.query(
+      `
+        UPDATE cloud_memories
+        SET last_seen_at = NOW()
+        WHERE id = ANY($1::text[])
+      `,
+      [memoryIds],
+    )
   }
 
   private async upsertNormalizedOrganization(
@@ -2846,6 +3571,708 @@ class PostgresCloudStore implements CloudStore {
     return normalized
   }
 
+  async listMemory(
+    user: CloudUserState,
+    input: MemoryListRequest,
+  ): Promise<MemoryRecord[]> {
+    await this.ensureWorkspaceExists(user)
+    const workspace = await this.getWorkspaceState(user)
+    const rows = await this.listMemoryRowsForUser({
+      userId: user.id,
+      organizationId: workspace.activeOrganizationId ?? workspace.organizations[0]?.id ?? null,
+      scope: input.scope ?? 'all',
+      projectId: input.projectId ?? null,
+      kind: input.kind ?? null,
+      includeArchived: input.includeArchived === true,
+      limit: input.limit ?? 50,
+    })
+    return rows.map(toMemoryRecordFromRow)
+  }
+
+  async searchMemory(
+    user: CloudUserState,
+    input: MemorySearchRequest,
+  ): Promise<Array<MemoryRecord & { score: number; matchReasons: string[] }>> {
+    await this.ensureWorkspaceExists(user)
+    const workspace = await this.getWorkspaceState(user)
+    const organizationId = workspace.activeOrganizationId ?? workspace.organizations[0]?.id ?? null
+    const scope = input.scope ?? 'all'
+    const includeArchived = input.includeArchived === true
+    const tags = Array.isArray(input.tags)
+      ? input.tags
+          .map((tag) => (typeof tag === 'string' ? tag.trim().toLowerCase() : ''))
+          .filter(Boolean)
+      : []
+    const query = input.query.trim()
+    const queryParams: Array<string | number | boolean | null | string[]> = [
+      user.id,
+      organizationId,
+      query,
+    ]
+    const clauses = [
+      'm.organization_id = $2',
+      `(
+        (m.scope = 'global' AND m.user_id = $1)
+        OR
+        (m.scope = 'project' AND EXISTS (
+          SELECT 1
+          FROM cloud_projects p
+          INNER JOIN cloud_organization_memberships membership
+            ON membership.organization_id = p.organization_id
+          WHERE p.id = m.project_id
+            AND membership.user_id = $1
+        ))
+      )`,
+      `m.status = 'active'`,
+    ]
+
+    if (scope === 'global') {
+      clauses.push(`m.scope = 'global'`)
+    } else if (scope === 'project') {
+      clauses.push(`m.scope = 'project'`)
+    }
+
+    if (input.projectId) {
+      queryParams.push(input.projectId)
+      const projectParam = `$${queryParams.length}`
+      if (scope === 'project') {
+        clauses.push(`m.project_id = ${projectParam}`)
+      } else if (scope === 'all') {
+        clauses.push(`(m.scope = 'global' OR m.project_id = ${projectParam})`)
+      }
+    }
+
+    if (input.kind) {
+      queryParams.push(normalizeMemoryKind(input.kind))
+      clauses.push(`m.kind = $${queryParams.length}`)
+    }
+
+    if (!includeArchived) {
+      clauses.push(`m.archived = FALSE`)
+    }
+
+    if (tags.length > 0) {
+      queryParams.push(tags)
+      clauses.push(`
+        NOT EXISTS (
+          SELECT 1
+          FROM unnest($${queryParams.length}::text[]) AS required_tag
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements_text(m.tags_json) AS tag
+            WHERE lower(tag) = required_tag
+          )
+        )
+      `)
+    }
+
+    queryParams.push(Math.max(50, (input.limit ?? 10) * 10))
+    const limitParam = `$${queryParams.length}`
+    const result = await this.pool.query<CloudMemoryRow>(
+      `
+        SELECT
+          m.id,
+          m.organization_id,
+          m.user_id,
+          m.project_id,
+          m.scope,
+          m.kind,
+          m.title,
+          m.content,
+          m.tags_json,
+          m.topic_key,
+          m.confidence,
+          m.schema_version,
+          m.reinforced_at,
+          m.last_used_at,
+          m.times_used,
+          m.source_conversation_id,
+          m.origin_type,
+          m.status,
+          m.visibility,
+          m.fingerprint,
+          m.archived,
+          m.source,
+          m.created_at,
+          m.updated_at,
+          m.last_seen_at,
+          ts_rank_cd(m.search_document, websearch_to_tsquery('simple', $3)) AS fts_rank
+        FROM cloud_memories m
+        WHERE ${clauses.join('\n          AND ')}
+          AND (
+            m.search_document @@ websearch_to_tsquery('simple', $3)
+            OR lower(coalesce(m.title, '')) LIKE '%' || lower($3) || '%'
+            OR lower(m.topic_key) LIKE '%' || lower($3) || '%'
+            OR lower(m.content) LIKE '%' || lower($3) || '%'
+          )
+        ORDER BY fts_rank DESC NULLS LAST, m.updated_at DESC
+        LIMIT ${limitParam}
+      `,
+      queryParams,
+    )
+
+    const reranked = rerankMemoryCandidates({
+      query,
+      limit: Math.max(1, input.limit ?? 10),
+      candidates: result.rows.map((row) => {
+        const record = toMemoryRecordFromRow(row)
+        return {
+          ...record,
+          ftsRank: typeof row.fts_rank === 'number' ? Math.min(1, row.fts_rank) : 0.3,
+        }
+      }),
+    }).map((record) => ({
+      ...record,
+      matchReasons: [...record.matchReasons],
+    }))
+
+    await this.markMemorySeen(reranked.map((record) => record.id))
+    return reranked
+  }
+
+  async getMemory(
+    user: CloudUserState,
+    memoryId: string,
+  ): Promise<MemoryRecord | null> {
+    await this.ensureWorkspaceExists(user)
+    const workspace = await this.getWorkspaceState(user)
+    const organizationId = workspace.activeOrganizationId ?? workspace.organizations[0]?.id ?? null
+    const result = await this.pool.query<CloudMemoryRow>(
+      `
+        SELECT
+          m.id,
+          m.organization_id,
+          m.user_id,
+          m.project_id,
+          m.scope,
+          m.kind,
+          m.title,
+          m.content,
+          m.tags_json,
+          m.topic_key,
+          m.confidence,
+          m.schema_version,
+          m.reinforced_at,
+          m.last_used_at,
+          m.times_used,
+          m.source_conversation_id,
+          m.origin_type,
+          m.status,
+          m.visibility,
+          m.fingerprint,
+          m.archived,
+          m.source,
+          m.created_at,
+          m.updated_at,
+          m.last_seen_at
+        FROM cloud_memories m
+        WHERE m.id = $1
+          AND m.organization_id = $3
+          AND (
+            (m.scope = 'global' AND m.user_id = $2)
+            OR
+            (m.scope = 'project' AND EXISTS (
+              SELECT 1
+              FROM cloud_projects p
+              INNER JOIN cloud_organization_memberships membership
+                ON membership.organization_id = p.organization_id
+              WHERE p.id = m.project_id
+                AND membership.user_id = $2
+            ))
+          )
+        LIMIT 1
+      `,
+      [memoryId, user.id, organizationId],
+    )
+    if (!result.rowCount) {
+      return null
+    }
+    await this.markMemoryUsed(memoryId)
+    const refreshed = await this.pool.query<CloudMemoryRow>(
+      `
+        SELECT
+          id,
+          organization_id,
+          user_id,
+          project_id,
+          scope,
+          kind,
+          title,
+          content,
+          tags_json,
+          topic_key,
+          confidence,
+          schema_version,
+          reinforced_at,
+          last_used_at,
+          times_used,
+          source_conversation_id,
+          origin_type,
+          status,
+          visibility,
+          fingerprint,
+          archived,
+          source,
+          created_at,
+          updated_at,
+          last_seen_at
+        FROM cloud_memories
+        WHERE id = $1
+      `,
+      [memoryId],
+    )
+    return refreshed.rowCount ? toMemoryRecordFromRow(refreshed.rows[0]) : null
+  }
+
+  async upsertMemory(
+    user: CloudUserState,
+    input: MemoryUpsertRequest & { organizationId?: string | null },
+  ): Promise<MemoryRecord | null> {
+    await this.ensureWorkspaceExists(user)
+    const workspace = await this.getWorkspaceState(user)
+    const organizationId =
+      input.organizationId?.trim() ||
+      workspace.activeOrganizationId ||
+      workspace.organizations[0]?.id ||
+      null
+    const scope = input.scope === 'project' ? 'project' : 'global'
+    const projectId = scope === 'project' ? input.projectId?.trim() || null : null
+    const content = input.content?.trim?.() ?? ''
+    if (!content) {
+      return null
+    }
+    if (scope === 'project' && projectId) {
+      const projectAccess = await this.pool.query<{ id: string }>(
+        `
+          SELECT p.id
+          FROM cloud_projects p
+          INNER JOIN cloud_organization_memberships m
+            ON m.organization_id = p.organization_id
+          WHERE m.user_id = $1
+            AND p.id = $2
+            AND p.organization_id = $3
+          LIMIT 1
+        `,
+        [user.id, projectId, organizationId],
+      )
+      if (!projectAccess.rowCount) {
+        return null
+      }
+    }
+
+    const tags = Array.isArray(input.tags)
+      ? input.tags
+          .filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
+          .map((tag) => tag.trim())
+      : []
+    const title = typeof input.title === 'string' && input.title.trim() ? input.title.trim() : null
+    const kind = normalizeMemoryKind(input.kind)
+    const topicKey = buildTopicKey({
+      topicKey: input.topicKey,
+      kind,
+      title,
+      content,
+      tags,
+    })
+    const fingerprint = buildMemoryFingerprint({
+      scope,
+      organizationId,
+      userId: scope === 'global' ? user.id : null,
+      projectId,
+      kind,
+      topicKey,
+      title,
+      content,
+      tags,
+    })
+    const tagsText = buildMemoryTagsText(tags)
+    const searchDocument = buildMemorySearchDocumentParts({
+      title,
+      content,
+      topicKey,
+      tagsText,
+      kind,
+    })
+
+    const existing = await this.pool.query<CloudMemoryRow>(
+      `
+        SELECT
+          id,
+          organization_id,
+          user_id,
+          project_id,
+          scope,
+          kind,
+          title,
+          content,
+          tags_json,
+          topic_key,
+          confidence,
+          schema_version,
+          reinforced_at,
+          last_used_at,
+          times_used,
+          source_conversation_id,
+          origin_type,
+          status,
+          visibility,
+          fingerprint,
+          archived,
+          source,
+          created_at,
+          updated_at
+        FROM cloud_memories
+        WHERE fingerprint = $1
+          AND organization_id = $2
+          AND (
+            ($3 = 'global' AND user_id = $4)
+            OR
+            ($3 = 'project' AND project_id = $5)
+          )
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `,
+      [fingerprint, organizationId, scope, scope === 'global' ? user.id : null, projectId],
+    )
+    const existingRecord = existing.rowCount ? toMemoryRecordFromRow(existing.rows[0]) : null
+
+    if (shouldSupersedeKind(kind)) {
+      await this.pool.query(
+        `
+          UPDATE cloud_memories
+          SET status = 'superseded',
+              archived = FALSE,
+              updated_at = NOW()
+          WHERE fingerprint = $1
+            AND organization_id = $2
+            AND id <> COALESCE($3, '')
+            AND status <> 'superseded'
+        `,
+        [fingerprint, organizationId, existingRecord?.id ?? null],
+      )
+    }
+
+    const nextId = existingRecord?.id ?? input.id?.trim() ?? `memory-${crypto.randomUUID()}`
+    const nextVisibility =
+      input.visibility === 'shared' || scope === 'project' ? 'shared' : 'private'
+    const now = new Date().toISOString()
+    await this.pool.query(
+      `
+        INSERT INTO cloud_memories(
+          id,
+          organization_id,
+          user_id,
+          project_id,
+          scope,
+          kind,
+          title,
+          content,
+          tags_json,
+          topic_key,
+          confidence,
+          schema_version,
+          reinforced_at,
+          last_used_at,
+          times_used,
+          source_conversation_id,
+          origin_type,
+          status,
+          visibility,
+          fingerprint,
+          archived,
+          source,
+          search_document,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16, $17,
+          'active', $18, $19, FALSE, $20, to_tsvector('simple', $21), $22, $23
+        )
+        ON CONFLICT (id) DO UPDATE
+        SET organization_id = EXCLUDED.organization_id,
+            user_id = EXCLUDED.user_id,
+            project_id = EXCLUDED.project_id,
+            scope = EXCLUDED.scope,
+            kind = EXCLUDED.kind,
+            title = EXCLUDED.title,
+            content = EXCLUDED.content,
+            tags_json = EXCLUDED.tags_json,
+            topic_key = EXCLUDED.topic_key,
+            confidence = EXCLUDED.confidence,
+            schema_version = EXCLUDED.schema_version,
+            source_conversation_id = EXCLUDED.source_conversation_id,
+            origin_type = EXCLUDED.origin_type,
+            status = 'active',
+            visibility = EXCLUDED.visibility,
+            fingerprint = EXCLUDED.fingerprint,
+            archived = FALSE,
+            source = EXCLUDED.source,
+            search_document = EXCLUDED.search_document,
+            updated_at = EXCLUDED.updated_at
+      `,
+      [
+        nextId,
+        organizationId,
+        scope === 'global' ? user.id : null,
+        projectId,
+        scope,
+        kind,
+        title,
+        content,
+        JSON.stringify(tags),
+        topicKey,
+        typeof input.confidence === 'number' ? input.confidence : existingRecord?.confidence ?? 0.5,
+        MEMORY_SCHEMA_VERSION,
+        existingRecord?.reinforcedAt ?? null,
+        existingRecord?.lastUsedAt ?? null,
+        existingRecord?.timesUsed ?? 0,
+        input.conversationId ?? existingRecord?.sourceConversationId ?? null,
+        existingRecord?.originType ?? 'manual',
+        nextVisibility,
+        fingerprint,
+        input.source ?? existingRecord?.source ?? 'manual',
+        searchDocument,
+        existingRecord?.createdAt ?? now,
+        now,
+      ],
+    )
+    const created = await this.pool.query<CloudMemoryRow>(
+      `
+        SELECT
+          id,
+          organization_id,
+          user_id,
+          project_id,
+          scope,
+          kind,
+          title,
+          content,
+          tags_json,
+          topic_key,
+          confidence,
+          schema_version,
+          reinforced_at,
+          last_used_at,
+          times_used,
+          source_conversation_id,
+          origin_type,
+          status,
+          visibility,
+          fingerprint,
+          archived,
+          source,
+          created_at,
+          updated_at,
+          last_seen_at
+        FROM cloud_memories
+        WHERE id = $1
+      `,
+      [nextId],
+    )
+    return created.rowCount ? toMemoryRecordFromRow(created.rows[0]) : null
+  }
+
+  async updateMemory(
+    user: CloudUserState,
+    input: MemoryUpdateRequest,
+  ): Promise<MemoryRecord | null> {
+    await this.ensureWorkspaceExists(user)
+    const workspace = await this.getWorkspaceState(user)
+    const organizationId = workspace.activeOrganizationId ?? workspace.organizations[0]?.id ?? null
+    const result = await this.pool.query<CloudMemoryRow>(
+      `
+        SELECT
+          id,
+          organization_id,
+          user_id,
+          project_id,
+          scope,
+          kind,
+          title,
+          content,
+          tags_json,
+          topic_key,
+          confidence,
+          schema_version,
+          reinforced_at,
+          last_used_at,
+          times_used,
+          source_conversation_id,
+          origin_type,
+          status,
+          visibility,
+          fingerprint,
+          archived,
+          source,
+          created_at,
+          updated_at,
+          last_seen_at
+        FROM cloud_memories
+        WHERE id = $1
+          AND organization_id = $3
+          AND (
+            (scope = 'global' AND user_id = $2)
+            OR
+            (scope = 'project' AND EXISTS (
+              SELECT 1
+              FROM cloud_projects p
+              INNER JOIN cloud_organization_memberships m
+                ON m.organization_id = p.organization_id
+              WHERE p.id = cloud_memories.project_id
+                AND m.user_id = $2
+            ))
+          )
+        LIMIT 1
+      `,
+      [input.id, user.id, organizationId],
+    )
+    if (!result.rowCount) {
+      return null
+    }
+    const existing = toMemoryRecordFromRow(result.rows[0])
+    const nextKind = normalizeMemoryKind(input.kind ?? existing.kind)
+    const nextTitle = input.title === undefined ? existing.title : input.title
+    const nextContent = input.content === undefined || input.content == null ? existing.content : input.content.trim()
+    if (!nextContent) {
+      return null
+    }
+    const nextTags = Array.isArray(input.tags) ? input.tags.filter(Boolean).map((tag) => tag.trim()) : existing.tags
+    const nextTopicKey = buildTopicKey({
+      topicKey: input.topicKey ?? existing.topicKey,
+      kind: nextKind,
+      title: nextTitle,
+      content: nextContent,
+      tags: nextTags,
+    })
+    const nextFingerprint = buildMemoryFingerprint({
+      scope: existing.scope,
+      organizationId: existing.ownership.organizationId,
+      userId: existing.ownership.userId,
+      projectId: existing.ownership.projectId,
+      kind: nextKind,
+      topicKey: nextTopicKey,
+      title: nextTitle,
+      content: nextContent,
+      tags: nextTags,
+    })
+    await this.pool.query(
+      `
+        UPDATE cloud_memories
+        SET kind = $2,
+            title = $3,
+            content = $4,
+            tags_json = $5::jsonb,
+            topic_key = $6,
+            confidence = $7,
+            status = $8,
+            visibility = $9,
+            fingerprint = $10,
+            archived = $11,
+            search_document = to_tsvector('simple', $12),
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [
+        input.id,
+        nextKind,
+        nextTitle,
+        nextContent,
+        JSON.stringify(nextTags),
+        nextTopicKey,
+        input.confidence ?? existing.confidence,
+        input.status ?? existing.status,
+        input.visibility ?? existing.visibility,
+        nextFingerprint,
+        input.archived ?? existing.archived,
+        buildMemorySearchDocumentParts({
+          title: nextTitle,
+          content: nextContent,
+          topicKey: nextTopicKey,
+          tagsText: buildMemoryTagsText(nextTags),
+          kind: nextKind,
+        }),
+      ],
+    )
+    const updated = await this.pool.query<CloudMemoryRow>(
+      `
+        SELECT
+          id,
+          organization_id,
+          user_id,
+          project_id,
+          scope,
+          kind,
+          title,
+          content,
+          tags_json,
+          topic_key,
+          confidence,
+          schema_version,
+          reinforced_at,
+          last_used_at,
+          times_used,
+          source_conversation_id,
+          origin_type,
+          status,
+          visibility,
+          fingerprint,
+          archived,
+          source,
+          created_at,
+          updated_at,
+          last_seen_at
+        FROM cloud_memories
+        WHERE id = $1
+      `,
+      [input.id],
+    )
+    return updated.rowCount ? toMemoryRecordFromRow(updated.rows[0]) : null
+  }
+
+  async deleteMemory(
+    user: CloudUserState,
+    memoryId: string,
+  ): Promise<boolean> {
+    await this.ensureWorkspaceExists(user)
+    const workspace = await this.getWorkspaceState(user)
+    const organizationId = workspace.activeOrganizationId ?? workspace.organizations[0]?.id ?? null
+    const result = await this.pool.query<{ id: string }>(
+      `
+        DELETE FROM cloud_memories
+        WHERE id = $1
+          AND organization_id = $3
+          AND (
+            (scope = 'global' AND user_id = $2)
+            OR
+            (scope = 'project' AND EXISTS (
+              SELECT 1
+              FROM cloud_projects p
+              INNER JOIN cloud_organization_memberships m
+                ON m.organization_id = p.organization_id
+              WHERE p.id = cloud_memories.project_id
+                AND m.user_id = $2
+            ))
+          )
+        RETURNING id
+      `,
+      [memoryId, user.id, organizationId],
+    )
+    return result.rowCount > 0
+  }
+
+  async getMemoryStats(
+    user: CloudUserState,
+    input: MemoryListRequest,
+  ): Promise<MemoryStatsRecord> {
+    const records = await this.listMemory(user, {
+      ...input,
+      limit: 100000,
+      includeArchived: input.includeArchived === true,
+    })
+    return summarizeMemoryStats(records)
+  }
+
   async getActiveParallelSessions(userId: string): Promise<number> {
     await this.init()
     try {
@@ -2947,6 +4374,22 @@ class PostgresCloudStore implements CloudStore {
               accessToken: workspace.repositoryAccessTokenByProjectId?.get(project.id) ?? null,
             },
     }
+  }
+
+  async internalUpsertMemory(params: {
+    organizationId: string
+    userId: string
+    input: MemoryUpsertRequest
+  }): Promise<MemoryRecord | null> {
+    await this.init()
+    const user = await this.getUserById(params.userId)
+    if (!user) {
+      return null
+    }
+    return this.upsertMemory(user, {
+      ...params.input,
+      organizationId: params.organizationId,
+    })
   }
 
   async createDesktopAuthRequest(request: CloudDesktopAuthRequestState): Promise<void> {
