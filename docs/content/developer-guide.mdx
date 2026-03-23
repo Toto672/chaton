@@ -378,7 +378,7 @@ Full documentation: [Extensions](/extensions), [Extensions API](/extensions/api)
 ### Architecture
 
 - Extensions live in `~/.chaton/extensions/<extension-id>/`
-- Built-in extensions (`@chaton/automation`, `@chaton/memory`, etc.) are bundled in `electron/extensions/builtin/`
+- Built-in extensions (`@chaton/automation`, `@chaton/memory`, `@chaton/ide-launcher`, `@chaton/tps-monitor`, etc.) are bundled in `electron/extensions/builtin/`
 - Extension manifest: `chaton.extension.json`
 - Runtime: `electron/extensions/runtime/` (host, storage, types, capabilities, UI bridge, automation, memory)
 - API surface: `window.chaton.*` (not `window.chatonExtension.api.*`)

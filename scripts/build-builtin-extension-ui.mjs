@@ -19,6 +19,18 @@ const entries = [
     html: 'react-index.html',
     outDir: 'dist',
   },
+  {
+    name: 'ide-launcher',
+    rootDir: path.join(root, 'electron/extensions/builtin/ide-launcher'),
+    html: 'react-index.html',
+    outDir: 'dist',
+  },
+  {
+    name: 'tps-monitor',
+    rootDir: path.join(root, 'electron/extensions/builtin/tps-monitor'),
+    html: 'react-index.html',
+    outDir: 'dist',
+  },
 ]
 
 for (const entry of entries) {

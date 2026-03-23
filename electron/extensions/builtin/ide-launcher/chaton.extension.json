@@ -25,7 +25,7 @@
       {
         "viewId": "ide-launcher.widget",
         "title": "IDE Launcher Widget",
-        "webviewUrl": "chaton-extension://@chaton/ide-launcher/index.html",
+        "webviewUrl": "chaton-extension://@chaton/ide-launcher/dist/react-index.html",
         "initialRoute": "/"
       }
     ]

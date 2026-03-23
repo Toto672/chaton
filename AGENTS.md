@@ -21,7 +21,7 @@ Chatons wraps this with its own:
 - Per-conversation runtime management
 - SQLite database for app-level persistence
 - React UI and workspace state
-- Extension runtime for third-party integrations
+- Extension runtime for third-party integrations, including packaged extension web apps and topbar widgets served from `chaton-extension://<extension-id>/...`
 
 ---
 

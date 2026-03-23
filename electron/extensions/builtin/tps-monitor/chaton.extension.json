@@ -26,7 +26,7 @@
       {
         "viewId": "tps-monitor.widget",
         "title": "TPS Monitor",
-        "webviewUrl": "chaton-extension://@chaton/tps-monitor/widget.html",
+        "webviewUrl": "chaton-extension://@chaton/tps-monitor/dist/react-index.html",
         "initialRoute": "/"
       }
     ]

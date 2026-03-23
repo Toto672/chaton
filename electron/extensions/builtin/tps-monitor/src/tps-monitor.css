@@ -1,0 +1,79 @@
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.tps-widget {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ce-fg, #0f172a);
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  user-select: none;
+  transition: background 150ms ease;
+}
+
+.tps-widget:hover {
+  background: color-mix(in srgb, var(--ce-fg, #0f172a) 8%, transparent);
+}
+
+.tsp-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ce-muted, #6488c3);
+  flex-shrink: 0;
+}
+
+.tsp-dot.streaming {
+  background: var(--ce-accent, #38bdf8);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.tps-value {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ce-fg, #0f172a);
+  min-width: 24px;
+  text-align: right;
+}
+
+.tps-value.medium {
+  color: var(--ce-warning, #f59e0b);
+}
+
+.tps-value.high {
+  color: var(--ce-success, #22c55e);
+}
+
+.tps-value.streaming {
+  color: var(--ce-accent, #38bdf8);
+}
+
+.tps-unit {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ce-muted, #6b7280);
+  text-transform: uppercase;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
