@@ -49,13 +49,8 @@ function SubFolderRow({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const deleteTimerRef = useRef<number | null>(null)
-
-  // Auto-expand subfolder when a project inside it is selected
-  useEffect(() => {
-    if (!expanded && state.selectedProjectId && folder.projects.some((p) => p.id === state.selectedProjectId)) {
-      setExpanded(true)
-    }
-  }, [state.selectedProjectId, folder.projects, expanded])
+  const hasSelectedProject = !!state.selectedProjectId && folder.projects.some((p) => p.id === state.selectedProjectId)
+  const isExpanded = expanded || hasSelectedProject
 
   useEffect(() => {
     if (editing) {
@@ -105,12 +100,12 @@ function SubFolderRow({
           type="button"
           className="pf-subfolder-toggle"
           onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
+          aria-expanded={isExpanded}
           whileTap={{ scale: 0.97 }}
         >
           <motion.span
             className="pf-subfolder-chevron"
-            animate={{ rotate: expanded ? 90 : 0 }}
+            animate={{ rotate: isExpanded ? 90 : 0 }}
             transition={{ duration: 0.15 }}
           >
             <ChevronRight className="h-3 w-3" />
@@ -178,7 +173,7 @@ function SubFolderRow({
         </div>
       </div>
       <AnimatePresence initial={false}>
-        {expanded && (
+        {isExpanded && (
           <motion.div
             className="pf-subfolder-list"
             initial={{ height: 0, opacity: 0 }}
