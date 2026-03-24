@@ -27,7 +27,6 @@ import type {
   CloudRuntimeAccessGrant,
 } from '../../packages/domain/index.js'
 import {
-  buildOrganizationInviteEmail,
   desktopAuthRequestTtlSeconds,
   oidcClientId,
   oidcClientSecret,
@@ -53,7 +52,7 @@ import { getAuthedWebUser, requireAuthedUser, requireInternalService, requireSub
 import { escapeHtml, handleCorsPreflight, html, json, readFormBody, readJsonBody, redirect } from './http.ts'
 import { handleWebAuthRoute } from './web-auth.ts'
 import { handleAdminRoute } from './admin-routes.ts'
-import { sendMail } from './mailer.ts'
+import { buildOrganizationInviteEmail, sendMail } from './mailer.ts'
 
 async function renderAuthorizePage(params: {
   scope: string
