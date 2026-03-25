@@ -1996,8 +1996,15 @@ export function diffuserTitreConversation(
     title,
     updatedAt: new Date().toISOString(),
   };
-  for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send("workspace:conversationUpdated", payload);
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    const webContents = win.webContents;
+    if (webContents.isDestroyed()) continue;
+    try {
+      webContents.send("workspace:conversationUpdated", payload);
+    } catch (err) {
+      console.warn("[updateConversationTitle] Failed to send to window:", err);
+    }
   }
   return payload;
 }

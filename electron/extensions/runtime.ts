@@ -352,14 +352,19 @@ export function emitHostEvent(
 
   // Broadcast event to all renderer windows so webviews can receive real-time updates
   if (subscribedExtensionIds.length > 0) {
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send("chaton:extension:event", {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed()) continue;
+      const webContents = win.webContents;
+      if (webContents.isDestroyed()) continue;
+      try {
+        webContents.send("chaton:extension:event", {
           topic,
           payload,
           publishedAt: now,
           subscribedExtensionIds,
         });
+      } catch (err) {
+        console.warn("[broadcastExtensionEvent] Failed to send to window:", err);
       }
     }
   }

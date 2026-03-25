@@ -42,7 +42,14 @@ export function createHostCall(emitHostEvent: HostEventEmitter) {
                 }
               : undefined
           for (const win of BrowserWindow.getAllWindows()) {
-            win.webContents.send('extension:notification', { title, body, link, meta })
+            if (win.isDestroyed()) continue;
+            const webContents = win.webContents;
+            if (webContents.isDestroyed()) continue;
+            try {
+              webContents.send('extension:notification', { title, body, link, meta });
+            } catch (err) {
+              console.warn("[hostCall extension:notification] Failed to send to window:", err);
+            }
           }
           return { ok: true }
         }
@@ -290,7 +297,14 @@ export function createHostCall(emitHostEvent: HostEventEmitter) {
           const viewId = typeof params?.viewId === 'string' ? params.viewId : null
           if (!viewId) return { ok: false, error: { code: 'invalid_args', message: 'viewId is required' } }
           for (const win of BrowserWindow.getAllWindows()) {
-            win.webContents.send('extensions:openMainView', { extensionId, viewId })
+            if (win.isDestroyed()) continue;
+            const webContents = win.webContents;
+            if (webContents.isDestroyed()) continue;
+            try {
+              webContents.send('extensions:openMainView', { extensionId, viewId });
+            } catch (err) {
+              console.warn("[hostCall open.mainView] Failed to send to window:", err);
+            }
           }
           return { ok: true }
         }

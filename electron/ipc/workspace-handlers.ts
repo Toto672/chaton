@@ -428,8 +428,15 @@ async function syncConnectedCloudInstances(): Promise<void> {
 }
 
 function emitCloudRealtimeEvent(payload: unknown): void {
-  for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send("cloud:realtimeEvent", payload);
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    const webContents = win.webContents;
+    if (webContents.isDestroyed()) continue;
+    try {
+      webContents.send("cloud:realtimeEvent", payload);
+    } catch (err) {
+      console.warn("[emitCloudRealtimeEvent] Failed to send to window:", err);
+    }
   }
 }
 
@@ -581,11 +588,18 @@ async function connectCloudRealtime(instanceId: string): Promise<void> {
             replayEvent.conversationId &&
             replayEvent.payload?.event
           ) {
-            for (const window of BrowserWindow.getAllWindows()) {
-              window.webContents.send("pi:event", {
-                conversationId: replayEvent.conversationId,
-                event: replayEvent.payload.event,
-              });
+            for (const win of BrowserWindow.getAllWindows()) {
+              if (win.isDestroyed()) continue;
+              const webContents = win.webContents;
+              if (webContents.isDestroyed()) continue;
+              try {
+                webContents.send("pi:event", {
+                  conversationId: replayEvent.conversationId,
+                  event: replayEvent.payload.event,
+                });
+              } catch (err) {
+                console.warn("[replayConversationEvent] Failed to send to window:", err);
+              }
             }
           }
           emitCloudRealtimeEvent({
@@ -645,11 +659,18 @@ async function connectCloudRealtime(instanceId: string): Promise<void> {
         parsed.conversationId &&
         parsed.payload?.event
       ) {
-        for (const window of BrowserWindow.getAllWindows()) {
-          window.webContents.send("pi:event", {
-            conversationId: parsed.conversationId,
-            event: parsed.payload.event,
-          });
+        for (const win of BrowserWindow.getAllWindows()) {
+          if (win.isDestroyed()) continue;
+          const webContents = win.webContents;
+          if (webContents.isDestroyed()) continue;
+          try {
+            webContents.send("pi:event", {
+              conversationId: parsed.conversationId,
+              event: parsed.payload.event,
+            });
+          } catch (err) {
+            console.warn("[socket message] Failed to send pi:event to window:", err);
+          }
         }
       }
 
@@ -1524,18 +1545,32 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         event.conversationId.startsWith("__channel_subagent__");
       if (!isEphemeral) {
         for (const win of BrowserWindow.getAllWindows()) {
-          win.webContents.send("memory:saving", {
-            conversationId: event.conversationId,
-            status: "started",
-          });
+          if (win.isDestroyed()) continue;
+          const webContents = win.webContents;
+          if (webContents.isDestroyed()) continue;
+          try {
+            webContents.send("memory:saving", {
+              conversationId: event.conversationId,
+              status: "started",
+            });
+          } catch (err) {
+            console.warn("[memory capture] Failed to send memory:saving (started) to window:", err);
+          }
         }
         const queued = enqueueConversationMemoryCapture(event.conversationId);
         if (!queued.queued) {
           for (const win of BrowserWindow.getAllWindows()) {
-            win.webContents.send("memory:saving", {
-              conversationId: event.conversationId,
-              status: "skipped",
-            });
+            if (win.isDestroyed()) continue;
+            const webContents = win.webContents;
+            if (webContents.isDestroyed()) continue;
+            try {
+              webContents.send("memory:saving", {
+                conversationId: event.conversationId,
+                status: "skipped",
+              });
+            } catch (err) {
+              console.warn("[memory capture] Failed to send memory:saving (skipped) to window:", err);
+            }
           }
         }
 
@@ -3223,8 +3258,15 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         updatedAt: new Date().toISOString(),
         worktreePath,
       };
-      for (const window of BrowserWindow.getAllWindows()) {
-        window.webContents.send("workspace:conversationUpdated", payload);
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (win.isDestroyed()) continue;
+        const webContents = win.webContents;
+        if (webContents.isDestroyed()) continue;
+        try {
+          webContents.send("workspace:conversationUpdated", payload);
+        } catch (err) {
+          console.warn("[enableWorktree] Failed to send workspace:conversationUpdated to window:", err);
+        }
       }
       emitHostEvent("conversation.updated", {
         conversationId,
@@ -3284,8 +3326,15 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         updatedAt: new Date().toISOString(),
         worktreePath: "",
       };
-      for (const window of BrowserWindow.getAllWindows()) {
-        window.webContents.send("workspace:conversationUpdated", payload);
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (win.isDestroyed()) continue;
+        const webContents = win.webContents;
+        if (webContents.isDestroyed()) continue;
+        try {
+          webContents.send("workspace:conversationUpdated", payload);
+        } catch (err) {
+          console.warn("[disableWorktree] Failed to send workspace:conversationUpdated to window:", err);
+        }
       }
       emitHostEvent("conversation.updated", {
         conversationId,
@@ -3355,8 +3404,15 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         updatedAt: new Date().toISOString(),
         accessMode: nextAccessMode,
       };
-      for (const window of BrowserWindow.getAllWindows()) {
-        window.webContents.send("workspace:conversationUpdated", payload);
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (win.isDestroyed()) continue;
+        const webContents = win.webContents;
+        if (webContents.isDestroyed()) continue;
+        try {
+          webContents.send("workspace:conversationUpdated", payload);
+        } catch (err) {
+          console.warn("[setAccessMode] Failed to send workspace:conversationUpdated to window:", err);
+        }
       }
 
       emitHostEvent("conversation.updated", {
@@ -3411,18 +3467,32 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       )
         .then((result) => {
           for (const win of BrowserWindow.getAllWindows()) {
-            win.webContents.send("memory:saving", {
-              conversationId,
-              status: result.stored > 0 ? "completed" : "skipped",
-            });
+            if (win.isDestroyed()) continue;
+            const webContents = win.webContents;
+            if (webContents.isDestroyed()) continue;
+            try {
+              webContents.send("memory:saving", {
+                conversationId,
+                status: result.stored > 0 ? "completed" : "skipped",
+              });
+            } catch (err) {
+              console.warn("[captureConversationMemoryNow] Failed to send memory:saving to window:", err);
+            }
           }
         })
         .catch(() => {
           for (const win of BrowserWindow.getAllWindows()) {
-            win.webContents.send("memory:saving", {
-              conversationId,
-              status: "error",
-            });
+            if (win.isDestroyed()) continue;
+            const webContents = win.webContents;
+            if (webContents.isDestroyed()) continue;
+            try {
+              webContents.send("memory:saving", {
+                conversationId,
+                status: "error",
+              });
+            } catch (err) {
+              console.warn("[captureConversationMemoryNow] Failed to send memory:saving (error) to window:", err);
+            }
           }
         });
       if (conversation.worktree_path && conversation.worktree_path.trim()) {
@@ -4030,15 +4100,22 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         return ensured;
       }
 
-      for (const window of BrowserWindow.getAllWindows()) {
-        window.webContents.send("pi:event", {
-          conversationId,
-          event: {
-            type: "runtime_status",
-            status: "ready",
-            message: "Cloud runtime ready",
-          },
-        });
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (win.isDestroyed()) continue;
+        const webContents = win.webContents;
+        if (webContents.isDestroyed()) continue;
+        try {
+          webContents.send("pi:event", {
+            conversationId,
+            event: {
+              type: "runtime_status",
+              status: "ready",
+              message: "Cloud runtime ready",
+            },
+          });
+        } catch (err) {
+          console.warn("[startSession cloud] Failed to send pi:event to window:", err);
+        }
       }
 
       return { ok: true as const, runtime: "cloud" as const };

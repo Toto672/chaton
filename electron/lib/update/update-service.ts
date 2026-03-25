@@ -374,8 +374,15 @@ export class UpdateService {
                 const progress = Math.round((downloadedBytes / totalBytes) * 100)
                 console.log(`Download progress: ${downloadedBytes}/${totalBytes} bytes (${progress}%)`)
                 // Send progress to all windows
-                for (const window of BrowserWindow.getAllWindows()) {
-                  window.webContents.send('download-progress', progress)
+                for (const win of BrowserWindow.getAllWindows()) {
+                  if (win.isDestroyed()) continue;
+                  const webContents = win.webContents;
+                  if (webContents.isDestroyed()) continue;
+                  try {
+                    webContents.send('download-progress', progress);
+                  } catch (err) {
+                    console.warn("[download progress] Failed to send to window:", err);
+                  }
                 }
               }
             })
@@ -417,8 +424,15 @@ export class UpdateService {
                   console.log(`Update file validated and moved to ${filePath}`)
                   
                   // Ensure final progress is 100%
-                  for (const window of BrowserWindow.getAllWindows()) {
-                    window.webContents.send('download-progress', 100)
+                  for (const win of BrowserWindow.getAllWindows()) {
+                    if (win.isDestroyed()) continue;
+                    const webContents = win.webContents;
+                    if (webContents.isDestroyed()) continue;
+                    try {
+                      webContents.send('download-progress', 100);
+                    } catch (err) {
+                      console.warn("[update complete] Failed to send download-progress to window:", err);
+                    }
                   }
                   
                   resolve()
