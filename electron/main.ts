@@ -131,7 +131,7 @@ function handleDeepLink(url: string) {
 const userDataPath = path.join(app.getPath('appData'), 'Chatons');
 app.setPath('userData', userDataPath);
 
-const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
+const isDev = Boolean(process.env.VITE_DEV_SERVER_URL) && !app.isPackaged;
 const appIconPath = path.join(__dirname, "../build/icons/icon.png");
 
 // Variable to keep track of the main window
@@ -262,13 +262,16 @@ async function createWindow() {
     console.error('Error setting main window for shortcut manager:', error);
   }
 
+  const indexPath = path.join(__dirname, "../../dist/index.html");
+  console.log(`[DEBUG] isDev=${isDev}, __dirname=${__dirname}, indexPath=${indexPath}`);
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(
       `${process.env.VITE_DEV_SERVER_URL}?language=${languagePreference}`,
     );
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    mainWindow.loadFile(path.join(__dirname, "../dist/index.html"), {
+    console.log(`[DEBUG] Loading index.html from: ${indexPath}`);
+    mainWindow.loadFile(indexPath, {
       query: { language: languagePreference },
     });
   }
