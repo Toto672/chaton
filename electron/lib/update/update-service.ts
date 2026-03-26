@@ -353,7 +353,7 @@ export class UpdateService {
       let redirectCount = 0
       const maxRedirects = 5
       let settled = false
-      let activeRequest: http.ClientRequest | https.ClientRequest | null = null
+      let activeRequest: http.ClientRequest | null = null
       let idleTimer: NodeJS.Timeout | null = null
 
       const safeCleanupTempFile = () => {

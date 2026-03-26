@@ -133,6 +133,7 @@ import { getSentryTelemetry } from "../lib/telemetry/sentry.js";
 import { OAuthProvider } from "@mariozechner/pi-ai";
 import { getOAuthProvider } from "@mariozechner/pi-ai/oauth";
 import path from "node:path";
+import os from "node:os";
 import { spawn } from "node:child_process";
 import { buildHostToolEnv, resolveHostExecutable } from "../lib/env/host-env.js";
 const { app, BrowserWindow, contentTracing, dialog, ipcMain, shell } = electron;
@@ -3859,7 +3860,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       const runId = crypto.randomUUID();
       const startedAt = new Date().toISOString();
       const runCwd = target.cwd ?? repo.repoPath;
-      const hostEnv = buildHostTerminalEnv(runCwd);
+      const hostEnv = buildHostToolEnv(runCwd);
       const commandPreview = target.isCustom
         ? (target.commandText ?? target.label)
         : [target.command, ...target.args].join(" ");
