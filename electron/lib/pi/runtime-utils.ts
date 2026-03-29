@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -99,7 +98,13 @@ export function maskValue(value: string, start = 4, end = 2): string {
 }
 
 export function fingerprint(value: string): string {
-  return createHash("sha256").update(value).digest("hex").slice(0, 10);
+  // Avoid hashing raw secrets in diagnostics; report only simple, non-cryptographic metadata.
+  const trimmed = value.trim();
+  let checksum = 0;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    checksum = (checksum + trimmed.charCodeAt(index) * (index + 1)) % 1_000_000_007;
+  }
+  return `len${trimmed.length}-sum${checksum.toString(16)}`;
 }
 
 export function extractNestedErrorMessage(
