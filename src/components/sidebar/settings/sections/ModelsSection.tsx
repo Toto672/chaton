@@ -69,14 +69,18 @@ export function ModelsSection({
   ]
 
   return (
-    <section className="settings-card">
+    <section className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#111827]">
       {/* Tab navigation */}
-      <div className="settings-tab-nav">
+      <div className="mb-4 flex flex-wrap gap-2 border-b border-black/10 pb-3 dark:border-white/10">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
-            className={`settings-tab-btn ${activeTab === tab.id ? 'settings-tab-btn-active' : ''}`}
+            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              activeTab === tab.id
+                ? 'bg-[#2563eb] text-white dark:bg-[#3b82f6]'
+                : 'bg-black/[0.04] text-[#374151] hover:bg-black/[0.08] dark:bg-white/[0.06] dark:text-[#d1d5db] dark:hover:bg-white/[0.1]'
+            }`}
             onClick={() => setActiveTab(tab.id)}
           >
             {tab.label}
@@ -86,7 +90,7 @@ export function ModelsSection({
 
       {/* Providers tab */}
       {activeTab === 'providers' && (
-        <div className="settings-tab-content">
+        <div className="space-y-4">
           <ProvidersModelsSection
             modelsJson={modelsJson}
             setModelsJson={setModelsJson}
@@ -110,13 +114,17 @@ export function ModelsSection({
 
       {/* Memory model tab */}
       {activeTab === 'memory' && (
-        <div className="settings-tab-content">
-          <h4 className="settings-subtitle">{t('settings.memory.title')}</h4>
-          <div className="settings-card-note" style={{ marginBottom: '12px' }}>
+        <div className="space-y-4">
+          <h4 className="text-sm font-semibold text-[#111827] dark:text-[#f9fafb]">
+            {t('settings.memory.title')}
+          </h4>
+          <div className="mb-3 text-sm text-[#6b7280] dark:text-[#9ca3af]">
             {t('settings.memory.desc')}
           </div>
-          <div className="settings-row-wrap">
-            <span className="settings-label">{t('settings.memory.modelLabel')}</span>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-sm font-medium text-[#374151] dark:text-[#d1d5db]">
+              {t('settings.memory.modelLabel')}
+            </span>
             {loaded ? (
               <MemoryModelPicker
                 modelKey={memoryModelKey}
@@ -126,7 +134,7 @@ export function ModelsSection({
                 }}
               />
             ) : (
-              <div className="text-sm text-[#9ca3af]">{t('Chargement...')}</div>
+              <div className="text-sm text-[#9ca3af] dark:text-[#6b7280]">{t('Chargement...')}</div>
             )}
           </div>
         </div>
@@ -134,12 +142,14 @@ export function ModelsSection({
 
       {/* Autocomplete model tab */}
       {activeTab === 'autocomplete' && (
-        <div className="settings-tab-content">
-          <h4 className="settings-subtitle">{t('settings.autocomplete.title')}</h4>
-          <div className="settings-card-note" style={{ marginBottom: '12px' }}>
+        <div className="space-y-4">
+          <h4 className="text-sm font-semibold text-[#111827] dark:text-[#f9fafb]">
+            {t('settings.autocomplete.title')}
+          </h4>
+          <div className="mb-3 text-sm text-[#6b7280] dark:text-[#9ca3af]">
             {t('settings.autocomplete.desc')}
           </div>
-          <div className="settings-row-wrap">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             {loaded ? (
               <AutocompleteModelPicker
                 enabled={autocompleteEnabled}
@@ -154,7 +164,7 @@ export function ModelsSection({
                 }}
               />
             ) : (
-              <div className="text-sm text-[#9ca3af]">{t('Chargement...')}</div>
+              <div className="text-sm text-[#9ca3af] dark:text-[#6b7280]">{t('Chargement...')}</div>
             )}
           </div>
         </div>
@@ -162,13 +172,17 @@ export function ModelsSection({
 
       {/* Title model tab */}
       {activeTab === 'title' && (
-        <div className="settings-tab-content">
-          <h4 className="settings-subtitle">{t('settings.title.title')}</h4>
-          <div className="settings-card-note" style={{ marginBottom: '12px' }}>
+        <div className="space-y-4">
+          <h4 className="text-sm font-semibold text-[#111827] dark:text-[#f9fafb]">
+            {t('settings.title.title')}
+          </h4>
+          <div className="mb-3 text-sm text-[#6b7280] dark:text-[#9ca3af]">
             {t('settings.title.desc')}
           </div>
-          <div className="settings-row-wrap">
-            <span className="settings-label">{t('settings.title.modelLabel')}</span>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-sm font-medium text-[#374151] dark:text-[#d1d5db]">
+              {t('settings.title.modelLabel')}
+            </span>
             {loaded ? (
               <TitleModelPicker
                 modelKey={titleModelKey}
@@ -178,7 +192,7 @@ export function ModelsSection({
                 }}
               />
             ) : (
-              <div className="text-sm text-[#9ca3af]">{t('Chargement...')}</div>
+              <div className="text-sm text-[#9ca3af] dark:text-[#6b7280]">{t('Chargement...')}</div>
             )}
           </div>
         </div>

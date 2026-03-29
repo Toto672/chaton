@@ -35,7 +35,7 @@ import type {
   RpcExtensionUiResponse,
 } from '../rpc'
 import { WorkspaceContext } from './context'
-import { applyPiEvent, clearPendingMessageUpdatesForConversation, mergeSnapshot } from './pi-events'
+import { applyPiEvent, clearPendingMessageUpdatesForConversation, flushPendingMessageUpdates, mergeSnapshot } from './pi-events'
 import {
   type Action,
   buildSendFailureNotice,
@@ -890,6 +890,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         return
       }
       
+      // Flush any pending message updates before replacing messages with snapshot.
+      // This ensures that any messages that arrived via message_update/agent_end
+      // but haven't been flushed yet are processed before we replace the array.
+      flushPendingMessageUpdates(dispatch)
       mergeSnapshot(dispatch, conversationId, snapshot)
     } finally {
       clearTimeout(timeoutId)

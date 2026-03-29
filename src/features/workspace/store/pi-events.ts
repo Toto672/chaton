@@ -39,7 +39,7 @@ function getMessageId(value: JsonValue): string | null {
   return typeof record.id === 'string' && record.id.length > 0 ? record.id : null
 }
 
-function flushPendingMessageUpdates(dispatch: Dispatch<Action>) {
+export function flushPendingMessageUpdates(dispatch: Dispatch<Action>) {
   messageUpdateFlushHandle = null
 
   for (const [conversationId, messagesById] of pendingMessageUpdatesByConversation) {

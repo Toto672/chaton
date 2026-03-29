@@ -808,11 +808,44 @@ export function piReducer(piState: PiStoreState, action: Action): PiStoreState {
     case 'setPiMessages': {
       const piByConversation = ensureRuntimeMap(piState, action.payload.conversationId)
       const current = piByConversation[action.payload.conversationId]
+      const incomingMessages = action.payload.messages
+      
+      // If there are no existing messages, just use the incoming ones
+      if (!current.messages || current.messages.length === 0) {
+        return {
+          ...piState,
+          piByConversation: {
+            ...piByConversation,
+            [action.payload.conversationId]: { ...current, messages: incomingMessages },
+          },
+        }
+      }
+      
+      // Build a set of message IDs from incoming messages
+      const incomingIds = new Set<string>()
+      for (const msg of incomingMessages) {
+        const id = getPiMessageId(msg)
+        if (id) {
+          incomingIds.add(id)
+        }
+      }
+      
+      // Keep existing messages that are NOT in the incoming list.
+      // This preserves any pending messages that arrived via message_update/agent_end
+      // but haven't been flushed before setPiMessages was called.
+      // These messages are appended at the end since they are newer than the snapshot.
+      const extraMessages = current.messages.filter((msg) => {
+        const id = getPiMessageId(msg)
+        // Keep if no ID or ID not in incoming
+        return !id || !incomingIds.has(id)
+      })
+      
+      const mergedMessages = [...incomingMessages, ...extraMessages]
       return {
         ...piState,
         piByConversation: {
           ...piByConversation,
-          [action.payload.conversationId]: { ...current, messages: action.payload.messages },
+          [action.payload.conversationId]: { ...current, messages: mergedMessages },
         },
       }
     }

@@ -127,18 +127,21 @@ export function ProvidersSection({
   }
 
   return (
-    <section className="settings-card">
+    <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
       {Object.entries(providers).map(([name, cfg]) => {
         const provider = (cfg ?? {}) as Record<string, unknown>
         const status = discoveryStatus[name]
         const connStatus = testStatus[name]
         return (
-          <div key={name} className="settings-subcard">
-            <div className="settings-subtitle">{name}</div>
-            <label className="settings-row-wrap">
-              <span className="settings-label">api</span>
+          <div
+            key={name}
+            className="mb-3 rounded-xl border border-neutral-200 bg-neutral-50 p-4 last:mb-0 dark:border-neutral-800 dark:bg-neutral-900/60"
+          >
+            <div className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-100">{name}</div>
+            <label className="mb-3 flex flex-col gap-1.5">
+              <span className="text-xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">api</span>
               <input
-                className="settings-input"
+                className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100 dark:focus:border-neutral-500 dark:focus:ring-neutral-800"
                 value={String(provider.api ?? '')}
                 onChange={(e) =>
                   setModels({
@@ -148,10 +151,10 @@ export function ProvidersSection({
                 }
               />
             </label>
-            <label className="settings-row-wrap">
-              <span className="settings-label">baseUrl</span>
+            <label className="mb-3 flex flex-col gap-1.5">
+              <span className="text-xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">baseUrl</span>
               <input
-                className="settings-input"
+                className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100 dark:focus:border-neutral-500 dark:focus:ring-neutral-800"
                 value={String(provider.baseUrl ?? '')}
                 onChange={(e) =>
                   setModels({
@@ -170,11 +173,11 @@ export function ProvidersSection({
                 })
               }
             />
-            <div className="settings-row-wrap">
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  className="settings-action-secondary"
+                  className="inline-flex items-center justify-center rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-200 dark:hover:bg-neutral-900"
                   onClick={() => handleTestConnection(name)}
                   disabled={testingProvider === name || refreshingProvider === name}
                 >
@@ -182,7 +185,7 @@ export function ProvidersSection({
                 </button>
                 <button
                   type="button"
-                  className="settings-action-secondary"
+                  className="inline-flex items-center justify-center rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-200 dark:hover:bg-neutral-900"
                   onClick={() => handleRefreshModels(name)}
                   disabled={refreshingProvider === name || testingProvider === name}
                 >
@@ -191,22 +194,36 @@ export function ProvidersSection({
               </div>
             </div>
             {connStatus && (
-              <div style={{ marginTop: '8px' }}>
-                <div className={`settings-muted ${connStatus.ok ? 'ok' : 'error'}`}>
+              <div className="mt-2">
+                <div
+                  className={connStatus.ok
+                    ? 'text-sm text-emerald-700 dark:text-emerald-400'
+                    : 'text-sm text-red-700 dark:text-red-400'}
+                >
                   <strong>Ping:</strong> {connStatus.message}
                   {connStatus.ok && connStatus.latency !== undefined && ` (${connStatus.latency}ms)`}
                 </div>
               </div>
             )}
             {status && (
-              <span className={`settings-muted ${status.ok ? 'ok' : 'error'}`} style={{ marginLeft: '0px', display: 'block', marginTop: '4px' }}>
+              <span
+                className={status.ok
+                  ? 'mt-1 block text-sm text-emerald-700 dark:text-emerald-400'
+                  : 'mt-1 block text-sm text-red-700 dark:text-red-400'}
+              >
                 <strong>Models:</strong> {status.message}
               </span>
             )}
           </div>
         )
       })}
-      <button type="button" className="settings-action" onClick={onSave}>{t('Sauvegarder')}</button>
+      <button
+        type="button"
+        className="inline-flex items-center justify-center rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
+        onClick={onSave}
+      >
+        {t('Sauvegarder')}
+      </button>
     </section>
   )
 }

@@ -302,6 +302,12 @@ export function replaceConversationMessagesCache(
   )
 
   const transaction = db.transaction(() => {
+    // Snapshot caching can race with conversation deletion; skip stale writes.
+    const conversationExists = db
+      .prepare('SELECT 1 FROM conversations WHERE id = ?')
+      .get(conversationId) as { 1: number } | undefined
+    if (!conversationExists) return
+
     deleteStmt.run(conversationId)
     for (const message of messages) {
       insertStmt.run(message.id, conversationId, message.role, message.payloadJson, now, now)

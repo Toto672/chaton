@@ -106,36 +106,39 @@ export function ShortcutsSection() {
   }
 
   return (
-    <div className="settings-section">
-      <div className="settings-section-header">
-        <div className="settings-section-icon">
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200">
           <Keyboard className="h-5 w-5" />
         </div>
-        <h2 className="settings-section-title">{t('Raccourcis clavier')}</h2>
-        <p className="settings-section-description">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('Raccourcis clavier')}</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
           {t('Gérez les raccourcis clavier pour Chatons')}
         </p>
       </div>
 
-      <div className="settings-section-content">
+      <div>
         {shortcuts.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="py-8 text-center text-gray-500 dark:text-gray-400">
             {t('Aucun raccourci configuré')}
           </div>
         ) : (
           <div className="space-y-4">
             {shortcuts.map((shortcut) => (
-              <div key={shortcut.id} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex-1 min-w-0">
+              <div
+                key={shortcut.id}
+                className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900"
+              >
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center space-x-2">
-                    <span className="font-medium truncate">
+                    <span className="truncate font-medium text-gray-900 dark:text-gray-100">
                       {getActionName(shortcut.actionId)}
                     </span>
-                    <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                    <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
                       {shortcut.scope}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-500 mt-1">
+                  <div className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     {shortcut.accelerator}
                   </div>
                 </div>
@@ -150,7 +153,7 @@ export function ShortcutsSection() {
                       const updatedShortcuts = await getAllShortcuts()
                       setShortcuts(updatedShortcuts)
                     }}
-                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:focus:ring-blue-400"
                   />
                   <Button
                     variant="ghost"
@@ -166,17 +169,20 @@ export function ShortcutsSection() {
         )}
 
         {isDialogOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium">{t('Modifier le raccourci')}</h3>
-                <button onClick={() => setIsDialogOpen(false)} className="text-gray-500 hover:text-gray-700">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">{t('Modifier le raccourci')}</h3>
+                <button
+                  onClick={() => setIsDialogOpen(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
                   <X className="h-5 w-5" />
                 </button>
               </div>
               <div className="space-y-4">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <label htmlFor="accelerator" className="text-right">
+                  <label htmlFor="accelerator" className="text-right text-sm text-gray-700 dark:text-gray-300">
                     {t('Raccourci')}
                   </label>
                   <div className="col-span-3">
@@ -201,14 +207,14 @@ export function ShortcutsSection() {
                       </Button>
                     </div>
                     {recordedKeys.length > 0 && (
-                      <div className="text-sm text-gray-500 mt-1">
+                      <div className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                         {recordedKeys.join(' + ')}
                       </div>
                     )}
                   </div>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <label htmlFor="scope" className="text-right">
+                  <label htmlFor="scope" className="text-right text-sm text-gray-700 dark:text-gray-300">
                     {t('Portée')}
                   </label>
                   <select
@@ -217,14 +223,14 @@ export function ShortcutsSection() {
                     onChange={(e) => 
                       setEditData(prev => ({ ...prev, scope: e.target.value as 'foreground' | 'global' }))
                     }
-                    className="col-span-3 p-2 border rounded"
+                    className="col-span-3 rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400/20"
                   >
                     <option value="foreground">{t('Premier plan (fenêtre active)')}</option>
                     <option value="global">{t('Global (système)')}</option>
                   </select>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <label htmlFor="enabled" className="text-right">
+                  <label htmlFor="enabled" className="text-right text-sm text-gray-700 dark:text-gray-300">
                     {t('Activé')}
                   </label>
                   <div className="col-span-3 flex items-center">
@@ -235,12 +241,12 @@ export function ShortcutsSection() {
                       onChange={(e) => 
                         setEditData(prev => ({ ...prev, enabled: e.target.checked }))
                       }
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:focus:ring-blue-400"
                     />
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end space-x-2 mt-6">
+              <div className="mt-6 flex justify-end space-x-2">
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                   {t('Annuler')}
                 </Button>

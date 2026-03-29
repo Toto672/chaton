@@ -1426,12 +1426,16 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       emitHostEvent("conversation.agent.ended", {
         conversationId: event.conversationId,
       });
+      // Save messages to cache asynchronously after agent_end.
+      // This ensures the database cache is updated even if other operations fail.
       void deps.piRuntimeManager
         .getSnapshot(event.conversationId)
-        .then((snapshot) =>
-          deps.cacheMessagesFromSnapshot(event.conversationId, snapshot),
-        )
-        .catch(() => undefined);
+        .then((snapshot) => {
+          deps.cacheMessagesFromSnapshot(event.conversationId, snapshot);
+        })
+        .catch((err) => {
+          console.warn("[agent_end] Failed to cache messages from snapshot:", err);
+        });
 
       // Queue structured memory capture for normal conversations.
       const convForMemory = findConversationById(getDb(), event.conversationId);

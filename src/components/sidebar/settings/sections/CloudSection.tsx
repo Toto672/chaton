@@ -27,6 +27,16 @@ function formatDate(value: string): string {
   return date.toLocaleString()
 }
 
+const cardClassName = 'rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950'
+const subcardClassName = 'rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60'
+const cardTitleClassName = 'text-base font-semibold text-zinc-900 dark:text-zinc-100'
+const smallTitleClassName = 'text-sm font-semibold text-zinc-900 dark:text-zinc-100'
+const noteClassName = 'text-sm text-zinc-600 dark:text-zinc-400'
+const labelClassName = 'text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400'
+const inputClassName = 'w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:border-zinc-500 dark:focus:ring-zinc-800'
+const primaryButtonClassName = 'inline-flex items-center justify-center rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200'
+const secondaryButtonClassName = 'inline-flex items-center justify-center rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800'
+
 function PlanRow({
   plan,
   onUpdatePlan,
@@ -39,29 +49,30 @@ function PlanRow({
   const [isDefault, setIsDefault] = useState(Boolean(plan.isDefault))
 
   return (
-    <div className="settings-list-row" style={{ alignItems: 'flex-start', gap: '16px' }}>
-      <div className="settings-mono" style={{ minWidth: '80px', paddingTop: '10px' }}>{plan.id}</div>
-      <label className="settings-row-wrap" style={{ minWidth: '180px' }}>
-        <span className="settings-label">Label</span>
+    <div className="flex flex-wrap items-start gap-4 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
+      <div className="min-w-[80px] pt-2.5 font-mono text-xs text-zinc-600 dark:text-zinc-400">{plan.id}</div>
+      <label className="grid min-w-[180px] gap-1.5">
+        <span className={labelClassName}>Label</span>
         <input
-          className="settings-input"
+          className={inputClassName}
           value={label}
           onChange={(event) => setLabel(event.target.value)}
         />
       </label>
-      <label className="settings-row-wrap" style={{ minWidth: '180px' }}>
-        <span className="settings-label">Sessions parallèles</span>
+      <label className="grid min-w-[180px] gap-1.5">
+        <span className={labelClassName}>Sessions parallèles</span>
         <input
-          className="settings-input"
+          className={inputClassName}
           type="number"
           min={0}
           value={parallelSessionsLimit}
           onChange={(event) => setParallelSessionsLimit(event.target.value)}
         />
       </label>
-      <label className="settings-toggle-row" style={{ minWidth: '140px' }}>
-        <span className="settings-label">Plan par défaut</span>
+      <label className="flex min-w-[140px] items-center gap-3 pt-6">
+        <span className={labelClassName}>Plan par défaut</span>
         <input
+          className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-300 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-zinc-700"
           type="checkbox"
           checked={isDefault}
           onChange={(event) => setIsDefault(event.target.checked)}
@@ -69,7 +80,7 @@ function PlanRow({
       </label>
       <button
         type="button"
-        className="settings-action"
+        className={primaryButtonClassName}
         onClick={() =>
           void onUpdatePlan(plan.id, {
             label,
@@ -104,22 +115,22 @@ function UserRow({
   const [grantDays, setGrantDays] = useState('30')
 
   return (
-    <div className="settings-list-row" style={{ alignItems: 'flex-start', gap: '16px' }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="settings-card-title" style={{ fontSize: '14px' }}>{user.displayName}</div>
-        <div className="settings-card-note">{user.email}</div>
-        <div className="settings-card-note">Créé le {formatDate(user.createdAt)}</div>
+    <div className="flex flex-wrap items-start gap-4 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
+      <div className="min-w-0 flex-1">
+        <div className={smallTitleClassName}>{user.displayName}</div>
+        <div className={noteClassName}>{user.email}</div>
+        <div className={noteClassName}>Créé le {formatDate(user.createdAt)}</div>
         {user.complimentaryGrant ? (
-          <div className="settings-card-note">
+          <div className={noteClassName}>
             Allocation admin active: {user.complimentaryGrant.plan.label}
             {user.complimentaryGrant.expiresAt ? ` jusqu'au ${formatDate(user.complimentaryGrant.expiresAt)}` : ' sans expiration'}
           </div>
         ) : null}
       </div>
-      <label className="settings-row-wrap" style={{ minWidth: '160px' }}>
-        <span className="settings-label">Plan</span>
+      <label className="grid min-w-[160px] gap-1.5">
+        <span className={labelClassName}>Plan</span>
         <select
-          className="settings-input"
+          className={inputClassName}
           value={plan}
           onChange={(event) => setPlan(event.target.value as CloudSubscriptionPlan)}
         >
@@ -130,9 +141,10 @@ function UserRow({
           ))}
         </select>
       </label>
-      <label className="settings-toggle-row" style={{ minWidth: '120px' }}>
-        <span className="settings-label">Admin</span>
+      <label className="flex min-w-[120px] items-center gap-3 pt-6">
+        <span className={labelClassName}>Admin</span>
         <input
+          className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-300 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:focus:ring-zinc-700"
           type="checkbox"
           checked={isAdmin}
           onChange={(event) => setIsAdmin(event.target.checked)}
@@ -140,16 +152,16 @@ function UserRow({
       </label>
       <button
         type="button"
-        className="settings-action"
+        className={primaryButtonClassName}
         onClick={() => void onUpdateUser(user.id, { subscriptionPlan: plan, isAdmin })}
       >
         Sauvegarder
       </button>
-      <div className="settings-row-wrap" style={{ minWidth: '320px' }}>
-        <span className="settings-label">Allocation manuelle</span>
-        <div style={{ display: 'grid', gap: '8px' }}>
+      <div className="grid min-w-[320px] gap-1.5">
+        <span className={labelClassName}>Allocation manuelle</span>
+        <div className="grid gap-2">
           <select
-            className="settings-input"
+            className={inputClassName}
             value={grantPlan}
             onChange={(event) => setGrantPlan(event.target.value as CloudSubscriptionPlan)}
           >
@@ -159,9 +171,9 @@ function UserRow({
               </option>
             ))}
           </select>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div className="flex items-center gap-2">
             <select
-              className="settings-input"
+              className={inputClassName}
               value={grantMode}
               onChange={(event) => setGrantMode(event.target.value as 'unlimited' | 'days')}
             >
@@ -170,7 +182,7 @@ function UserRow({
             </select>
             {grantMode === 'days' ? (
               <input
-                className="settings-input"
+                className={inputClassName}
                 type="number"
                 min={1}
                 value={grantDays}
@@ -181,7 +193,7 @@ function UserRow({
           </div>
           <button
             type="button"
-            className="settings-action-secondary"
+            className={secondaryButtonClassName}
             onClick={() =>
               void onGrantSubscription(user.id, {
                 planId: grantPlan,
@@ -233,29 +245,29 @@ export function CloudSection({ state, onLogin, onSignup, onRefresh, onLogout, on
   // Guard clause for account block - TypeScript narrowing doesn't work inside JSX conditional
   if (!account) {
     return (
-      <div style={{ display: 'grid', gap: '16px' }}>
-        <section className="settings-card">
-          <h3 className="settings-card-title">{t('Compte cloud')}</h3>
-          <div className="settings-card-note" style={{ marginBottom: '12px' }}>
+      <div className="grid gap-4">
+        <section className={cardClassName}>
+          <h3 className={cardTitleClassName}>{t('Compte cloud')}</h3>
+          <div className={`${noteClassName} mb-3`}>
             {cloudStatusText}
           </div>
           {(!hasInstances || hasSessionIssue) && (
-            <div className="settings-actions-row">
-              <button type="button" className="settings-action" onClick={() => void onLogin()}>
+            <div className="flex flex-wrap gap-3">
+              <button type="button" className={primaryButtonClassName} onClick={() => void onLogin()}>
                 Se connecter
               </button>
-              <button type="button" className="settings-action-secondary" onClick={() => void onSignup()}>
+              <button type="button" className={secondaryButtonClassName} onClick={() => void onSignup()}>
                 S'inscrire
               </button>
             </div>
           )}
           {!hasAccount && hasInstances && isAuthenticating && (
-            <div className="settings-card-note" style={{ color: 'var(--color-text-secondary)' }}>
+            <div className={noteClassName}>
               Connexion cloud en cours... Veuillez terminer l'authentification dans votre navigateur.
             </div>
           )}
           {hasSessionIssue && (
-            <div className="settings-card-note" style={{ color: 'var(--color-text-secondary)' }}>
+            <div className={noteClassName}>
               La session cloud est absente, expirée ou invalide. Reconnectez-vous pour continuer.
             </div>
           )}
@@ -265,64 +277,64 @@ export function CloudSection({ state, onLogin, onSignup, onRefresh, onLogout, on
   }
 
   return (
-    <div style={{ display: 'grid', gap: '16px' }}>
-      <section className="settings-card">
-        <h3 className="settings-card-title">{t('Compte cloud')}</h3>
-        <div className="settings-card-note" style={{ marginBottom: '12px' }}>
+    <div className="grid gap-4">
+      <section className={cardClassName}>
+        <h3 className={cardTitleClassName}>{t('Compte cloud')}</h3>
+        <div className={`${noteClassName} mb-3`}>
           {cloudStatusText}
         </div>
         {!hasInstances && (
-          <div className="settings-actions-row">
-            <button type="button" className="settings-action" onClick={() => void onLogin()}>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" className={primaryButtonClassName} onClick={() => void onLogin()}>
               Se connecter
             </button>
-            <button type="button" className="settings-action-secondary" onClick={() => void onSignup()}>
+            <button type="button" className={secondaryButtonClassName} onClick={() => void onSignup()}>
               S'inscrire
             </button>
           </div>
         )}
         {hasAccount && (
           <>
-            <div className="settings-grid">
-              <div className="settings-row-wrap">
-                <span className="settings-label">Nom</span>
-                <div className="settings-card-note">{account!.user.displayName}</div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-1.5">
+                <span className={labelClassName}>Nom</span>
+                <div className={noteClassName}>{account.user.displayName}</div>
               </div>
-              <div className="settings-row-wrap">
-                <span className="settings-label">Email</span>
-                <div className="settings-card-note">{account!.user.email}</div>
+              <div className="grid gap-1.5">
+                <span className={labelClassName}>Email</span>
+                <div className={noteClassName}>{account.user.email}</div>
               </div>
-              <div className="settings-row-wrap">
-                <span className="settings-label">Abonnement</span>
-                <div className="settings-card-note">
-                  {account!.user.subscription.label} · {account!.user.subscription.parallelSessionsLimit} sessions parallèles
+              <div className="grid gap-1.5">
+                <span className={labelClassName}>Abonnement</span>
+                <div className={noteClassName}>
+                  {account.user.subscription.label} · {account.user.subscription.parallelSessionsLimit} sessions parallèles
                 </div>
               </div>
-              <div className="settings-row-wrap">
-                <span className="settings-label">Usage actuel</span>
-                <div className="settings-card-note">
-                  {account!.usage.activeParallelSessions} actives, {account!.usage.remainingParallelSessions} restantes
+              <div className="grid gap-1.5">
+                <span className={labelClassName}>Usage actuel</span>
+                <div className={noteClassName}>
+                  {account.usage.activeParallelSessions} actives, {account.usage.remainingParallelSessions} restantes
                 </div>
               </div>
-              <div className="settings-row-wrap">
-                <span className="settings-label">Rôle</span>
-                <div className="settings-card-note">{account!.user.isAdmin ? 'Admin' : 'Utilisateur'}</div>
+              <div className="grid gap-1.5">
+                <span className={labelClassName}>Rôle</span>
+                <div className={noteClassName}>{account.user.isAdmin ? 'Admin' : 'Utilisateur'}</div>
               </div>
-              <div className="settings-row-wrap">
-                <span className="settings-label">Organisations</span>
-                <div className="settings-card-note">
-                  {account!.organizations.length === 0 ? (
+              <div className="grid gap-1.5">
+                <span className={labelClassName}>Organisations</span>
+                <div className={noteClassName}>
+                  {account.organizations.length === 0 ? (
                     'Aucune'
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      {account!.organizations.map((org) => (
-                        <div key={org.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {org.id === account!.activeOrganizationId && (
-                            <span style={{ color: 'var(--color-accent)', fontWeight: 500 }}>●</span>
+                    <div className="flex flex-col gap-1">
+                      {account.organizations.map((org) => (
+                        <div key={org.id} className="flex items-center gap-2">
+                          {org.id === account.activeOrganizationId && (
+                            <span className="font-medium text-blue-600 dark:text-blue-400">●</span>
                           )}
                           <span>{org.name}</span>
-                          <span style={{ color: 'var(--color-text-secondary)' }}>·</span>
-                          <span style={{ textTransform: 'capitalize' }}>{org.role.replace('_', ' ')}</span>
+                          <span className="text-zinc-400 dark:text-zinc-500">·</span>
+                          <span className="capitalize">{org.role.replace('_', ' ')}</span>
                         </div>
                       ))}
                     </div>
@@ -331,14 +343,25 @@ export function CloudSection({ state, onLogin, onSignup, onRefresh, onLogout, on
               </div>
             </div>
             {hasInstances ? (
-              <div className="settings-cloud-instance-list">
+              <div className="mt-4 grid gap-3">
                 {cloudInstances.map((instance) => (
-                  <div key={instance.id} className={`settings-cloud-instance-card settings-cloud-instance-${instance.connectionStatus}`}>
+                  <div
+                    key={instance.id}
+                    className={`rounded-lg border p-3 ${
+                      instance.connectionStatus === 'connected'
+                        ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30'
+                        : instance.connectionStatus === 'connecting'
+                          ? 'border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30'
+                          : instance.connectionStatus === 'disconnected'
+                            ? 'border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/60'
+                            : 'border-rose-200 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/30'
+                    }`}
+                  >
                     <div>
-                      <div className="settings-card-title" style={{ fontSize: '14px' }}>{instance.name}</div>
-                      <div className="settings-card-note">{instance.baseUrl}</div>
+                      <div className={smallTitleClassName}>{instance.name}</div>
+                      <div className={noteClassName}>{instance.baseUrl}</div>
                     </div>
-                    <div className="settings-card-note">
+                    <div className={`${noteClassName} mt-2`}>
                       {instance.connectionStatus === 'connecting' && instance.userEmail
                         ? 'session connectée, realtime en connexion'
                         : instance.connectionStatus === 'connected'
@@ -354,11 +377,11 @@ export function CloudSection({ state, onLogin, onSignup, onRefresh, onLogout, on
                 ))}
               </div>
             ) : null}
-            <div className="settings-actions-row" style={{ marginTop: '16px' }}>
-              <button type="button" className="settings-action-secondary" onClick={() => void onRefresh()}>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button type="button" className={secondaryButtonClassName} onClick={() => void onRefresh()}>
                 Rafraîchir
               </button>
-              <button type="button" className="settings-action-secondary" onClick={() => void onLogout()}>
+              <button type="button" className={secondaryButtonClassName} onClick={() => void onLogout()}>
                 Se déconnecter
               </button>
             </div>
@@ -366,22 +389,22 @@ export function CloudSection({ state, onLogin, onSignup, onRefresh, onLogout, on
         )}
       </section>
 
-      {account?.user.isAdmin ? (
-        <section className="settings-card">
-          <h3 className="settings-card-title">Administration cloud</h3>
-          <div className="settings-card-note" style={{ marginBottom: '12px' }}>
+      {account.user.isAdmin ? (
+        <section className={cardClassName}>
+          <h3 className={cardTitleClassName}>Administration cloud</h3>
+          <div className={`${noteClassName} mb-3`}>
             Les contrôles d’administration restent disponibles ici, mais le statut cloud quotidien reste visible dans la carte ci-dessus.
           </div>
-          <div className="settings-cloud-admin-grid">
-            <div className="settings-subcard" style={{ display: 'grid', gap: '12px' }}>
-              <div className="settings-card-title" style={{ fontSize: '14px' }}>Plans d’abonnement</div>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <div className={`${subcardClassName} grid gap-3`}>
+              <div className={smallTitleClassName}>Plans d’abonnement</div>
               {plans.map((plan) => (
                 <PlanRow key={plan.id} plan={plan} onUpdatePlan={onUpdatePlan} />
               ))}
             </div>
 
-            <div className="settings-subcard" style={{ display: 'grid', gap: '12px' }}>
-              <div className="settings-card-title" style={{ fontSize: '14px' }}>Utilisateurs</div>
+            <div className={`${subcardClassName} grid gap-3`}>
+              <div className={smallTitleClassName}>Utilisateurs</div>
               {state.cloudAdminUsers.map((user) => (
                 <UserRow key={user.id} user={user} plans={plans} onUpdateUser={onUpdateUser} onGrantSubscription={onGrantSubscription} />
               ))}

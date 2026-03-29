@@ -40,40 +40,8 @@
     @apply my-2 border-t border-[#e4e5ea];
   }
 
-  .settings-tab-nav {
-    @apply flex gap-1 mb-4 p-1 bg-[#f0f1f5] rounded-lg;
-  }
-
-  .settings-tab-btn {
-    @apply flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors text-[#5c5e67] hover:text-[#2c2d34];
-  }
-
-  .settings-tab-btn-active {
-    @apply bg-white text-[#2c2d34] shadow-sm;
-  }
-
-  .settings-tab-content {
-    @apply py-3;
-  }
-
-  .settings-content {
-    @apply min-h-0 flex-1 space-y-2 overflow-y-auto p-2;
-  }
-
   .settings-card {
     @apply space-y-4 rounded-2xl border border-[#dcdddf] bg-[#f7f7f9] p-5;
-  }
-
-  .settings-subcard {
-    @apply rounded-md border border-[#dedfe2] bg-white/70 p-2;
-  }
-
-  .settings-provider-head {
-    @apply mb-2 flex items-center justify-between gap-2;
-  }
-
-  .settings-provider-brand {
-    @apply flex min-w-0 items-center gap-2.5;
   }
 
   .settings-provider-favicon {
@@ -82,51 +50,6 @@
 
   .settings-provider-fallback {
     @apply inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-[#dce3f0] bg-[#eef2fa] text-[10px] font-semibold text-[#44506a];
-  }
-
-  .settings-pm-shell {
-    @apply overflow-hidden border-[#d7dce7] bg-[linear-gradient(150deg,#f6f8fc_0%,#f4f6f9_40%,#f8f7f3_100%)];
-  }
-
-  .settings-pm-topbar {
-    @apply sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-lg p-2;
-  }
-
-  .settings-pm-inline-form {
-    @apply grid min-w-[320px] flex-1 grid-cols-1 gap-2 md:grid-cols-[1fr_auto];
-  }
-
-  .settings-pm-grid {
-    @apply grid grid-cols-1 gap-3 lg:grid-cols-3;
-  }
-
-  .settings-pm-card {
-    @apply rounded-xl border border-[#d6dce8] bg-[linear-gradient(165deg,#ffffff_0%,#f8fbff_100%)] p-3 shadow-[0_8px_18px_rgba(31,52,82,0.08)] transition-all duration-200;
-  }
-
-  .settings-pm-card:hover {
-    @apply border-[#c5d3ea] shadow-[0_14px_26px_rgba(31,52,82,0.12)];
-    transform: translateY(-1px);
-  }
-
-  .settings-pm-card-head {
-    @apply border-b border-[#e4e7ef] pb-2.5;
-  }
-
-  .settings-pm-card-head .settings-provider-brand {
-    @apply flex-1 justify-center;
-  }
-
-  .settings-pm-card-head .settings-provider-brand > div {
-    @apply text-center;
-  }
-
-  .settings-pm-provider-name {
-    @apply text-sm font-semibold tracking-[0.01em] text-[#24324d];
-  }
-
-  .settings-pm-form {
-    @apply mt-2 space-y-2;
   }
 
   .settings-pm-models {
@@ -145,41 +68,13 @@
     @apply text-[#b87b0f];
   }
 
-  .settings-pm-footer {
-    @apply space-y-2 rounded-lg border border-[#d6dbe6] bg-white/80 p-3;
-  }
-
-  .settings-pm-btn-primary {
-    @apply border-[#c9d5ef] bg-[#edf3ff] text-[#1f3a68] hover:bg-[#e2ecff];
-  }
-
   .settings-card-title {
     @apply text-base font-semibold text-[#1e1f26];
   }
 
-  .settings-card-content {
-    @apply space-y-2;
-  }
 
-  .settings-form-group {
-    @apply space-y-1.5;
-  }
 
-  .settings-form-label {
-    @apply text-xs text-[#696b74];
-  }
 
-  .settings-form-select {
-    @apply w-full rounded-lg border border-[#d4d5da] bg-white px-3 py-2 text-sm text-[#2d2f35] transition-colors focus:border-[#b5b8c2] focus:outline-none focus:ring-2 focus:ring-[#b9bac1]/40;
-  }
-
-  .settings-subtitle {
-    @apply pb-2 text-xs font-semibold text-[#484a52];
-  }
-
-  .settings-grid {
-    @apply space-y-3;
-  }
 
   .settings-row-wrap {
     @apply block space-y-1;
@@ -193,32 +88,8 @@
     @apply w-full rounded-lg border border-[#d4d5da] bg-white px-3 py-2 text-sm text-[#2d2f35] transition-colors focus:border-[#b5b8c2] focus:outline-none focus:ring-2 focus:ring-[#b9bac1]/40;
   }
 
-  .settings-toggle-row {
-    @apply flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors hover:bg-white/50;
-  }
-
-  .settings-toggle {
-    @apply relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full bg-[#d1d3da] transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1] focus-visible:ring-offset-2;
-  }
-
-  .settings-toggle-on {
-    @apply bg-[#3967d6];
-  }
-
-  .settings-toggle-thumb {
-    @apply pointer-events-none block h-4 w-4 translate-x-[2px] rounded-full bg-white shadow-sm transition-transform duration-200;
-  }
-
-  .settings-toggle-on .settings-toggle-thumb {
-    @apply translate-x-[18px];
-  }
-
   .settings-action {
     @apply rounded-lg border border-[#cacbd1] bg-white px-3 py-2 text-sm font-medium text-[#3b3d45] transition-colors hover:bg-[#f2f2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1];
-  }
-
-  .settings-action-secondary {
-    @apply rounded-lg border border-[#d9dadf] bg-[#f5f5f7] px-3 py-2 text-sm font-medium text-[#3b3d45] transition-colors hover:bg-[#ececf1] hover:border-[#cacbd1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1] disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .settings-icon-action {
@@ -253,49 +124,8 @@
     @apply flex flex-wrap gap-2;
   }
 
-  .settings-cloud-instance-list {
-    @apply mt-4 grid gap-2;
-  }
-
-  .settings-cloud-instance-card {
-    @apply flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3 py-3;
-    border-color: #d7dde7;
-    background: #ffffffcc;
-  }
-
-  .settings-cloud-instance-connected {
-    border-color: #c6e6d0;
-    background: #f5fcf7;
-  }
-
-  .settings-cloud-instance-connecting {
-    border-color: #f0deb2;
-    background: #fffaf0;
-  }
-
-  .settings-cloud-instance-disconnected,
-  .settings-cloud-instance-error {
-    border-color: #f0c8c8;
-    background: #fff7f7;
-  }
-
-  .settings-cloud-admin-grid {
-    @apply grid gap-4 lg:grid-cols-2;
-  }
-
-  .settings-actions-grid {
-    @apply grid grid-cols-1 gap-2 md:grid-cols-2;
-  }
-
   .settings-card-note {
     @apply text-xs text-[#5c5e67];
-  }
-
-  .settings-extension-logs {
-    @apply max-h-56 w-full overflow-auto rounded-md border border-[#d3d4d9] bg-white p-2 font-mono text-[11px] text-[#3f4250];
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    word-break: break-word;
   }
 
   .settings-output {
@@ -322,26 +152,6 @@
     @apply text-xs text-[#8f2d2d];
   }
 
-  .settings-check {
-    @apply rounded-md px-2 py-1 text-xs;
-  }
-
-  .settings-check-info {
-    @apply bg-[#ecf3ff] text-[#274d82];
-  }
-
-  .settings-check-warning {
-    @apply bg-[#fff6df] text-[#7a5a15];
-  }
-
-  .settings-check-error {
-    @apply bg-[#ffecec] text-[#8f2d2d];
-  }
-
-  .settings-error {
-    @apply rounded-md bg-[#ffecec] px-2 py-1.5 text-xs text-[#8f2d2d];
-  }
-
   .settings-secret-row {
     @apply flex items-center gap-2;
   }
@@ -355,98 +165,7 @@
     @apply mx-auto w-full;
   }
 
-  .sidebar-badge {
-    @apply ml-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#ff4444] text-xs font-bold text-white;
-  }
 
-  .extensions-update-checkbox {
-    @apply h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500;
-  }
-
-  .skills-main-wrap {
-    max-width: 980px;
-    @apply mx-auto w-full;
-  }
-
-  .skills-header {
-    @apply pb-6;
-  }
-
-  .skills-title {
-    @apply text-5xl font-semibold tracking-[-0.03em] text-[#111216];
-  }
-
-  .skills-subtitle {
-    @apply mt-2 text-[22px] text-[#70727a];
-  }
-
-  .skills-section-head {
-    @apply pb-3 text-[40px] font-semibold text-[#131419];
-  }
-
-  .skills-grid {
-    @apply grid grid-cols-1 gap-4 md:grid-cols-2;
-  }
-
-  .skill-card {
-    @apply flex items-center justify-between gap-4 rounded-[28px] border border-[#d8d9de] bg-[#f6f6f8] px-5 py-4;
-  }
-
-  .skill-card-main {
-    @apply flex min-w-0 items-center gap-4;
-  }
-
-  .skill-avatar {
-    @apply flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#101115] text-2xl font-semibold text-white;
-  }
-
-  .skill-copy {
-    @apply min-w-0;
-  }
-
-  .skill-name {
-    @apply truncate text-[34px] font-semibold leading-tight text-[#14151a];
-  }
-
-  .skill-desc {
-    @apply truncate text-[18px] text-[#676b75];
-  }
-
-  .skill-path {
-    @apply truncate font-mono text-[11px] text-[#8a8f98];
-  }
-
-  .skill-toggle {
-    @apply relative h-8 w-14 shrink-0 rounded-full bg-[#b8bbc1] transition-colors;
-  }
-
-  .skill-toggle-on {
-    @apply bg-[#2a9bff];
-  }
-
-  .skill-toggle-busy {
-    @apply opacity-80;
-  }
-
-  .skill-toggle-thumb {
-    @apply absolute left-1 top-1 h-6 w-6 rounded-full bg-white shadow transition-transform;
-  }
-
-  .skill-toggle-on .skill-toggle-thumb {
-    transform: translateX(24px);
-  }
-
-  .settings-chip-row {
-    @apply flex flex-wrap gap-2;
-  }
-
-  .settings-chip {
-    @apply rounded-full border border-[#d2d3d8] bg-white px-3 py-1 text-xs text-[#4c4f58] hover:bg-[#f4f5f8];
-  }
-
-  .settings-chip-active {
-    @apply border-[#b7bcc8] bg-[#e9edf7] text-[#2d3e63];
-  }
 
   .telemetry-consent-card {
     position: absolute;
@@ -472,275 +191,6 @@
 
   .telemetry-consent-accept {
     @apply border-[#b7c5e3] bg-[#edf3ff] text-[#26406f] hover:bg-[#dde9ff];
-  }
-
-  .extensions-panel-shell,
-  .skills-panel-shell {
-    @apply space-y-6 pb-8;
-  }
-
-  .extensions-panel-shell {
-    max-width: none;
-    @apply mt-0 pt-0 mx-0;
-  }
-
-  .extensions-hero,
-  .skills-hero-card {
-    @apply relative overflow-hidden rounded-[32px] border border-[#ded8d3] bg-[linear-gradient(135deg,rgba(255,255,255,0.95)_0%,rgba(250,245,241,0.92)_42%,rgba(243,240,251,0.95)_100%)] p-6 shadow-[0_24px_60px_rgba(32,28,24,0.08)] backdrop-blur;
-  }
-
-  .extensions-hero {
-    @apply sticky top-0 z-20 mt-0 flex flex-col gap-5 rounded-none rounded-t-none border-t-0 lg:flex-row lg:items-end lg:justify-between;
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.78) 0%,
-      rgba(250, 245, 241, 0.72) 42%,
-      rgba(243, 240, 251, 0.78) 100%
-    );
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-  }
-
-  .skills-hero-card {
-    @apply grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)] lg:items-end;
-  }
-
-  .extensions-hero-badge,
-  .skills-hero-badge,
-  .extensions-feature-pill,
-  .extensions-subtle-pill,
-  .extensions-status-pill {
-    @apply inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold tracking-[0.02em];
-  }
-
-  .extensions-hero-badge,
-  .skills-hero-badge,
-  .extensions-feature-pill {
-    @apply border-[#d7cbbd] bg-white/80 text-[#5c4634];
-  }
-
-  .extensions-subtle-pill {
-    @apply border-[#ddd6cf] text-[#6d655d];
-    background-color: rgb(255 255 255 / 0.72);
-  }
-
-  .extensions-status-pill {
-    @apply border-[#ddd6cf] text-[#61574f];
-    background-color: rgb(255 255 255 / 0.78);
-  }
-
-  .extensions-status-pill-ok,
-  .extensions-status-pill-live {
-    @apply border-[#b7d9c9] bg-[#edf8f1] text-[#246747];
-  }
-
-  .extensions-status-pill-error {
-    @apply border-[#efc2c2] bg-[#fff1f1] text-[#a63a3a];
-  }
-
-  .extensions-status-pill-warn {
-    @apply border-[#ead7a8] bg-[#fff8e7] text-[#8b6720];
-  }
-
-  .extensions-status-pill-update {
-    @apply border-[#b7d9c9] bg-[#edf8f1] text-[#246747];
-  }
-
-  .extensions-hero-title,
-  .skills-hero-title {
-    @apply mt-4 text-4xl font-semibold tracking-[-0.04em] text-[#171319] md:text-5xl;
-  }
-
-  .extensions-hero-subtitle,
-  .skills-hero-subtitle {
-    @apply mt-3 max-w-3xl text-base leading-7 text-[#625b57] md:text-lg;
-  }
-
-  .extensions-primary-action,
-  .extensions-primary-inline-action,
-  .extensions-secondary-action {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border text-sm font-medium transition-all duration-200;
-  }
-
-  .extensions-primary-action,
-  .extensions-primary-inline-action {
-    @apply border-[#d7c8b8] bg-[#171319] px-3.5 py-2 text-white shadow-[0_14px_30px_rgba(23,19,25,0.18)] hover:-translate-y-[1px] hover:bg-[#0f0c12];
-  }
-
-  .extensions-secondary-action {
-    @apply border-[#ddd6cf] px-3.5 py-2 text-[#2d2730] hover:-translate-y-[1px] hover:bg-white;
-    background-color: rgb(255 255 255 / 0.82);
-  }
-
-  .extensions-stats-grid,
-  .skills-stats-grid {
-    @apply grid grid-cols-2 gap-3 lg:grid-cols-4;
-  }
-
-  .skills-stats-grid {
-    @apply lg:grid-cols-3;
-  }
-
-  .extensions-stat-card,
-  .skills-stat-card {
-    @apply rounded-[24px] border border-[#ddd6cf] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)];
-    background-color: rgb(255 255 255 / 0.75);
-  }
-
-  .extensions-stat-icon {
-    @apply mb-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#171319] text-white;
-  }
-
-  .extensions-stat-value,
-  .skills-stat-value {
-    @apply text-[34px] font-semibold tracking-[-0.04em] text-[#171319];
-  }
-
-  .extensions-stat-label,
-  .skills-stat-label {
-    @apply mt-1 text-[13px] font-medium tracking-[-0.01em] text-[#6b645f];
-  }
-
-  .extensions-toolbar,
-  .skills-toolbar-shell {
-    @apply rounded-[28px] border border-[#ded8d3] p-4 shadow-[0_14px_34px_rgba(32,28,24,0.06)] backdrop-blur;
-    background-color: rgb(255 255 255 / 0.74);
-  }
-
-  .extensions-content-shell {
-    @apply space-y-8 px-6 pb-8 pt-6 md:px-10 md:pb-10 md:pt-6;
-  }
-
-  .extensions-search-shell {
-    @apply flex items-center gap-3 rounded-[18px] border border-[#ddd6cf] bg-[#fbfaf8] px-4 py-3;
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.72),
-      0 8px 24px rgba(32, 28, 24, 0.04);
-  }
-
-  .extensions-install-progress {
-    @apply flex items-center justify-between gap-3 rounded-[18px] border border-[#ddd6cf] px-4 py-3 text-sm font-medium text-[#231d25];
-    background-color: rgb(255 255 255 / 0.82);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.72),
-      0 8px 24px rgba(32, 28, 24, 0.04);
-  }
-
-  .extensions-install-progress-main {
-    @apply flex items-center gap-3;
-  }
-
-  .extensions-install-cancel {
-    @apply inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#ddd6cf] text-[#2d2730] transition-all duration-200 hover:-translate-y-[1px] hover:bg-white;
-    background-color: rgb(255 255 255 / 0.82);
-  }
-
-  .extensions-search-icon {
-    @apply h-4 w-4 shrink-0 text-[#93857a];
-  }
-
-  .extensions-search-input {
-    @apply w-full bg-transparent text-[15px] font-medium text-[#231d25] outline-none placeholder:text-[#988c83] md:text-base;
-  }
-
-  .extensions-section-block {
-    @apply space-y-5;
-  }
-
-  .extensions-section-header {
-    @apply flex items-end justify-between gap-4 border-b border-[#e8e0d9] pb-3;
-  }
-
-  .extensions-section-eyebrow {
-    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8f8378];
-  }
-
-  .extensions-section-title {
-    @apply mt-1 text-[28px] font-semibold tracking-[-0.035em] text-[#171319] md:text-[32px];
-  }
-
-  .extensions-subsection-title {
-    @apply pt-4 text-xl font-semibold tracking-[-0.02em] text-[#201923];
-  }
-
-  .extensions-empty-state {
-    @apply rounded-[28px] border border-dashed border-[#ddd6cf] px-5 py-6 text-sm text-[#756d67];
-    background-color: rgb(255 255 255 / 0.62);
-  }
-
-  .extensions-surface-card,
-  .skill-surface-card {
-    @apply rounded-[24px] border border-[#ddd6cf] bg-[linear-gradient(180deg,rgba(255,255,255,0.92)_0%,rgba(248,244,240,0.92)_100%)] p-4 shadow-[0_14px_30px_rgba(32,28,24,0.06)] backdrop-blur transition-all duration-200;
-  }
-
-  .extensions-surface-card:hover,
-  .skill-surface-card:hover {
-    @apply border-[#d2c5b9] shadow-[0_24px_52px_rgba(32,28,24,0.1)];
-    transform: translateY(-2px);
-  }
-
-  .extensions-surface-card-highlighted {
-    @apply bg-[linear-gradient(180deg,rgba(255,255,255,0.95)_0%,rgba(244,239,251,0.94)_100%)];
-  }
-
-  .extensions-card-topline,
-  .extensions-card-badges,
-  .extensions-actions-row,
-  .skill-surface-title-row {
-    @apply flex flex-wrap items-center gap-2;
-  }
-
-  .extensions-actions-row {
-    @apply mt-4;
-  }
-
-  .extensions-card-topline {
-    @apply justify-between;
-  }
-
-  .extensions-card-title-row,
-  .skill-surface-main {
-    @apply mt-3 flex gap-3;
-  }
-
-  .skill-surface-main {
-    @apply items-start;
-  }
-
-  .skill-surface-copy {
-    @apply min-w-0 flex-1;
-  }
-
-  .extensions-card-title {
-    @apply text-[22px] font-semibold leading-tight tracking-[-0.03em] text-[#171319];
-  }
-
-  .extensions-card-description {
-    @apply mt-1.5 text-[14px] leading-6 text-[#655d58] md:text-[15px];
-  }
-
-  .extensions-meta-grid {
-    @apply mt-3 grid grid-cols-1 gap-2.5 rounded-[18px] border border-[#e4ddd6] p-3 text-sm md:grid-cols-2;
-    background-color: rgb(255 255 255 / 0.64);
-  }
-
-  .extensions-meta-grid dt {
-    @apply text-[10px] font-semibold uppercase tracking-[0.12em] text-[#978a80];
-  }
-
-  .extensions-meta-grid dd {
-    @apply mt-0.5 break-all text-[12px] text-[#2b242c];
-  }
-
-  .extensions-log-box {
-    @apply mt-3 max-h-56 w-full overflow-auto rounded-[18px] border border-[#d8d0ca] bg-[#16131a] p-3 font-mono text-[11px] text-[#ece7f3];
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-
-  .skill-avatar-modern {
-    @apply flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#171319] text-sm font-semibold tracking-[0.08em] text-white shadow-[0_10px_24px_rgba(23,19,25,0.18)];
   }
 
   /* ── ep- design system (Extensions & Skills panels) ── */
@@ -812,17 +262,7 @@
     @apply flex-1 overflow-auto px-6 py-6 space-y-8 md:px-10;
   }
 
-  .ep-page-header {
-    @apply pb-8 mb-10;
-  }
 
-  .ep-page-title {
-    @apply text-4xl font-bold tracking-[-0.045em] text-[#171319];
-  }
-
-  .ep-page-subtitle {
-    @apply mt-2 text-base text-[#8a7f78];
-  }
 
   .ep-progress-bar {
     @apply flex items-center gap-3 rounded-2xl border border-[#ddd6cf] bg-gradient-to-r from-white to-[#faf8f6] px-5 py-3 text-sm font-semibold text-[#231d25] shadow-sm;
@@ -933,33 +373,6 @@
 
   .ep-empty {
     @apply rounded-2xl border-2 border-dashed border-[#ddd6cf] bg-gradient-to-br from-[#faf8f6] to-[#f5f0eb] px-8 py-12 text-center text-base text-[#9a8f87] font-medium;
-  }
-
-  .ep-log-box {
-    @apply mt-3 max-h-48 w-full overflow-auto rounded-lg border border-[#2a2430] bg-[#0f0c12] p-3 font-mono text-xs text-[#e0d9f0] leading-relaxed;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-
-  .ep-log-container {
-    @apply mt-3 w-full rounded-lg border border-[#2a2430] bg-[#0f0c12] overflow-hidden;
-  }
-
-  .ep-log-header {
-    @apply flex items-center justify-between bg-[#1a1620] px-3 py-2 border-b border-[#2a2430];
-  }
-
-  .ep-log-title {
-    @apply text-xs font-semibold text-[#e0d9f0] uppercase tracking-wider;
-  }
-
-  .ep-log-close {
-    @apply h-6 w-6 flex items-center justify-center rounded hover:bg-[#2a2430] transition-colors text-[#e0d9f0] font-bold text-lg leading-none cursor-pointer;
-  }
-
-  .ep-log-close:hover {
-    @apply bg-[#3a3240] text-[#f0e9ff];
   }
 
   .ep-extension-logs-sheet {

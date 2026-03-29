@@ -28,10 +28,10 @@ function Toggle({
       type="button"
       role="switch"
       aria-checked={checked}
-      className={`settings-toggle${checked ? ' settings-toggle-on' : ''}`}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1] focus-visible:ring-offset-2 ${checked ? 'bg-[#3967d6]' : 'bg-[#d1d3da]'}`}
       onClick={() => onChange(!checked)}
     >
-      <span className="settings-toggle-thumb" />
+      <span className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${checked ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
     </button>
   )
 }
@@ -52,14 +52,14 @@ export function AppearanceSection({
   }
 
   return (
-    <section className="settings-card">
-      <h3 className="settings-card-title">{t('Apparence')}</h3>
-      <div className="settings-grid">
+    <section className="space-y-4 rounded-2xl border border-[#dcdddf] bg-[#f7f7f9] p-5 dark:border-[#262934] dark:bg-[#151821]">
+      <h3 className="text-base font-semibold text-[#1e1f26] dark:text-[#f3f4f6]">{t('Apparence')}</h3>
+      <div className="space-y-3">
         {/* Theme */}
-        <label className="settings-row-wrap">
-          <span className="settings-label">{t('Thème')}</span>
+        <label className="block space-y-1">
+          <span className="text-xs text-[#696b74] dark:text-[#9ca3af]">{t('Thème')}</span>
           <select
-            className="settings-input"
+            className="w-full rounded-lg border border-[#d4d5da] bg-white px-3 py-2 text-sm text-[#2d2f35] transition-colors focus:border-[#b5b8c2] focus:outline-none focus:ring-2 focus:ring-[#b9bac1]/40 dark:border-[#343845] dark:bg-[#0f1218] dark:text-[#e5e7eb]"
             value={String(settingsJson.theme ?? 'system')}
             onChange={(e) =>
               setSettingsJson({ ...settingsJson, theme: e.target.value })
@@ -74,10 +74,10 @@ export function AppearanceSection({
         </label>
 
         {/* Language */}
-        <label className="settings-row-wrap">
-          <span className="settings-label">{t('Langue')}</span>
+        <label className="block space-y-1">
+          <span className="text-xs text-[#696b74] dark:text-[#9ca3af]">{t('Langue')}</span>
           <select
-            className="settings-input"
+            className="w-full rounded-lg border border-[#d4d5da] bg-white px-3 py-2 text-sm text-[#2d2f35] transition-colors focus:border-[#b5b8c2] focus:outline-none focus:ring-2 focus:ring-[#b9bac1]/40 dark:border-[#343845] dark:bg-[#0f1218] dark:text-[#e5e7eb]"
             value={i18n.language}
             onChange={handleLanguageChange}
           >
@@ -87,8 +87,8 @@ export function AppearanceSection({
         </label>
 
         {/* Sidebar toggles */}
-        <div className="settings-toggle-row">
-          <span className="settings-label">
+        <div className="flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors hover:bg-white/50 dark:hover:bg-white/5">
+          <span className="text-xs text-[#696b74] dark:text-[#9ca3af]">
             {t('Afficher les stats assistant')}
           </span>
           <Toggle
@@ -99,8 +99,8 @@ export function AppearanceSection({
           />
         </div>
 
-        <div className="settings-toggle-row">
-          <span className="settings-label">
+        <div className="flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors hover:bg-white/50 dark:hover:bg-white/5">
+          <span className="text-xs text-[#696b74] dark:text-[#9ca3af]">
             {t('Autoriser les logs/crash anonymes')}
           </span>
           <Toggle
@@ -116,11 +116,11 @@ export function AppearanceSection({
         </div>
       </div>
 
-      <div className="settings-actions-row" style={{ marginTop: '16px' }}>
-        <button type="button" className="settings-action" onClick={onSaveSidebar}>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button type="button" className="rounded-lg border border-[#cacbd1] bg-white px-3 py-2 text-sm font-medium text-[#3b3d45] transition-colors hover:bg-[#f2f2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1] dark:border-[#343845] dark:bg-[#0f1218] dark:text-[#e5e7eb] dark:hover:bg-[#161b24]" onClick={onSaveSidebar}>
           {t('Sauvegarder')}
         </button>
-        <button type="button" className="settings-action-secondary" onClick={onSaveSettingsJson}>
+        <button type="button" className="rounded-lg border border-[#d9dadf] bg-[#f5f5f7] px-3 py-2 text-sm font-medium text-[#3b3d45] transition-colors hover:border-[#cacbd1] hover:bg-[#ececf1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b9bac1] dark:border-[#343845] dark:bg-[#171b24] dark:text-[#e5e7eb] dark:hover:bg-[#1d2330]" onClick={onSaveSettingsJson}>
           {t('Sauvegarder Pi')}
         </button>
       </div>

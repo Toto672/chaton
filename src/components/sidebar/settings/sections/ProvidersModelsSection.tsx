@@ -233,12 +233,12 @@ export function ProvidersModelsSection({
   };
 
   return (
-    <section className="settings-card settings-pm-shell">
-      <div className="settings-pm-topbar">
+    <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex w-full justify-end">
           <button
             type="button"
-            className="settings-action settings-pm-btn-primary"
+            className="inline-flex items-center justify-center rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
             onClick={() => setIsAddProviderDialogOpen((open) => !open)}
           >
             {t("Ajouter provider")}
@@ -247,8 +247,8 @@ export function ProvidersModelsSection({
       </div>
 
       {isAddProviderDialogOpen ? (
-        <div className="settings-subcard" style={{ marginBottom: "16px" }}>
-          <div className="settings-subtitle">{t("Ajouter un provider")}</div>
+        <div className="mb-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+          <div className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{t("Ajouter un provider")}</div>
           <ProviderSetupForm
             draft={{
               providerPreset: draftProviderPreset,
@@ -294,17 +294,17 @@ export function ProvidersModelsSection({
               }
             }}
           />
-          <div className="extension-modal-actions">
+          <div className="mt-4 flex items-center justify-end gap-2">
             <button
               type="button"
-              className="extension-modal-btn"
+              className="inline-flex items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
               onClick={() => setIsAddProviderDialogOpen(false)}
             >
               {t("Annuler")}
             </button>
             <button
               type="button"
-              className="extension-modal-btn extension-modal-btn-primary"
+              className="inline-flex items-center justify-center rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
               disabled={!canAddProvider || isAddingProvider}
               onClick={handleAddProvider}
             >
@@ -314,7 +314,7 @@ export function ProvidersModelsSection({
         </div>
       ) : null}
 
-      <div className="settings-pm-grid">
+      <div className="grid gap-4">
         {providerNames.map((name) => {
           console.log('[DEBUG] Processing provider:', name);
           const provider = (providers[name] ??
@@ -334,26 +334,26 @@ export function ProvidersModelsSection({
           ).length;
           const isCollapsed = collapsedProviders[name] ?? true;
           return (
-            <div key={name} className="settings-pm-card">
+            <div key={name} className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
               <div
-                className={`settings-provider-head ${!isCollapsed ? "settings-pm-card-head" : ""}`}
+                className={`flex items-center justify-between gap-3 px-4 py-3 ${!isCollapsed ? "border-b border-zinc-200 dark:border-zinc-800" : ""}`}
               >
-                <div className="settings-provider-brand">
+                <div className="flex min-w-0 items-center gap-3">
                   {iconSrc ? (
                     <img
                       src={iconSrc}
                       alt=""
-                      className="settings-provider-favicon"
+                      className="h-8 w-8 rounded-md object-contain"
                       loading="lazy"
                     />
                   ) : (
-                    <div className="settings-provider-fallback">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-sm font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
                       {name.slice(0, 1).toUpperCase()}
                     </div>
                   )}
-                  <div>
-                    <div className="settings-pm-provider-name">{name}</div>
-                    <div className="settings-muted">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{name}</div>
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
                       {t("{{scopedCount}} sur {{total}} dans le scope", {
                         scopedCount,
                         total: providerModels.length,
@@ -361,10 +361,10 @@ export function ProvidersModelsSection({
                     </div>
                   </div>
                 </div>
-                <div className="settings-actions-grid !grid-cols-[auto_auto] !gap-1">
+                <div className="grid grid-cols-[auto_auto] gap-1">
                   <button
                     type="button"
-                    className="settings-icon-action"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                     onClick={() =>
                       setCollapsedProviders((prev) => ({
                         ...prev,
@@ -386,7 +386,7 @@ export function ProvidersModelsSection({
                   </button>
                   <button
                     type="button"
-                    className="settings-icon-action"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                     onClick={() => {
                       const nextProviders = { ...providers };
                       delete nextProviders[name];
@@ -404,11 +404,11 @@ export function ProvidersModelsSection({
 
               {!isCollapsed ? (
                 <>
-                  <div className="settings-pm-form">
-                    <label className="settings-row-wrap">
-                      <span className="settings-label">api</span>
+                  <div className="space-y-3 p-4">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">api</span>
                       <input
-                        className="settings-input"
+                        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-500 dark:focus:ring-zinc-800"
                         value={String(provider.api ?? "")}
                         onChange={(e) =>
                           updateProviderDraft(name, (current) => ({
@@ -421,10 +421,10 @@ export function ProvidersModelsSection({
                         }}
                       />
                     </label>
-                    <label className="settings-row-wrap">
-                      <span className="settings-label">baseUrl</span>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">baseUrl</span>
                       <input
-                        className="settings-input"
+                        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-200 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-500 dark:focus:ring-zinc-800"
                         value={String(provider.baseUrl ?? "")}
                         onChange={(e) =>
                           updateProviderDraft(name, (current) => ({
