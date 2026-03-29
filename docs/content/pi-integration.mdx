@@ -258,6 +258,8 @@ This is used for:
 
 Memory capture is now structured rather than summary-only. Completed conversations enqueue a capture checkpoint, hidden Pi sessions extract typed memories such as decisions, preferences, facts, profile notes, repo conventions, and task state, and the runtime only keeps a fallback summary when no higher-signal structured item covers the same topic.
 
+For AI conversation-title refinement, Chatons now strips model-emitted reasoning blocks such as `<think>...</think>` or `<thinking>...</thinking>` before validating the generated title. This keeps reasoning-capable models from being rejected solely because they exposed internal thinking text ahead of an otherwise valid short title.
+
 ---
 
 ## 8. Worktree Cleanup and Safety

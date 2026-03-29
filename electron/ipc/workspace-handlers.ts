@@ -50,7 +50,6 @@ import {
   listConversationsByProjectId,
   replaceConversationMessagesCache,
   saveConversationPiRuntime,
-  upsertConversation,
   updateConversationStatus,
   updateConversationTitle,
 } from "../db/repos/conversations.js";
@@ -60,8 +59,6 @@ import {
   findProjectByRepoPath,
   insertProject,
   listProjects,
-  upsertCloudProject,
-  updateCloudProjectsStatusByInstance,
   updateProjectIcon,
   updateProjectIsArchived,
 } from "../db/repos/projects.js";
@@ -124,22 +121,38 @@ import type { DbSidebarSettings } from "../db/repos/settings.js";
 import crypto from "node:crypto";
 import electron from "electron";
 import fs from "node:fs";
-// `ws` ships JS-only in this repo setup; keep the import permissive for Electron main.
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error -- no local declaration package installed
-import WebSocket from "ws";
 import { getDb } from "../db/index.js";
 import { getSentryTelemetry } from "../lib/telemetry/sentry.js";
 import { OAuthProvider } from "@mariozechner/pi-ai";
 import { getOAuthProvider } from "@mariozechner/pi-ai/oauth";
 import type { GitDiffSummaryResult } from "./workspace.js";
 import path from "node:path";
-import os from "node:os";
 import { spawn } from "node:child_process";
 import { buildHostToolEnv, resolveHostExecutable } from "../lib/env/host-env.js";
-const { app, BrowserWindow, contentTracing, dialog, ipcMain, shell } = electron;
-
-const oidcVerifierByState = new Map<string, string>();
+import {
+  connectCloudRealtime,
+  createPkceChallenge,
+  createPkceVerifier,
+  deleteCloudOidcVerifier,
+  deleteRequestWithHeaders,
+  ensureCloudRuntimeSession,
+  getAuthJson,
+  getCloudOidcVerifier,
+  getCloudRuntimeSnapshot,
+  getJson,
+  getPrimaryCloudAccount,
+  getRuntimeHeadlessBaseUrl,
+  postAuthJson,
+  postJson,
+  resetExpiredCloudRuntimeSession,
+  setCloudOidcVerifier,
+  syncCloudInstanceBootstrap,
+  syncConnectedCloudInstances,
+  disconnectAllCloudRealtime,
+} from "./workspace-handlers/cloud.js";
+import { registerComposerHandlers } from "./workspace-handlers/composer-handlers.js";
+import { registerSystemUtilityHandlers } from "./workspace-handlers/system-utils.js";
+const { app, BrowserWindow, dialog, ipcMain, shell } = electron;
 
 type ProjectTerminalRunStatus = "running" | "exited" | "failed" | "stopped";
 
@@ -164,785 +177,6 @@ type ProjectTerminalRun = {
   process: import("node:child_process").ChildProcess | null;
 };
 
-type CloudBootstrapResponse = {
-  user: {
-    id: string;
-    email: string;
-    displayName: string;
-    isAdmin: boolean;
-    createdAt: string;
-    subscription: {
-      id: "plus" | "pro" | "max";
-      label: string;
-      parallelSessionsLimit: number;
-      isDefault?: boolean;
-    };
-    complimentaryGrant?: {
-      plan: {
-        id: "plus" | "pro" | "max";
-        label: string;
-        parallelSessionsLimit: number;
-        isDefault?: boolean;
-      };
-      grantedAt: string;
-      expiresAt: string | null;
-    } | null;
-  };
-  organizations: Array<{
-    id: string;
-    slug: string;
-    name: string;
-    role: "owner" | "admin" | "member" | "billing_viewer";
-  }>;
-  cloudInstances: Array<{
-    id: string;
-    name: string;
-    baseUrl: string;
-    authMode: "oauth";
-    connectionStatus: "connected" | "connecting" | "disconnected" | "error";
-    lastError: string | null;
-  }>;
-  projects: Array<{
-    id: string;
-    organizationId: string;
-    organizationName: string;
-    name: string;
-    repoName: string;
-    kind: "repository" | "conversation_only";
-    workspaceCapability: "full_tools" | "chat_only";
-    repository?: {
-      cloneUrl: string;
-      defaultBranch: string | null;
-      authMode: "none" | "token";
-    } | null;
-    location: "cloud";
-    cloudStatus: "connected" | "connecting" | "disconnected" | "error";
-  }>;
-  conversations: Array<{
-    id: string;
-    projectId: string;
-    runtimeLocation: "cloud";
-    title: string;
-    status: "active" | "done" | "archived";
-    modelProvider: string | null;
-    modelId: string | null;
-  }>;
-  usage: {
-    activeParallelSessions: number;
-    parallelSessionsLimit: number;
-    remainingParallelSessions: number;
-  };
-};
-
-type CloudAccountResponse = {
-  user: CloudBootstrapResponse["user"];
-  usage: CloudBootstrapResponse["usage"];
-  organizations: CloudBootstrapResponse["organizations"];
-  activeOrganizationId: string | null;
-  plans: Array<{
-    id: "plus" | "pro" | "max";
-    label: string;
-    parallelSessionsLimit: number;
-    isDefault?: boolean;
-  }>;
-};
-
-type CloudAdminListUsersResponse = {
-  users: CloudAccountResponse["user"][];
-  plans: CloudAccountResponse["plans"];
-};
-
-type RuntimeSessionSnapshot = {
-  status: string;
-  state: unknown;
-  messages: unknown[];
-};
-
-async function postJson<TResponse>(
-  url: string,
-  payload: unknown,
-  headers?: Record<string, string>,
-): Promise<TResponse> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(headers ?? {}),
-    },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(
-      `HTTP ${response.status} ${response.statusText}: ${text || "request failed"}`,
-    );
-  }
-  return (await response.json()) as TResponse;
-}
-
-function createPkceVerifier(): string {
-  return crypto.randomBytes(32).toString("base64url");
-}
-
-function createPkceChallenge(verifier: string): string {
-  return crypto.createHash("sha256").update(verifier).digest("base64url");
-}
-
-async function getJson<TResponse>(
-  url: string,
-  headers?: Record<string, string>,
-): Promise<TResponse> {
-  const response = await fetch(url, {
-    method: "GET",
-    headers,
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(
-      `HTTP ${response.status} ${response.statusText}: ${text || "request failed"}`,
-    );
-  }
-  return (await response.json()) as TResponse;
-}
-
-async function deleteRequest(url: string): Promise<void> {
-  const response = await fetch(url, {
-    method: "DELETE",
-  });
-  if (!response.ok && response.status !== 404) {
-    const text = await response.text();
-    throw new Error(
-      `HTTP ${response.status} ${response.statusText}: ${text || "request failed"}`,
-    );
-  }
-}
-
-async function deleteRequestWithHeaders(
-  url: string,
-  headers?: Record<string, string>,
-): Promise<void> {
-  const response = await fetch(url, {
-    method: "DELETE",
-    headers,
-  });
-  if (!response.ok && response.status !== 404) {
-    const text = await response.text();
-    throw new Error(
-      `HTTP ${response.status} ${response.statusText}: ${text || "request failed"}`,
-    );
-  }
-}
-
-async function syncCloudInstanceBootstrap(
-  instanceId: string,
-): Promise<
-  | { ok: true; syncedProjects: number }
-  | {
-      ok: false;
-      reason: "instance_not_found" | "missing_session" | "subscription_required" | "unknown";
-      message?: string;
-    }
-> {
-  const db = getDb();
-  const instance = findCloudInstanceById(db, instanceId);
-  if (!instance) {
-    return { ok: false, reason: "instance_not_found" };
-  }
-
-  if (!instance.access_token) {
-    return {
-      ok: false,
-      reason: "missing_session",
-      message: "Missing cloud access token",
-    };
-  }
-
-  try {
-    const bootstrap = await getJson<CloudBootstrapResponse>(
-      new URL("/v1/bootstrap", instance.base_url).toString(),
-      {
-        authorization: `Bearer ${instance.access_token}`,
-      },
-    );
-
-    for (const project of bootstrap.projects) {
-      upsertCloudProject(db, {
-        id: project.id,
-        name: project.name,
-        repoName: project.repoName,
-        cloudInstanceId: instance.id,
-        organizationId: project.organizationId,
-        organizationName: project.organizationName,
-        cloudStatus: project.cloudStatus,
-        cloudProjectKind: project.kind ?? null,
-        cloudWorkspaceCapability: project.workspaceCapability ?? null,
-        cloudRepositoryCloneUrl: project.repository?.cloneUrl ?? null,
-        cloudRepositoryDefaultBranch: project.repository?.defaultBranch ?? null,
-        cloudRepositoryAuthMode: project.repository?.authMode ?? null,
-      });
-    }
-
-    for (const conversation of bootstrap.conversations) {
-      upsertConversation(db, {
-        id: conversation.id,
-        projectId: conversation.projectId,
-        title: conversation.title,
-        status: conversation.status,
-        modelProvider: conversation.modelProvider ?? null,
-        modelId: conversation.modelId ?? null,
-        accessMode: "secure",
-        runtimeLocation: "cloud",
-        cloudRuntimeSessionId: null,
-      });
-    }
-
-    saveCloudInstanceSession(db, instance.id, {
-      userEmail: bootstrap.user.email ?? instance.user_email,
-      accessToken: instance.access_token,
-      refreshToken: instance.refresh_token,
-      tokenExpiresAt: instance.token_expires_at,
-      oauthState: null,
-      connectionStatus: "connected",
-      lastError: null,
-    });
-
-    return { ok: true, syncedProjects: bootstrap.projects.length };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("subscription_required")) {
-      updateCloudInstanceStatus(db, instance.id, "error", message);
-      return { ok: false, reason: "subscription_required", message };
-    }
-    updateCloudInstanceStatus(db, instance.id, "error", message);
-    return { ok: false, reason: "unknown", message };
-  }
-}
-
-async function syncConnectedCloudInstances(): Promise<void> {
-  const db = getDb();
-  const instances = listCloudInstances(db).filter((instance) =>
-    Boolean(instance.access_token),
-  );
-
-  for (const instance of instances) {
-    await syncCloudInstanceBootstrap(instance.id);
-  }
-}
-
-function emitCloudRealtimeEvent(payload: unknown): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (win.isDestroyed()) continue;
-    const webContents = win.webContents;
-    if (webContents.isDestroyed()) continue;
-    try {
-      webContents.send("cloud:realtimeEvent", payload);
-    } catch (err) {
-      console.warn("[emitCloudRealtimeEvent] Failed to send to window:", err);
-    }
-  }
-}
-
-async function getAuthJson<TResponse>(
-  url: string,
-  accessToken: string,
-): Promise<TResponse> {
-  return getJson<TResponse>(url, {
-    authorization: `Bearer ${accessToken}`,
-  });
-}
-
-async function postAuthJson<TResponse>(
-  url: string,
-  accessToken: string,
-  payload: unknown,
-): Promise<TResponse> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(
-      `HTTP ${response.status} ${response.statusText}: ${text || "request failed"}`,
-    );
-  }
-  return (await response.json()) as TResponse;
-}
-
-async function connectCloudRealtime(instanceId: string): Promise<void> {
-  const db = getDb();
-  const instance = findCloudInstanceById(db, instanceId);
-  if (!instance?.access_token) {
-    return;
-  }
-
-  const existing = cloudRealtimeSockets.get(instanceId);
-  if (
-    existing &&
-    (existing.readyState === WebSocket.OPEN ||
-      existing.readyState === WebSocket.CONNECTING)
-  ) {
-    return;
-  }
-
-  const realtimeBaseUrl = instance.base_url.replace(
-    /:(4000|80|443)(?=\/|$)/,
-    ":4001",
-  );
-
-  let tokenResponse:
-    | { token: string; expiresAt: string; websocketUrl: string }
-    | undefined;
-
-  try {
-    tokenResponse = await getAuthJson(
-      new URL(
-        `/v1/realtime/token?cloudInstanceId=${encodeURIComponent(instance.id)}`,
-        realtimeBaseUrl,
-      ).toString(),
-      instance.access_token,
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    updateCloudInstanceStatus(db, instance.id, "error", message);
-    updateCloudProjectsStatusByInstance(db, instance.id, "error");
-    emitCloudRealtimeEvent({
-      instanceId: instance.id,
-      type: "cloud.instance.status",
-      status: "error",
-      message,
-    });
-    return;
-  }
-  if (!tokenResponse) {
-    return;
-  }
-
-  const separator = tokenResponse.websocketUrl.includes("?") ? "&" : "?";
-  const socket = new WebSocket(
-    `${tokenResponse.websocketUrl}${separator}token=${encodeURIComponent(tokenResponse.token)}`,
-  );
-  cloudRealtimeSockets.set(instance.id, socket);
-  const lastRealtimeSeqByInstance = (connectCloudRealtime as typeof connectCloudRealtime & {
-    _lastRealtimeSeqByInstance?: Map<string, number>;
-  })._lastRealtimeSeqByInstance ?? new Map<string, number>();
-  (connectCloudRealtime as typeof connectCloudRealtime & {
-    _lastRealtimeSeqByInstance?: Map<string, number>;
-  })._lastRealtimeSeqByInstance = lastRealtimeSeqByInstance;
-
-  updateCloudInstanceStatus(db, instance.id, "connecting", null);
-  updateCloudProjectsStatusByInstance(db, instance.id, "connecting");
-  emitCloudRealtimeEvent({
-    instanceId: instance.id,
-    type: "cloud.instance.status",
-    status: "connecting",
-    message: "Connecting realtime",
-  });
-
-  socket.on("open", () => {
-    updateCloudInstanceStatus(db, instance.id, "connected", null);
-    updateCloudProjectsStatusByInstance(db, instance.id, "connected");
-    emitCloudRealtimeEvent({
-      instanceId: instance.id,
-      type: "cloud.instance.status",
-      status: "connected",
-      message: "Realtime connected",
-    });
-
-    void getAuthJson<{
-      cloudInstanceId: string;
-      lastSeq: number;
-      events: Array<{
-        seq?: number;
-        type?: string;
-        conversationId?: string;
-        payload?: {
-          event?: {
-            type: string;
-            [key: string]: unknown;
-          };
-        };
-      }>;
-    }>(
-      new URL(
-        `/v1/realtime/replay?cloudInstanceId=${encodeURIComponent(instance.id)}&afterSeq=${encodeURIComponent(String(lastRealtimeSeqByInstance.get(instance.id) ?? 0))}`,
-        realtimeBaseUrl,
-      ).toString(),
-      instance.access_token!,
-    )
-      .then((replay) => {
-        if (typeof replay.lastSeq === "number") {
-          lastRealtimeSeqByInstance.set(instance.id, replay.lastSeq);
-        }
-        for (const replayEvent of replay.events ?? []) {
-          if (typeof replayEvent.seq === "number") {
-            const currentSeq = lastRealtimeSeqByInstance.get(instance.id) ?? 0;
-            if (replayEvent.seq > currentSeq) {
-              lastRealtimeSeqByInstance.set(instance.id, replayEvent.seq);
-            }
-          }
-          if (
-            replayEvent.type === "conversation.event" &&
-            replayEvent.conversationId &&
-            replayEvent.payload?.event
-          ) {
-            for (const win of BrowserWindow.getAllWindows()) {
-              if (win.isDestroyed()) continue;
-              const webContents = win.webContents;
-              if (webContents.isDestroyed()) continue;
-              try {
-                webContents.send("pi:event", {
-                  conversationId: replayEvent.conversationId,
-                  event: replayEvent.payload.event,
-                });
-              } catch (err) {
-                console.warn("[replayConversationEvent] Failed to send to window:", err);
-              }
-            }
-          }
-          emitCloudRealtimeEvent({
-            instanceId: instance.id,
-            ...replayEvent,
-          });
-        }
-      })
-      .catch(() => undefined);
-  });
-
-  socket.on("message", (data: unknown) => {
-    try {
-      const rawData =
-        typeof data === "string" || Buffer.isBuffer(data) ? data.toString() : String(data);
-      const parsed = JSON.parse(rawData) as {
-        seq?: number;
-        type?: string;
-        conversationId?: string;
-        payload?: {
-          cloudInstanceId?: string;
-          status?: "connected" | "connecting" | "disconnected" | "error";
-          message?: string;
-          event?: {
-            type: string;
-            [key: string]: unknown;
-          };
-        };
-      };
-
-      if (typeof parsed.seq === "number") {
-        const currentSeq = lastRealtimeSeqByInstance.get(instance.id) ?? 0;
-        if (parsed.seq > currentSeq) {
-          lastRealtimeSeqByInstance.set(instance.id, parsed.seq);
-        }
-      }
-
-      if (parsed.type === "cloud.instance.status" && parsed.payload?.status) {
-        const targetInstanceId = parsed.payload.cloudInstanceId ?? instance.id;
-        updateCloudInstanceStatus(
-          db,
-          targetInstanceId,
-          parsed.payload.status,
-          parsed.payload.status === "error"
-            ? parsed.payload.message ?? null
-            : null,
-        );
-        updateCloudProjectsStatusByInstance(
-          db,
-          targetInstanceId,
-          parsed.payload.status,
-        );
-      }
-
-      if (
-        parsed.type === "conversation.event" &&
-        parsed.conversationId &&
-        parsed.payload?.event
-      ) {
-        for (const win of BrowserWindow.getAllWindows()) {
-          if (win.isDestroyed()) continue;
-          const webContents = win.webContents;
-          if (webContents.isDestroyed()) continue;
-          try {
-            webContents.send("pi:event", {
-              conversationId: parsed.conversationId,
-              event: parsed.payload.event,
-            });
-          } catch (err) {
-            console.warn("[socket message] Failed to send pi:event to window:", err);
-          }
-        }
-      }
-
-      emitCloudRealtimeEvent({
-        instanceId: instance.id,
-        ...parsed,
-      });
-    } catch {
-      // Ignore malformed realtime payloads for now.
-    }
-  });
-
-  socket.on("close", () => {
-    cloudRealtimeSockets.delete(instance.id);
-    updateCloudInstanceStatus(db, instance.id, "disconnected", null);
-    updateCloudProjectsStatusByInstance(db, instance.id, "disconnected");
-    emitCloudRealtimeEvent({
-      instanceId: instance.id,
-      type: "cloud.instance.status",
-      status: "disconnected",
-      message: "Realtime disconnected",
-    });
-  });
-
-  socket.on("error", (error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    updateCloudInstanceStatus(db, instance.id, "error", message);
-    updateCloudProjectsStatusByInstance(db, instance.id, "error");
-    emitCloudRealtimeEvent({
-      instanceId: instance.id,
-      type: "cloud.instance.status",
-      status: "error",
-      message,
-    });
-  });
-}
-
-function disconnectAllCloudRealtime(): void {
-  for (const socket of cloudRealtimeSockets.values()) {
-    try {
-      socket.close();
-    } catch {
-      // Ignore close failures during shutdown.
-    }
-  }
-  cloudRealtimeSockets.clear();
-}
-
-function getRuntimeHeadlessBaseUrl(instanceBaseUrl: string): string {
-  return instanceBaseUrl.replace(/:(4000|80|443)(?=\/|$)/, ":4002");
-}
-
-async function getPrimaryCloudAccount(): Promise<{
-  account: CloudAccountResponse | null;
-  users: CloudAdminListUsersResponse["users"];
-  reason?: "not_connected" | "session_expired" | "unknown";
-}> {
-  const db = getDb();
-  const instances = listCloudInstances(db);
-  const instance = instances.find((entry) => Boolean(entry.access_token));
-  if (!instance?.access_token) {
-    // Clear stale pending auth rows so the UI does not remain stuck in "connecting"
-    // after a failed or abandoned browser auth attempt.
-    const staleInstance = instances.find(
-      (entry) => entry.connection_status === "connecting" && !entry.access_token,
-    );
-    if (staleInstance) {
-      console.log(
-        "[Cloud] No access token found, clearing stale pending instance:",
-        staleInstance.id,
-      );
-      clearCloudInstanceSession(db, staleInstance.id);
-    }
-    return { account: null, users: [], reason: "not_connected" };
-  }
-
-  try {
-    const account = await getJson<CloudAccountResponse>(
-      new URL("/v1/account", instance.base_url).toString(),
-      {
-        authorization: `Bearer ${instance.access_token}`,
-      },
-    );
-
-    let normalizedAccount = account;
-    if ((account.organizations?.length ?? 0) === 0) {
-      try {
-        const bootstrap = await getJson<CloudBootstrapResponse>(
-          new URL("/v1/bootstrap", instance.base_url).toString(),
-          {
-            authorization: `Bearer ${instance.access_token}`,
-          },
-        );
-        normalizedAccount = {
-          ...account,
-          organizations: bootstrap.organizations ?? [],
-          activeOrganizationId:
-            account.activeOrganizationId ??
-            bootstrap.organizations[0]?.id ??
-            null,
-        };
-      } catch {
-        normalizedAccount = account;
-      }
-    }
-
-    let users: CloudAdminListUsersResponse["users"] = [];
-    if (normalizedAccount.user.isAdmin) {
-      users = (
-        await getJson<CloudAdminListUsersResponse>(
-          new URL("/v1/admin/users", instance.base_url).toString(),
-          {
-            authorization: `Bearer ${instance.access_token}`,
-          },
-        )
-      ).users;
-    }
-
-    return { account: normalizedAccount, users };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const lowered = message.toLowerCase();
-    const reason = lowered.includes('401') || lowered.includes('403') || lowered.includes('unauthorized')
-      ? "session_expired"
-      : "unknown";
-    return { account: null, users: [], reason };
-  }
-}
-
-async function ensureCloudRuntimeSession(
-  conversationId: string,
-): Promise<
-  | { ok: true; sessionId: string }
-  | { ok: false; reason: "conversation_not_found" | "project_not_found" | "cloud_instance_not_found" | "unknown"; message?: string }
-> {
-  const db = getDb();
-  const conversation = findConversationById(db, conversationId);
-  if (!conversation) {
-    return { ok: false, reason: "conversation_not_found" };
-  }
-
-  const project = conversation.project_id
-    ? findProjectById(db, conversation.project_id)
-    : null;
-  if (!project || project.location !== "cloud" || !project.cloud_instance_id) {
-    return { ok: false, reason: "project_not_found" };
-  }
-
-  const instance = findCloudInstanceById(db, project.cloud_instance_id);
-  if (!instance) {
-    return { ok: false, reason: "cloud_instance_not_found" };
-  }
-
-  if (conversation.cloud_runtime_session_id) {
-    return { ok: true, sessionId: conversation.cloud_runtime_session_id };
-  }
-
-  try {
-    const createdResponse = await fetch(
-      new URL("/v1/runtime/sessions", getRuntimeHeadlessBaseUrl(instance.base_url)).toString(),
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${instance.access_token}`,
-        },
-        body: JSON.stringify({
-          conversationId: conversation.id,
-          projectId: conversation.project_id,
-          cloudInstanceId: instance.id,
-          modelProvider: conversation.model_provider,
-          modelId: conversation.model_id,
-          thinkingLevel: conversation.thinking_level,
-        }),
-      },
-    );
-    const created = (await createdResponse.json().catch(() => null)) as
-      | { id: string; status: string; usage?: unknown }
-      | { error?: string; message?: string; usage?: unknown }
-      | null;
-    if (!createdResponse.ok || !created || !("id" in created)) {
-      const createdError =
-        created && "message" in created && typeof created.message === "string"
-          ? created.message
-          : null;
-      throw new Error(
-        createdError && createdError.trim().length > 0
-          ? createdError
-          : `HTTP ${createdResponse.status} while creating cloud runtime session`,
-      );
-    }
-
-    saveConversationPiRuntime(db, conversation.id, {
-      runtimeLocation: "cloud",
-      cloudRuntimeSessionId: created.id,
-      lastRuntimeError: null,
-    });
-
-    return { ok: true, sessionId: created.id };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    saveConversationPiRuntime(db, conversation.id, {
-      runtimeLocation: "cloud",
-      lastRuntimeError: message,
-    });
-    return { ok: false, reason: "unknown", message };
-  }
-}
-
-async function getCloudRuntimeSnapshot(
-  conversationId: string,
-): Promise<RuntimeSessionSnapshot> {
-  const db = getDb();
-  const conversation = findConversationById(db, conversationId);
-  if (!conversation) {
-    return { status: "error", state: null, messages: [] };
-  }
-  const project = conversation.project_id
-    ? findProjectById(db, conversation.project_id)
-    : null;
-  const instance =
-    project?.cloud_instance_id
-      ? findCloudInstanceById(db, project.cloud_instance_id)
-      : null;
-
-  if (!project || project.location !== "cloud" || !instance) {
-    return { status: "error", state: null, messages: [] };
-  }
-
-  const session = await ensureCloudRuntimeSession(conversationId);
-  if (!session.ok) {
-    return {
-      status: "error",
-      state: null,
-      messages: [],
-    };
-  }
-
-  try {
-    return await getJson<RuntimeSessionSnapshot>(
-      new URL(
-        `/v1/runtime/sessions/${encodeURIComponent(session.sessionId)}`,
-        getRuntimeHeadlessBaseUrl(instance.base_url),
-      ).toString(),
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("404")) {
-      await resetExpiredCloudRuntimeSession(conversationId);
-      const retried = await ensureCloudRuntimeSession(conversationId);
-      if (!retried.ok) {
-        return { status: "error", state: null, messages: [] };
-      }
-      return getJson<RuntimeSessionSnapshot>(
-        new URL(
-          `/v1/runtime/sessions/${encodeURIComponent(retried.sessionId)}`,
-          getRuntimeHeadlessBaseUrl(instance.base_url),
-        ).toString(),
-      );
-    }
-    return { status: "error", state: null, messages: [] };
-  }
-}
-
-async function resetExpiredCloudRuntimeSession(conversationId: string): Promise<void> {
-  const db = getDb();
-  saveConversationPiRuntime(db, conversationId, {
-    cloudRuntimeSessionId: null,
-  });
-}
 
 type RegisterWorkspaceHandlersDeps = {
   toWorkspacePayload: () => Record<string, unknown>;
@@ -1111,8 +345,6 @@ let extensionQueueWorker: NodeJS.Timeout | null = null;
 let extensionQueueWorkerInFlight = false;
 let memoryCaptureWorker: NodeJS.Timeout | null = null;
 let unsubscribePiRuntimeEvents: (() => void) | null = null;
-const cloudRealtimeSockets = new Map<string, WebSocket>();
-
 
 /**
  * Builds a system message informing the agent about an access mode change.
@@ -1755,7 +987,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         updateCloudInstanceStatus(db, existing.id, "connecting", null);
       }
 
-      oidcVerifierByState.set(state, verifier);
+      setCloudOidcVerifier(state, verifier);
 
       const discovery = await getJson<{
         issuer: string;
@@ -1778,7 +1010,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       try {
         await shell.openExternal(authUrl.toString());
       } catch (error) {
-        oidcVerifierByState.delete(state);
+        deleteCloudOidcVerifier(state);
         updateCloudInstanceStatus(
           db,
           instanceId,
@@ -1847,7 +1079,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         typeof payload.code === "string" && payload.code.trim().length > 0
           ? payload.code.trim()
           : "";
-      const verifier = oidcVerifierByState.get(state) ?? "";
+      const verifier = getCloudOidcVerifier(state) ?? "";
       if (!code) {
         updateCloudInstanceStatus(db, instance.id, "error", "Missing auth code");
         return {
@@ -1890,7 +1122,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
           codeVerifier: verifier,
         });
       } catch (error) {
-        oidcVerifierByState.delete(state);
+        deleteCloudOidcVerifier(state);
         const message =
           error instanceof Error ? error.message : String(error);
         updateCloudInstanceStatus(db, instance.id, "error", message);
@@ -1902,7 +1134,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
       }
 
       if (!exchange) {
-        oidcVerifierByState.delete(state);
+        deleteCloudOidcVerifier(state);
         updateCloudInstanceStatus(db, instance.id, "error", "Missing cloud session payload");
         return {
           ok: false as const,
@@ -1911,7 +1143,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
         };
       }
 
-      oidcVerifierByState.delete(state);
+      deleteCloudOidcVerifier(state);
       saveCloudInstanceSession(db, instance.id, {
         userEmail: exchange.user.email,
         accessToken: exchange.session.accessToken,
@@ -3706,7 +2938,7 @@ export function registerWorkspaceHandlers(deps: RegisterWorkspaceHandlersDeps) {
 
       if (!titreAffine || titreAffine === titreDeterministe) {
         if (!titreAffine) {
-          console.warn("[conversation-title] AI refinement unavailable", {
+          console.warn("[conversation-title] AI refinement returned no usable title", {
             conversationId,
             provider,
             modelId,
@@ -4445,301 +3677,8 @@ export function registerSystemHandlers() {
     return { success: true };
   });
 
-  const detectExternalCommand = async (command: string) => {
-    try {
-      if (typeof command !== "string" || !command.trim()) {
-        return { detected: false };
-      }
-      const { execSync } = await import("node:child_process");
-      try {
-        if (process.platform === "win32") {
-          execSync(`where ${command}`, { stdio: "pipe" });
-        } else {
-          execSync(`command -v ${command}`, { stdio: "pipe", shell: "/bin/sh" });
-        }
-        return { detected: true };
-      } catch {
-        return { detected: false };
-      }
-    } catch {
-      return { detected: false };
-    }
-  };
-
-  ipcMain.handle("vscode:detect", async () => detectExternalCommand("code"));
-
-  ipcMain.handle("app:detectExternalCommand", async (_event, command: string) =>
-    detectExternalCommand(command),
-  );
-
-  ipcMain.handle("app:openExternal", async (_event, url: string) => {
-    try {
-      if (typeof url !== "string" || !url.trim()) {
-        return { success: false, error: "Missing URL" };
-      }
-      new URL(url);
-      await shell.openExternal(url);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: String(error) };
-    }
-  });
-
-  ipcMain.handle("ollama:detect", async () => {
-    try {
-      const { execSync } = await import("node:child_process");
-      let installed = false;
-      try {
-        if (process.platform === "win32") {
-          execSync("where ollama", { stdio: "pipe" });
-        } else {
-          execSync("command -v ollama", { stdio: "pipe", shell: "/bin/sh" });
-        }
-        installed = true;
-      } catch {
-        installed = false;
-      }
-
-      let apiRunning = false;
-      try {
-        const response = await fetch("http://127.0.0.1:11434/api/tags");
-        apiRunning = response.ok;
-      } catch {
-        apiRunning = false;
-      }
-
-      return { installed, apiRunning, baseUrl: "http://localhost:11434/v1" };
-    } catch {
-      return {
-        installed: false,
-        apiRunning: false,
-        baseUrl: "http://localhost:11434/v1",
-      };
-    }
-  });
-
-  ipcMain.handle("lmstudio:detect", async () => {
-    try {
-      let installed = false;
-      if (process.platform === "darwin") {
-        installed = fs.existsSync("/Applications/LM Studio.app");
-      } else if (process.platform === "win32") {
-        const base = process.env.LOCALAPPDATA ?? "";
-        installed = base
-          ? fs.existsSync(path.join(base, "Programs", "LM Studio"))
-          : false;
-      } else {
-        const home = os.homedir();
-        installed =
-          fs.existsSync(path.join(home, "LM-Studio")) ||
-          fs.existsSync(path.join(home, "Applications", "LM-Studio"));
-      }
-
-      let apiRunning = false;
-      try {
-        const response = await fetch("http://127.0.0.1:1234/v1/models");
-        apiRunning = response.ok;
-      } catch {
-        apiRunning = false;
-      }
-
-      return { installed, apiRunning, baseUrl: "http://localhost:1234/v1" };
-    } catch {
-      return {
-        installed: false,
-        apiRunning: false,
-        baseUrl: "http://localhost:1234/v1",
-      };
-    }
-  });
-
-  ipcMain.handle(
-    "vscode:openWorktree",
-    async (_event, worktreePath: string) => {
-      try {
-        if (process.platform === "darwin") {
-          const { execSync } = await import("node:child_process");
-          execSync(`open -a "Visual Studio Code" "${worktreePath}"`);
-        } else if (process.platform === "win32") {
-          const { execSync } = await import("node:child_process");
-          execSync(`code "${worktreePath}"`);
-        } else {
-          const { execSync } = await import("node:child_process");
-          execSync(`code "${worktreePath}"`);
-        }
-        return { success: true };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
-    },
-  );
-
-  ipcMain.handle(
-    "app:openExternalApplication",
-    async (_event, command: string, args: string[]) => {
-      try {
-        if (typeof command !== "string" || !command.trim()) {
-          return { success: false, error: "Missing command" };
-        }
-        const normalizedArgs = Array.isArray(args)
-          ? args.filter((arg): arg is string => typeof arg === "string")
-          : [];
-        const { spawn } = await import("node:child_process");
-        const child = spawn(command, normalizedArgs, {
-          detached: true,
-          stdio: "ignore",
-          shell: process.platform === "win32",
-        });
-        child.unref();
-        return { success: true };
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
-    },
-  );
-
-  // Composer drafts handlers
-  ipcMain.handle(
-    "composer:saveDraft",
-    async (_event, key: string, content: string) => {
-      try {
-        const { saveComposerDraft } =
-          await import("../db/repos/conversations.js");
-        saveComposerDraft(getDb(), key, content);
-        return { ok: true };
-      } catch (error) {
-        console.error("Failed to save composer draft:", error);
-        return {
-          ok: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
-    },
-  );
-
-  ipcMain.handle("composer:getDraft", async (_event, key: string) => {
-    try {
-      const { getComposerDraft } = await import("../db/repos/conversations.js");
-      const draft = getComposerDraft(getDb(), key);
-      return { ok: true, draft: draft?.content ?? null };
-    } catch (error) {
-      console.error("Failed to get composer draft:", error);
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
-  });
-
-  ipcMain.handle("composer:getAllDrafts", async () => {
-    try {
-      const { getComposerDrafts } =
-        await import("../db/repos/conversations.js");
-      const drafts = getComposerDrafts(getDb());
-      const result: Record<string, string> = {};
-      for (const draft of drafts) {
-        result[draft.key] = draft.content;
-      }
-      return { ok: true, drafts: result };
-    } catch (error) {
-      console.error("Failed to get all composer drafts:", error);
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
-  });
-
-  ipcMain.handle("composer:deleteDraft", async (_event, key: string) => {
-    try {
-      const { deleteComposerDraft } =
-        await import("../db/repos/conversations.js");
-      deleteComposerDraft(getDb(), key);
-      return { ok: true };
-    } catch (error) {
-      console.error("Failed to delete composer draft:", error);
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
-  });
-
-  ipcMain.handle(
-    "composer:saveQueuedMessages",
-    async (_event, key: string, messages: string[]) => {
-      try {
-        const { saveComposerQueuedMessages } =
-          await import("../db/repos/conversations.js");
-        saveComposerQueuedMessages(getDb(), key, messages);
-        return { ok: true };
-      } catch (error) {
-        console.error("Failed to save queued composer messages:", error);
-        return {
-          ok: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
-    },
-  );
-
-  ipcMain.handle("composer:getQueuedMessages", async (_event, key: string) => {
-    try {
-      const { getComposerQueuedMessages } =
-        await import("../db/repos/conversations.js");
-      const queued = getComposerQueuedMessages(getDb(), key);
-      return {
-        ok: true,
-        messages: queued ? JSON.parse(queued.messages_json) : [],
-      };
-    } catch (error) {
-      console.error("Failed to get queued composer messages:", error);
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
-  });
-
-  ipcMain.handle("composer:getAllQueuedMessages", async () => {
-    try {
-      const { getAllComposerQueuedMessages } =
-        await import("../db/repos/conversations.js");
-      const queuedEntries = getAllComposerQueuedMessages(getDb());
-      const result: Record<string, string[]> = {};
-      for (const entry of queuedEntries) {
-        result[entry.key] = JSON.parse(entry.messages_json);
-      }
-      return { ok: true, queuedMessages: result };
-    } catch (error) {
-      console.error("Failed to get all queued composer messages:", error);
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
-  });
-
-  ipcMain.handle("composer:deleteQueuedMessages", async (_event, key: string) => {
-    try {
-      const { deleteComposerQueuedMessages } =
-        await import("../db/repos/conversations.js");
-      deleteComposerQueuedMessages(getDb(), key);
-      return { ok: true };
-    } catch (error) {
-      console.error("Failed to delete queued composer messages:", error);
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
-  });
+  registerSystemUtilityHandlers();
+  registerComposerHandlers();
 
   // Performance tracing (dev mode)
   let tracingActive = false;
@@ -4749,6 +3688,7 @@ export function registerSystemHandlers() {
       return { ok: false, message: "Tracing already active" };
     }
     try {
+      const { contentTracing } = electron;
       await contentTracing.startRecording({
         included_categories: ["*"],
       });
@@ -4768,11 +3708,10 @@ export function registerSystemHandlers() {
       return { ok: false, message: "No active tracing session" };
     }
     try {
-      // Stop recording into a temp file first
+      const { BrowserWindow, contentTracing, dialog } = electron;
       const tempPath = await contentTracing.stopRecording();
       tracingActive = false;
 
-      // Ask the user where to save the trace file
       const win = BrowserWindow.getFocusedWindow();
       const result = await dialog.showSaveDialog(win ?? BrowserWindow.getAllWindows()[0], {
         title: "Save performance trace",
@@ -4782,12 +3721,10 @@ export function registerSystemHandlers() {
 
       // @ts-ignore - Electron dialog type issue
       if (result.canceled || !result.filePath) {
-        // User cancelled, clean up temp file
         try { fs.unlinkSync(tempPath); } catch { /* ignore */ }
         return { ok: true, cancelled: true };
       }
 
-      // Move temp trace to chosen location
       // @ts-ignore - Electron dialog type issue
       fs.copyFileSync(tempPath, result.filePath);
       try { fs.unlinkSync(tempPath); } catch { /* ignore */ }
@@ -4803,31 +3740,4 @@ export function registerSystemHandlers() {
       };
     }
   });
-
-  ipcMain.handle(
-    "setConversationMemoryInjected",
-    async (_event, conversationId: string, injected: boolean) => {
-      try {
-        // Update the conversation in the database to mark memory as injected
-        const db = getDb();
-        db.prepare(
-          `UPDATE conversations SET memory_injected = ? WHERE id = ?`
-        ).run(injected ? 1 : 0, conversationId);
-        
-        // Also update the in-memory conversation cache
-        const conversation = findConversationById(db, conversationId);
-        if (conversation) {
-          conversation.memory_injected = injected ? 1 : 0;
-        }
-        
-        return { ok: true };
-      } catch (error) {
-        console.error("Failed to set conversation memory injected:", error);
-        return {
-          ok: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
-      }
-    }
-  );
 }

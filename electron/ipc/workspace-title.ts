@@ -55,6 +55,21 @@ export function setTitleModelPreference(modelKey: string | null): void {
   }
 }
 
+function supprimerBlocsThinking(raw: string): string {
+  return raw
+    // XML-style: <thinking>...</thinking>
+    .replace(/<thinking\b[^>]*>[\s\S]*?<\/thinking>/gi, " ")
+    // Anthropic-style: <think>...</think> (no whitespace prefix)
+    .replace(/<think>[\s\S]*?<\/think>/gi, " ")
+    // OpenAI o1 style: <think>...</think> (with whitespace prefix)
+    .replace(/\s*<think>[\s\S]*?<\/think>\s*/gi, " ")
+    // Clean up whitespace from removed blocks
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\n+/, "")
+    .replace(/\n+$/, "")
+    .trim();
+}
+
 function normaliserTitre(raw: string): string {
   return raw
     .replace(/\r?\n/g, " ")
@@ -319,7 +334,8 @@ export async function generateConversationTitleFromPi(params: {
 
       const snapshot = await params.piRuntimeManager.getSnapshot(ephemeralId);
       const rawTitle = extractAssistantTextFromSnapshot(snapshot) ?? "";
-      const titre = sanitiserTitreStrict(rawTitle);
+      const titreNettoye = supprimerBlocsThinking(rawTitle);
+      const titre = sanitiserTitreStrict(titreNettoye);
       if (titre) {
         return titre;
       }
@@ -327,6 +343,7 @@ export async function generateConversationTitleFromPi(params: {
       params.log?.("Auto-title generation returned unusable title", {
         requestedModel: modele,
         rawOutputPreview: normaliserTitre(rawTitle).slice(0, 160),
+        cleanedOutputPreview: normaliserTitre(titreNettoye).slice(0, 160),
       });
     } catch (error) {
       params.log?.("Auto-title generation session errored", {

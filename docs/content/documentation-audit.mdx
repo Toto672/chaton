@@ -5,6 +5,17 @@ description: Verified documentation changes and rationale for Chatons features a
 
 # Documentation Audit
 
+## 2026-03-29
+
+### Fixed thinking block stripping for AI title refinement
+
+**Change:** `supprimerBlocsThinking()` in `workspace-title.ts` now matches the full pattern set from `messageParsing.ts:stripThinkingBlocks()`, including the non-whitespace-prefixed Anthropic-style `` pattern. Added whitespace normalization to clean up after block removal.
+
+**Why:** When a model returned reasoning blocks (e.g., ``) before the actual title, the title parser failed because it only handled the whitespace-prefixed variant. This caused AI title refinement to silently fall back to deterministic titles even when a valid short title was present after the thinking block.
+
+**Files updated:**
+- `electron/ipc/workspace-title.ts` -- Added missing anthropic-style pattern and whitespace cleanup to `supprimerBlocsThinking()`
+
 ## 2026-03-28
 
 ### Aligned new conversation model startup with the composer model picker
@@ -1000,6 +1011,19 @@ description: Verified documentation changes and rationale for Chatons features a
 - `src/components/sidebar/settings/sections/ProvidersModelsSection.tsx` -- Allows `anthropic-messages` in provider settings state
 - `src/components/onboarding/OnboardingFlow.tsx` -- Allows `anthropic-messages` in onboarding provider setup state
 - `docs/content/pi-integration.mdx` -- Documented the GitHub Copilot transport change
+
+## 2026-03-29
+
+### Stripped reasoning blocks from AI conversation title generation
+
+**Change:** Updated hidden Pi session title refinement to remove `<think>...</think>` and `<thinking>...</thinking>` blocks before strict title validation, and clarified the fallback log message when refinement produces no usable title.
+
+**Why:** Some reasoning-capable models emitted internal thinking text instead of a plain title, causing title sanitization to reject otherwise recoverable outputs and making the fallback warning sound like the refinement path itself was unavailable.
+
+**Verified files:**
+- `electron/ipc/workspace-title.ts` -- Strips reasoning blocks before title validation and logs both raw and cleaned previews for unusable outputs
+- `electron/ipc/workspace-handlers.ts` -- Clarified the fallback warning when AI title refinement returns no usable title
+- `docs/content/pi-integration.mdx` -- Documented reasoning-block stripping for hidden title-generation sessions
 
 ## 2026-03-16
 

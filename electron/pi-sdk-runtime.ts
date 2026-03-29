@@ -1,12 +1,12 @@
 import electron from "electron";
 const { app, BrowserWindow } = electron;
-import crypto, { createHash } from "node:crypto";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
-import type { ImageContent as PiAiImageContent, Model, TextContent } from "@mariozechner/pi-ai";
+import type { Model, TextContent } from "@mariozechner/pi-ai";
 import type {
   AgentToolResult,
   AgentToolUpdateCallback,
@@ -43,10 +43,7 @@ import { getDb } from "./db/index.js";
 import { findProjectById } from "./db/repos/projects.js";
 import { getSidebarSettings } from "./db/repos/settings.js";
 import { createCoreTools } from "./core-tools.js";
-import {
-  runBeforePiLaunchHooks,
-  getChatonsExtensionsBaseDir,
-} from "./extensions/manager.js";
+import { runBeforePiLaunchHooks } from "./extensions/manager.js";
 import {
   atomicWriteJson,
   getPiModelsPath,
@@ -68,6 +65,26 @@ import {
   searchToolCatalog,
 } from "./extensions/runtime/tool-catalog.js";
 import { buildHostToolEnv } from "./lib/env/host-env.js";
+import {
+  buildChannelPromptSection,
+  buildExtensionContextSection,
+  buildExtensionDevelopmentGuidance,
+  buildLazyToolDiscoverySection,
+} from "./lib/pi/prompt-sections.js";
+import {
+  buildSubagentResultFromSnapshot,
+  createSettingsManagerWithRetry,
+  extractNestedErrorMessage,
+  extractTextFromSnapshot,
+  getOpenModeToolsCwd,
+  fingerprint,
+  isPathWithinAllowedScope,
+  isWriteLikeBashCommand,
+  maskValue,
+  safeJson,
+  toPiImageContent,
+  type JsonValue,
+} from "./lib/pi/runtime-utils.js";
 
 export type PiRuntimeStatus =
   | "stopped"
@@ -76,69 +93,6 @@ export type PiRuntimeStatus =
   | "streaming"
   | "error";
 
-// Utility function to clean up stale lock files
-function cleanupStaleLocks(agentDir: string): void {
-  const settingsPath = path.join(agentDir, "settings.json");
-  const lockPath = `${settingsPath}.lock`;
-
-  try {
-    // Check if lock file exists and is stale (older than 5 minutes)
-    if (fs.existsSync(lockPath)) {
-      const stats = fs.statSync(lockPath);
-      const lockAge = Date.now() - stats.mtime.getTime();
-      const staleThreshold = 5 * 60 * 1000; // 5 minutes in milliseconds
-
-      if (lockAge > staleThreshold) {
-        console.log(`Cleaning up stale lock file: ${lockPath}`);
-        fs.rmSync(lockPath, { recursive: true, force: true });
-      }
-    }
-  } catch (error) {
-    console.warn(
-      `Failed to cleanup stale locks: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
-
-// Retry wrapper for SettingsManager creation with exponential backoff
-async function createSettingsManagerWithRetry(
-  cwd: string,
-  agentDir: string,
-  maxRetries = 3,
-): Promise<SettingsManager> {
-  let lastError: unknown = null;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      // Clean up stale locks before each attempt
-      cleanupStaleLocks(agentDir);
-
-      // Try to create SettingsManager
-      return SettingsManager.create(cwd, agentDir);
-    } catch (error) {
-      lastError = error;
-
-      if (attempt < maxRetries) {
-        // Exponential backoff: 100ms, 200ms, 400ms
-        const delay = 100 * Math.pow(2, attempt - 1);
-        console.warn(
-          `Attempt ${attempt} failed to create SettingsManager, retrying in ${delay}ms...`,
-        );
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-    }
-  }
-
-  throw lastError;
-}
-
-type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
 
 export type ImageContent = {
   type: "image";
@@ -414,61 +368,6 @@ function getGlobalWorkspaceDir() {
   return path.join(app.getPath("userData"), "workspace", "global");
 }
 
-function getOpenModeToolsCwd() {
-  return process.platform === "win32" ? path.parse(process.cwd()).root : "/";
-}
-
-function toPiImageContent(image: ImageContent): PiAiImageContent {
-  return {
-    type: "image",
-    data: image.data,
-    mimeType: image.mimeType,
-  };
-}
-
-function safeJson(value: unknown): JsonValue {
-  try {
-    return JSON.parse(JSON.stringify(value)) as JsonValue;
-  } catch {
-    return null;
-  }
-}
-
-function maskValue(value: string, start = 4, end = 2): string {
-  const trimmed = value.trim();
-  if (trimmed.length <= start + end)
-    return "*".repeat(Math.max(1, trimmed.length));
-  return `${trimmed.slice(0, start)}...${trimmed.slice(-end)}`;
-}
-
-function fingerprint(value: string): string {
-  return createHash("sha256").update(value).digest("hex").slice(0, 10);
-}
-
-function extractNestedErrorMessage(
-  value: unknown,
-  seen = new Set<unknown>(),
-): string | null {
-  if (!value || seen.has(value)) return null;
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    return trimmed ? trimmed : null;
-  }
-  if (typeof value !== "object") return null;
-
-  seen.add(value);
-  const record = value as Record<string, unknown>;
-  const directMessage =
-    typeof record.message === "string" ? record.message.trim() : "";
-  if (directMessage) return directMessage;
-
-  const nestedCandidates = [record.cause, record.error, record.err, record.reason];
-  for (const candidate of nestedCandidates) {
-    const nestedMessage = extractNestedErrorMessage(candidate, seen);
-    if (nestedMessage) return nestedMessage;
-  }
-  return null;
-}
 
 function buildState(runtime: RuntimeState): RpcSessionState {
   const model = runtime.session.model;
@@ -501,52 +400,6 @@ function listScopedOrAllModels(
   return source.map((model) => ({ provider: model.provider, id: model.id }));
 }
 
-function normalizeJsonValue(value: unknown): JsonValue | undefined {
-  const normalized = safeJson(value);
-  return normalized === null && value !== null ? undefined : normalized;
-}
-
-function buildSubagentResultFromSnapshot(
-  snapshot: { messages?: unknown[] } | null | undefined,
-): RuntimeSubagentResult {
-  const outputText = extractTextFromSnapshot(snapshot) ?? undefined;
-  return {
-    ...(outputText ? { outputText, summary: outputText.slice(0, 400) } : {}),
-  };
-}
-
-function isPathWithinAllowedScope(
-  absolutePath: string,
-  workingDirectory: string,
-  fileScope?: RuntimeSubagentFileScope,
-): boolean {
-  if (!fileScope || fileScope.mode === "all") return true;
-  const allowlist = Array.isArray(fileScope.paths) ? fileScope.paths : [];
-  if (allowlist.length === 0) return false;
-  const normalizedTarget = path.resolve(absolutePath);
-  return allowlist.some((allowed) => {
-    const allowedAbsolute = path.resolve(workingDirectory, allowed);
-    const relative = path.relative(allowedAbsolute, normalizedTarget);
-    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-  });
-}
-
-function isWriteLikeBashCommand(command: string): boolean {
-  const lowered = command.toLowerCase();
-  return [
-    "rm ",
-    "mv ",
-    "cp ",
-    "touch ",
-    "mkdir ",
-    "rmdir ",
-    ">",
-    "chmod ",
-    "chown ",
-    "sed -i",
-    "perl -pi",
-  ].some((token) => lowered.includes(token));
-}
 
 function convertEvent(event: AgentSessionEvent): RpcEvent | null {
   switch (event.type) {
@@ -571,131 +424,9 @@ function convertEvent(event: AgentSessionEvent): RpcEvent | null {
 }
 
 function getManifestToolCatalog() {
-  return buildToolCatalogFromManifests(listExtensionManifests())
+  return buildToolCatalogFromManifests(listExtensionManifests());
 }
 
-function buildLazyToolDiscoverySection(): string {
-  return [
-    "## Tool Discovery Mode",
-    "",
-    "Only builtin tools are always available at session start.",
-    "Non-builtin tools should be discovered first through `search_tool` before relying on them.",
-    "Tool definitions are not fully inlined in the initial prompt to save context space.",
-    "Use `search_tool` to discover available tools by keyword, capability, or intent.",
-    "`search_tool.query` accepts either a single text string or an array of text queries/keywords.",
-    "When you pass an array to `search_tool`, the search is inclusive: results from all queries are merged and deduplicated, not intersected.",
-    "Prefer array queries when the user intent contains multiple useful keywords or variants (for example: product name, action, synonym, language variant).",
-    "Some tool families may appear in search results as a single grouped catalog entry instead of exposing every sub-tool individually. If a grouped entry matches the need, inspect it with `tool_detail` or refine the search.",
-    "Use `tool_detail` to inspect one tool in depth before calling it when you need its parameters, description, or usage requirements.",
-    "When a user request likely requires a tool but the exact name or arguments are unclear, search first, then inspect details, then call the real tool.",
-    "Do not guess tool arguments when tool_detail can give you the exact schema.",
-  ].join("\n");
-}
-
-function buildExtensionContextSection(): string | null {
-  try {
-    const manifests = listExtensionManifests();
-    if (manifests.length === 0) {
-      return null;
-    }
-
-    const extensionsBaseDir = getChatonsExtensionsBaseDir();
-    const lines = [
-      "## Available Extensions",
-      "",
-      "The following extensions are installed and available to this session:",
-      "",
-    ];
-
-    for (const manifest of manifests) {
-      const extensionPath = path.join(extensionsBaseDir, manifest.id);
-      const capabilities = manifest.capabilities?.length
-        ? manifest.capabilities.join(", ")
-        : "no capabilities declared";
-
-      lines.push(`- **${manifest.name}** (v${manifest.version})`);
-      lines.push(`  ID: ${manifest.id}`);
-      lines.push(`  Location: ${extensionPath}`);
-      lines.push(`  Capabilities: ${capabilities}`);
-
-      // Include tool summaries so the LLM knows what each extension offers
-      const tools = Array.isArray(manifest.llm?.tools) ? manifest.llm!.tools : [];
-      if (tools.length > 0) {
-        const toolSummaries = tools
-          .filter((t) => typeof t.name === "string" && (typeof t.promptSnippet === "string" || typeof t.description === "string"))
-          .map((t) => {
-            const snippet = (typeof t.promptSnippet === "string" && t.promptSnippet.trim()) || t.description;
-            return `    - ${t.name}: ${snippet}`;
-          });
-        if (toolSummaries.length > 0) {
-          lines.push("  Tools:");
-          lines.push(...toolSummaries);
-        }
-      }
-
-      lines.push("");
-    }
-
-    return lines.join("\n").trim();
-  } catch (error) {
-    console.warn(
-      `Failed to build extension context: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return null;
-  }
-}
-
-function buildExtensionDevelopmentGuidance(): string {
-  const extensionsBaseDir = getChatonsExtensionsBaseDir();
-  return [
-    "## Extension Development Guidance",
-    "",
-    "If the user asks you to create or edit an extension, follow these guidelines:",
-    "",
-    "1. **Documentation Reference**: For comprehensive extension development documentation, refer to https://docs.chatons.ai/extensions",
-    "2. **Extension Location**: Always create new extensions in the user's extension home folder:",
-    `   \`${extensionsBaseDir}\``,
-    "3. **File Structure**: Follow the standard extension manifest structure as documented in the Chatons extensions guide.",
-    "4. **Best Practices**: When editing or creating extensions, ensure proper manifest validation and follow the patterns in the documentation.",
-    "5. **User Guidance**: When helping with extensions, provide clear paths and file locations relative to the extension home folder.",
-  ].join("\n");
-}
-
-function buildChannelPromptSection(channelExtensionId: string | null): string | null {
-  if (!channelExtensionId) {
-    return null;
-  }
-
-  // First, check if the channel extension defines a custom systemPrompt in its manifest
-  try {
-    const manifests = listExtensionManifests();
-    const channelManifest = manifests.find(
-      (m) => m.id === channelExtensionId && m.kind === "channel" && typeof m.systemPrompt === "string",
-    );
-    if (channelManifest?.systemPrompt?.trim()) {
-      return channelManifest.systemPrompt.trim();
-    }
-  } catch {
-    // Fall through to legacy behavior if manifest lookup fails
-  }
-
-  // Legacy fallback: hardcoded prompt for Even Realities extension
-  // This maintains backward compatibility for extensions that haven't updated their manifest yet
-  if (channelExtensionId === "@thibautrey/chatons-channel-even-realities") {
-    return [
-      "## Channel Context: Even Realities Glasses",
-      "",
-      "This conversation is being used through a pair of smart glasses.",
-      "Optimize for very fast interactions and short on-device readability.",
-      "Keep answers brief by default: usually one sentence, at most two short sentences unless the user explicitly asks for more.",
-      "Prefer direct answers over preamble, filler, or step-by-step exposition.",
-      "If the user asks a yes/no question, answer yes or no first.",
-      "Do not mention internal channel rules unless the user asks.",
-    ].join("\n");
-  }
-
-  return null;
-}
 
 export class PiSdkRuntime {
   private status: PiRuntimeStatus = "stopped";
@@ -2634,36 +2365,3 @@ export class PiSessionRuntimeManager {
   }
 }
 
-/** Extract the latest assistant text from a Pi session snapshot. */
-function extractTextFromSnapshot(
-  snapshot: { messages?: unknown[] } | null | undefined,
-): string | null {
-  const messages = Array.isArray(snapshot?.messages) ? snapshot.messages : [];
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const msg = messages[i] as Record<string, unknown> | null;
-    if (!msg) continue;
-    const role =
-      (typeof msg.role === "string" ? msg.role : null) ??
-      ((msg.message as Record<string, unknown> | undefined)?.role as
-        | string
-        | undefined) ??
-      "";
-    if (role !== "assistant") continue;
-    const rawContent = Array.isArray(msg.content)
-      ? msg.content
-      : Array.isArray(
-            (msg.message as Record<string, unknown> | undefined)?.content,
-          )
-        ? ((msg.message as Record<string, unknown>).content as unknown[])
-        : [];
-    const parts = rawContent
-      .map((part) => {
-        if (!part || typeof part !== "object") return "";
-        const p = part as Record<string, unknown>;
-        return p.type === "text" && typeof p.text === "string" ? p.text : "";
-      })
-      .filter((t) => t.trim().length > 0);
-    if (parts.length > 0) return parts.join("\n\n").trim();
-  }
-  return null;
-}
