@@ -447,7 +447,7 @@ export async function connectCloudRealtime(instanceId: string): Promise<void> {
         `/v1/realtime/replay?cloudInstanceId=${encodeURIComponent(instance.id)}&afterSeq=${encodeURIComponent(String(lastRealtimeSeqByInstance.get(instance.id) ?? 0))}`,
         realtimeBaseUrl,
       ).toString(),
-      instance.access_token,
+      instance.access_token!,
     )
       .then((replay) => {
         if (typeof replay.lastSeq === "number") {
