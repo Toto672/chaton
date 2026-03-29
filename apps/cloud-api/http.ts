@@ -119,19 +119,31 @@ export function html(
 /**
  * Basic HTML sanitization for defense-in-depth.
  * This should not be relied upon as the primary security measure.
+ * Uses multiple patterns to catch edge cases like spaces in closing tags.
  */
 function sanitizeHtml(html: string): string {
   if (!html || typeof html !== 'string') return ''
   
-  return html
-    // Remove script tags
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-    // Remove event handler attributes
-    .replace(/\s+on\w+\s*=/gi, ' ')
-    // Remove javascript: URLs in attributes
-    .replace(/\s*javascript\s*:/gi, '')
-    // Remove data: URLs that could be used for XSS
-    .replace(/\s*data\s*:/gi, '')
+  let result = html
+  
+  // Remove script tags - multiple patterns for robustness
+  // Pattern 1: Standard <script ...> ... </script>
+  result = result.replace(/<script[\s\S]*?<\/script\s*>/gi, '')
+  // Pattern 2: Unclosed <script ...> at end of string
+  result = result.replace(/<script[\s\S]*$/gi, '')
+  // Pattern 3: Malformed closing tags like </script >
+  result = result.replace(/<\/script\s*>/gi, '')
+  
+  // Remove event handler attributes
+  result = result.replace(/\s+on\w+\s*=/gi, ' ')
+  
+  // Remove javascript: URLs in attributes
+  result = result.replace(/\s*javascript\s*:/gi, '')
+  
+  // Remove data: URLs that could be used for XSS
+  result = result.replace(/\s*data\s*:/gi, '')
+  
+  return result
 }
 
 export function sanitizeRedirectTarget(location: string, baseUrl: string): string | null {
