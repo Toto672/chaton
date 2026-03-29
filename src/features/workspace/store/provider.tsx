@@ -33,6 +33,7 @@ import type {
   JsonValue,
   RpcCommand,
   RpcExtensionUiResponse,
+  RpcResponse,
 } from '../rpc'
 import { WorkspaceContext } from './context'
 import { applyPiEvent, clearPendingMessageUpdatesForConversation, flushPendingMessageUpdates, mergeSnapshot } from './pi-events'

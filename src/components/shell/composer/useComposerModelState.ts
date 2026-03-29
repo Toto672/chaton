@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import type { TFunction } from "i18next";
+
 import type { Conversation } from "@/features/workspace/types";
 import { workspaceIpc } from "@/services/ipc/workspace";
 
@@ -43,7 +45,7 @@ type UseComposerModelStateArgs = {
     mode: "secure" | "open",
   ) => Promise<{ ok: boolean; reason?: string; message?: string }>;
   notify: (message: string, type?: "error" | "info" | "success" | "warning") => void;
-  t: (key: string, defaultValue?: string) => string;
+  t: TFunction;
 };
 
 type UseComposerModelStateResult = {

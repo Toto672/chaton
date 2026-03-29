@@ -31,11 +31,6 @@ type GroupedLogs = {
   logs: LogEntry[]
 }
 
-// Helper function to basename since we can't import path in frontend
-function basename(filePath: string): string {
-  return filePath.split('/').pop() || filePath
-}
-
 export function LogConsole({ isOpen, onClose }: LogConsoleProps) {
   const { t } = useTranslation()
   const { state } = useWorkspace()
