@@ -7,7 +7,6 @@ import {
   Loader,
   ChevronRight,
   Bot,
-  Cpu,
   ExternalLink,
 } from 'lucide-react'
 import type { TaskList, SubAgent, Task } from '@/features/task-list/types'
@@ -115,6 +114,14 @@ function getItemTitle(item: Task | SubAgent): string {
   return isSubAgent(item) ? item.name : item.title
 }
 
+function getItemMetaLabel(item: Task | SubAgent): string {
+  return isSubAgent(item) ? 'Sub-agent' : 'Task'
+}
+
+function getTaskNumber(task: Task): string {
+  return `#${task.order + 1}`
+}
+
 interface TaskListItemProps {
   item: Task | SubAgent
   isExpanded: boolean
@@ -143,13 +150,16 @@ function TaskListItem({ item, isExpanded, onToggle, onOpenDetail }: TaskListItem
               {escapeDisplayText(getItemTitle(item))}
             </span>
             {subAgent ? (
-              <Bot className="h-3.5 w-3.5 text-purple-500" />
+              <Bot className="h-3.5 w-3.5 shrink-0 text-purple-500" />
             ) : (
-              <Cpu className="h-3.5 w-3.5 text-blue-500" />
+              <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                Task
+              </span>
             )}
           </div>
           <div className="text-xs text-neutral-500 dark:text-neutral-400">
-            {escapeDisplayText(item.id)} {'•'} {getStatusLabel(item.status)}
+            {escapeDisplayText(getItemMetaLabel(item))}
+            {!subAgent && 'order' in item ? ` ${getTaskNumber(item)}` : ''} {'•'} {getStatusLabel(item.status)}
           </div>
         </div>
         {canOpenDetail && (
