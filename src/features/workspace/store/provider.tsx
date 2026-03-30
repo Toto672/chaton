@@ -1459,18 +1459,28 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           runtime: { pendingUserMessage: true, pendingUserMessageText: message, activeStreamTurn: Date.now(), activeStreamEventSeq: 0 },
         },
       })
-      dispatch({
-        type: 'upsertPiMessage',
-        payload: {
-          conversationId,
-          message: {
-            id: `optimistic-user:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-            role: 'user',
-            timestamp: Date.now(),
-            content: [{ type: 'text', text: message }],
-          } satisfies Record<string, JsonValue>,
-        },
-      })
+      /*
+       * Disabled optimistic user-message insertion.
+       *
+       * We used to inject a local `optimistic-user:*` message immediately to hide
+       * any runtime latency before Pi echoed the real user message back.
+       *
+       * This is kept commented rather than deleted because it may still be useful
+       * if runtime responsiveness regresses and we need to restore the previous UX.
+       *
+       * dispatch({
+       *   type: 'upsertPiMessage',
+       *   payload: {
+       *     conversationId,
+       *     message: {
+       *       id: `optimistic-user:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+       *       role: 'user',
+       *       timestamp: Date.now(),
+       *       content: [{ type: 'text', text: message }],
+       *     } satisfies Record<string, JsonValue>,
+       *   },
+       * })
+       */
 
       if (!gitBaselineByConversationRef.current[conversationId]) {
         void workspaceIpc.getGitDiffSummary(conversationId)
