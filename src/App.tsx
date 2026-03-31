@@ -1,4 +1,4 @@
-import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SyntheticEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MessageExpansionProvider } from '@/hooks/useMessageExpansionContext'
@@ -11,6 +11,7 @@ import { Composer } from '@/components/shell/Composer'
 import { MainView } from '@/components/shell/MainView'
 import { Topbar } from '@/components/shell/Topbar'
 import { ExtensionConfigSheet } from '@/components/shell/ExtensionConfigSheet'
+import { MetaHarnessPanel } from '@/components/shell/MetaHarnessPanel'
 import { ChangelogManager, setChangelogManagerRef } from '@/components/ChangelogManager'
 import type { ChangelogManagerHandle } from '@/components/ChangelogManager'
 import { LogConsole } from '@/components/LogConsole'
@@ -24,6 +25,7 @@ import { ConversationSidePanelProvider } from '@/hooks/use-conversation-side-pan
 import { NotificationProvider } from '@/features/notifications/NotificationContext'
 import { initializeDefaultDeeplinks, setWorkspaceDeeplinkDispatcher } from '@/features/notifications/default-deeplinks'
 import { warmConversationSuccessChime } from '@/lib/audio/conversation-success-chime'
+import { useShortcutAction } from '@/hooks/use-shortcuts'
 import heroCat from '@/assets/chaton-hero.webm'
 
 const SIDEBAR_MIN_WIDTH = 260
@@ -90,7 +92,12 @@ function AppShell() {
   const { t } = useTranslation()
   const { state, isLoading, updateSettings, selectConversation, selectProject, openSettings, closeSettings, openAutomationSuggestionReview } = useWorkspace()
   const [forceOnboardingOpen, setForceOnboardingOpen] = useState(false)
+  const [isMetaHarnessPanelOpen, setIsMetaHarnessPanelOpen] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
+  const toggleMetaHarnessPanel = useMemo(
+    () => () => setIsMetaHarnessPanelOpen((current) => !current),
+    [],
+  )
   const [isResizing, setIsResizing] = useState(false)
   const resizeStartXRef = useRef(0)
   const resizeStartWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH)
@@ -187,6 +194,12 @@ function AppShell() {
     return () => window.clearTimeout(timeout)
   }, [isLoading, isResizing, sidebarWidth, state.settings, updateSettings])
 
+  useShortcutAction((actionId) => {
+    if (actionId === 'toggle-meta-harness-panel') {
+      toggleMetaHarnessPanel()
+    }
+  })
+
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
 
@@ -204,17 +217,28 @@ function AppShell() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const isMeta = navigator.platform.toLowerCase().includes('mac')
-        ? event.metaKey
-        : event.ctrlKey
-      if (!isMeta || !event.shiftKey) return
-      if (event.key.toLowerCase() !== 'o') return
-      event.preventDefault()
-      setForceOnboardingOpen(true)
+      const isMacPlatform = navigator.platform.toLowerCase().includes('mac')
+      const isMeta = isMacPlatform ? event.metaKey : event.ctrlKey
+      if (!isMeta || !event.shiftKey || event.altKey) return
+
+      const key = event.key.toLowerCase()
+      if (key === 'o') {
+        event.preventDefault()
+        setForceOnboardingOpen(true)
+        return
+      }
+
+      // Foreground fallback for the hidden Meta-Harness panel.
+      // The shortcut manager only registers global shortcuts at the Electron layer,
+      // so foreground-only shortcuts need a renderer listener to be reliable.
+      if (key === 'm') {
+        event.preventDefault()
+        toggleMetaHarnessPanel()
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [toggleMetaHarnessPanel])
 
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
@@ -288,6 +312,10 @@ function AppShell() {
       </div>
       <TelemetryConsentCard />
       <ExtensionConfigSheet />
+      <MetaHarnessPanel
+        isOpen={isMetaHarnessPanelOpen}
+        onClose={() => setIsMetaHarnessPanelOpen(false)}
+      />
     </div>
   )
 }

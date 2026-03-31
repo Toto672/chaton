@@ -219,6 +219,21 @@ Project worktrees are only persisted after Chatons confirms the created director
 
 Changing access mode on an existing thread restarts that runtime.
 
+### Meta-Harness Integration
+
+Chatons now includes a first-phase Meta-Harness implementation around the local Pi runtime.
+
+Current architecture:
+
+- `electron/meta-harness/types.ts` defines the typed `HarnessCandidate` surface
+- `electron/meta-harness/bootstrap.ts` performs the bounded environment-bootstrap probe and returns additive prompt sections
+- `electron/meta-harness/archive.ts` stores candidates, prompt text, scores, traces, and frontier metadata under the managed Pi directory
+- `electron/meta-harness/evaluator.ts` evaluates stored candidates against a narrow benchmark in isolated ephemeral local conversations
+- `electron/core-tools.ts` exposes maintainer-facing Meta-Harness tools for listing candidates, inspecting the frontier, storing candidates, promoting one as active, and running evaluation
+- `electron/ipc/pi.ts` exposes lightweight IPC readers for candidate/frontier inspection
+
+The runtime seam remains `electron/pi-sdk-runtime.ts`. Harness application happens before session creation finishes so the environment snapshot can be inserted before the first model turn. This implementation is intentionally bounded: it optimizes harness behavior around a fixed model rather than letting a proposer rewrite arbitrary runtime files.
+
 ### Prompt Composition
 
 At session creation, Chatons injects additional system prompts covering:

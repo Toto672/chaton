@@ -5,6 +5,28 @@ description: Verified documentation changes and rationale for Chatons features a
 
 # Documentation Audit
 
+## 2026-03-31
+
+### Added first-phase Meta-Harness runtime, archive, and evaluation substrate
+
+**Change:** Added a typed Meta-Harness layer around the local Pi runtime. Chatons can now load an active `HarnessCandidate`, run a bounded environment-bootstrap probe before the first model turn, inject the resulting snapshot into the initial system prompt, archive prompt/snapshot artifacts under the managed Pi directory, and evaluate stored candidates against a narrow benchmark with archived scores and traces. Maintainer-facing core tools and lightweight IPC readers were also added for candidate/frontier inspection and promotion.
+
+**Why:** This establishes the lowest-risk first milestone from the Meta-Harness specification: improve coding-task startup quality through pre-turn environment context while building the archive and evaluation substrate needed for later outer-loop harness search.
+
+**Files updated:**
+- `electron/pi-sdk-runtime.ts` -- Applied active harness candidates at runtime startup and archived startup prompt/snapshot artifacts
+- `electron/core-tools.ts` -- Added Meta-Harness candidate/frontier/promote/evaluate tools
+- `electron/ipc/pi.ts` -- Added lightweight IPC readers for Meta-Harness candidates and frontier
+- `electron/meta-harness/types.ts` -- Added typed harness candidate, runtime metadata, benchmark, score, and trace models
+- `electron/meta-harness/candidate.ts` -- Added candidate validation, storage, and loading helpers
+- `electron/meta-harness/bootstrap.ts` -- Added environment snapshot gathering and harness prompt-section application
+- `electron/meta-harness/archive.ts` -- Added archive layout, artifact writing, active candidate state, and frontier tracking
+- `electron/meta-harness/benchmark.ts` -- Added the initial narrow benchmark definition and score aggregation helpers
+- `electron/meta-harness/evaluator.ts` -- Added isolated candidate evaluation with archived traces and scores
+- `docs/content/pi-integration.mdx` -- Documented the Meta-Harness layer and first-phase bootstrap behavior
+- `docs/content/developer-guide.mdx` -- Documented runtime seam, archive modules, and maintainer surfaces
+- `AGENTS.md` -- Documented the Meta-Harness maintainer rule and startup behavior
+
 ## 2026-03-30
 
 ### Fixed conversation creation / runtime model desynchronization in the composer

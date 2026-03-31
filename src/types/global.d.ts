@@ -1253,6 +1253,15 @@ declare global {
       getSettings: () => Promise<PiSettings>;
       updateSettings: (newSettings: Partial<PiSettings>) => Promise<PiSettings>;
       isUsingUserConfig: () => Promise<boolean>;
+      metaHarnessListCandidates: (benchmarkId?: string | null) => Promise<{
+        benchmarkId: string;
+        activeCandidateId: string;
+        candidates: Array<Record<string, unknown>>;
+      }>;
+      metaHarnessGetFrontier: (benchmarkId?: string | null) => Promise<{
+        benchmarkId: string;
+        frontier: Array<Record<string, unknown>>;
+      }>;
     };
     logger: {
       getLogs: (limit?: number, conversationId?: string | null) => Promise<

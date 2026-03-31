@@ -190,9 +190,25 @@ For each conversation, Chatons creates a Pi session with these steps:
    - How to explain limitations to the user
    - Channel-specific delivery constraints when the conversation is owned by a channel extension (for example the local Even Realities glasses channel requires very short, fast replies optimized for on-glasses display)
 
-5. **Start Pi session** and expose commands like `get_access_mode` for the model to query live state
+5. **Apply the active Meta-Harness candidate** before session start. The runtime may prepend or append bounded prompt sections and can run a short environment-bootstrap probe that captures a sandbox snapshot before the first model turn.
+
+6. **Start Pi session** and expose commands like `get_access_mode` for the model to query live state
 
 For cloud conversations, skip this entire local Pi lifecycle. The desktop app may cache cloud project and conversation state locally for display, but execution belongs to the remote headless Chatons runtime and its control-plane services.
+
+### Meta-Harness Runtime Rule
+
+Chatons now supports a typed Meta-Harness layer around the normal Pi runtime. The harness is applied in `electron/pi-sdk-runtime.ts` and must remain an outer-loop runtime concern, not a second assistant persona.
+
+Current first-phase behavior:
+
+- the active harness candidate is loaded from the managed Pi directory archive
+- the runtime may gather an environment snapshot before the first model turn
+- the snapshot is injected into the initial system prompt as an additive section
+- prompt additions must remain bounded and typed through a `HarnessCandidate` object
+- startup prompt text and snapshot artifacts are archived under `<userData>/.pi/agent/meta-harness/`
+
+The initial harness candidate space is intentionally narrow. It may control bounded prompt sections, environment bootstrap, lazy tool-discovery posture, subagent posture, and scoring objectives. It must not grant arbitrary runtime-file mutation to a proposer in this first implementation stage.
 
 ### Memory Retrieval
 

@@ -219,6 +219,20 @@ GitHub Copilot conversations are now configured against Pi's `anthropic-messages
 2. Project repository path (if conversation is project-linked)
 3. Global workspace directory (`<userData>/workspace/global`)
 
+### Meta-Harness Layer
+
+Chatons now has a first-phase Meta-Harness layer around the normal Pi runtime. This is implemented as an outer-loop runtime wrapper in `electron/pi-sdk-runtime.ts`, not as a second conversational persona and not as a change to the underlying provider/model stack.
+
+The current implementation is intentionally narrow and typed:
+
+- a `HarnessCandidate` controls bounded prompt additions, environment bootstrap, tool-discovery posture, subagent posture, and scoring objectives
+- the active candidate is loaded from the managed Pi archive under `<userData>/.pi/agent/meta-harness/`
+- before the first model turn, the runtime may gather a short environment snapshot from the workspace or tool cwd
+- when a snapshot is captured successfully, Chatons injects it into the initial system prompt as an additive `Environment Snapshot` section
+- startup prompt text, candidate metadata, scores, and evaluation traces are archived under the managed Pi directory for later comparison
+
+The first production milestone mirrors the paper's environment-bootstrap pattern: a short, best-effort probe with a timeout and silent failure behavior. If the snapshot fails, runtime startup continues normally.
+
 Worktree enablement is now strict: Chatons only persists a conversation worktree after the created directory is confirmed to be a valid Git worktree/repository. Failed worktree creation is cleaned up instead of leaving an empty directory in the conversation runtime path.
 
 ### Access Mode

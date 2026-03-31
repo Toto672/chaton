@@ -6,6 +6,8 @@
  * not routed through the extension system.
  */
 
+import electron from "electron";
+const { app } = electron;
 import { Type } from "@sinclair/typebox";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
 import { ModelRegistry, SettingsManager } from "@mariozechner/pi-coding-agent";
@@ -13,6 +15,21 @@ import type { Api, Model } from "@mariozechner/pi-ai";
 import { getDb } from "./db/index.js";
 import { findConversationById } from "./db/repos/conversations.js";
 import { piSessionRuntimeManager } from "./pi-runtime-singleton.js";
+import {
+  listHarnessCandidates as listStoredHarnessCandidates,
+  markActiveCandidateInSummaries,
+  readActiveCandidate,
+  readFrontier,
+  writeActiveCandidate,
+} from "./meta-harness/archive.js";
+import {
+  ensureCandidateStored,
+  getDefaultHarnessCandidate,
+  loadHarnessCandidate,
+  validateHarnessCandidate,
+} from "./meta-harness/candidate.js";
+import { buildDefaultBenchmark } from "./meta-harness/benchmark.js";
+import { evaluateHarnessCandidate } from "./meta-harness/evaluator.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -42,6 +59,10 @@ function errorResult(message: string) {
   };
 }
 
+function getAgentDirFromElectronUserData() {
+  return `${app.getPath("userData")}/.pi/agent`;
+}
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
@@ -60,6 +81,7 @@ export function createCoreTools(
   settingsManager?: SettingsManager,
   modelRegistry?: ModelRegistry,
 ): ToolDefinition[] {
+  const agentDir = getAgentDirFromElectronUserData();
   // ---- create_task_list ----
   const createTaskList: ToolDefinition = {
     name: "create_task_list",
@@ -983,6 +1005,120 @@ export function createCoreTools(
   };
 
   // ---- get_commands ----
+  // ---- meta-harness tools ----
+  const listMetaHarnessCandidates: ToolDefinition = {
+    name: "meta_harness_list_candidates",
+    label: "List meta-harness candidates",
+    description:
+      "List stored Meta-Harness candidates and their latest known scores for a benchmark.",
+    parameters: Type.Object({
+      benchmarkId: Type.Optional(Type.String({ description: "Optional benchmark identifier" })),
+    }),
+    execute: async (_toolCallId: string, params: { benchmarkId?: string }) => {
+      const benchmarkId =
+        typeof params.benchmarkId === "string" && params.benchmarkId.trim().length > 0
+          ? params.benchmarkId.trim()
+          : buildDefaultBenchmark().id;
+      const summaries = markActiveCandidateInSummaries(
+        agentDir,
+        listStoredHarnessCandidates(agentDir, benchmarkId),
+      );
+      return textResult({
+        benchmarkId,
+        activeCandidateId: readActiveCandidate(agentDir) ?? getDefaultHarnessCandidate().id,
+        candidates: summaries,
+      });
+    },
+  };
+
+  const getMetaHarnessFrontier: ToolDefinition = {
+    name: "meta_harness_get_frontier",
+    label: "Get meta-harness frontier",
+    description:
+      "List the current ranked frontier for a benchmark from the Meta-Harness archive.",
+    parameters: Type.Object({
+      benchmarkId: Type.Optional(Type.String({ description: "Optional benchmark identifier" })),
+    }),
+    execute: async (_toolCallId: string, params: { benchmarkId?: string }) => {
+      const benchmarkId =
+        typeof params.benchmarkId === "string" && params.benchmarkId.trim().length > 0
+          ? params.benchmarkId.trim()
+          : buildDefaultBenchmark().id;
+      return textResult({ benchmarkId, frontier: readFrontier(agentDir, benchmarkId) });
+    },
+  };
+
+  const setMetaHarnessActiveCandidate: ToolDefinition = {
+    name: "meta_harness_set_active_candidate",
+    label: "Set active meta-harness candidate",
+    description:
+      "Promote a stored Meta-Harness candidate so new local runtimes use it by default.",
+    parameters: Type.Object({
+      candidateId: Type.String({ description: "Candidate identifier to activate" }),
+    }),
+    execute: async (_toolCallId: string, params: { candidateId: string }) => {
+      const candidateId = (params.candidateId ?? "").trim();
+      if (!candidateId) return errorResult("candidateId is required");
+      loadHarnessCandidate(agentDir, candidateId);
+      writeActiveCandidate(agentDir, candidateId);
+      return textResult({ candidateId, active: true });
+    },
+  };
+
+  const createMetaHarnessCandidate: ToolDefinition = {
+    name: "meta_harness_create_candidate",
+    label: "Create meta-harness candidate",
+    description:
+      "Validate and store a typed Meta-Harness candidate in the managed archive.",
+    parameters: Type.Object({
+      candidate: Type.Any({ description: "Candidate payload to validate and store" }),
+    }),
+    execute: async (_toolCallId: string, params: { candidate: unknown }) => {
+      const validated = validateHarnessCandidate(params.candidate);
+      if (!validated.ok) {
+        return errorResult(`invalid candidate: ${validated.errors.join(", ")}`);
+      }
+      ensureCandidateStored(agentDir, validated.value);
+      return textResult({ candidate: validated.value, stored: true });
+    },
+  };
+
+  const evaluateMetaHarnessCandidate: ToolDefinition = {
+    name: "meta_harness_evaluate_candidate",
+    label: "Evaluate meta-harness candidate",
+    description:
+      "Run a narrow benchmark against a Meta-Harness candidate and store scores plus traces in the archive.",
+    parameters: Type.Object({
+      candidateId: Type.String({ description: "Stored candidate identifier" }),
+      benchmarkId: Type.Optional(Type.String({ description: "Optional benchmark identifier override" })),
+      workspaceRoot: Type.Optional(Type.String({ description: "Optional workspace root used for benchmark tasks" })),
+    }),
+    execute: async (
+      _toolCallId: string,
+      params: { candidateId: string; benchmarkId?: string; workspaceRoot?: string },
+    ) => {
+      const candidateId = (params.candidateId ?? "").trim();
+      if (!candidateId) return errorResult("candidateId is required");
+      const candidate = loadHarnessCandidate(agentDir, candidateId);
+      const db = getDb();
+      const conversation = findConversationById(db, conversationId);
+      const workspaceRoot =
+        typeof params.workspaceRoot === "string" && params.workspaceRoot.trim().length > 0
+          ? params.workspaceRoot.trim()
+          : conversation?.worktree_path ?? process.cwd();
+      if (!workspaceRoot || workspaceRoot.trim().length === 0) {
+        return errorResult("workspaceRoot could not be resolved");
+      }
+      const result = await evaluateHarnessCandidate({
+        agentDir,
+        candidate,
+        benchmarkId: params.benchmarkId,
+        workspaceRoot,
+      });
+      return textResult(result);
+    },
+  };
+
   const getCommands: ToolDefinition = {
     name: "get_commands",
     label: "Get runtime commands",
@@ -1172,6 +1308,11 @@ export function createCoreTools(
     cancelSubagent,
     setSubagentResult,
     runSubagents,
+    listMetaHarnessCandidates,
+    getMetaHarnessFrontier,
+    setMetaHarnessActiveCandidate,
+    createMetaHarnessCandidate,
+    evaluateMetaHarnessCandidate,
     getAccessMode,
     getCommands,
     listProviders,
@@ -1194,6 +1335,11 @@ export const CORE_TOOL_NAMES = new Set([
   "cancel_subagent",
   "set_subagent_result",
   "run_subagents",
+  "meta_harness_list_candidates",
+  "meta_harness_get_frontier",
+  "meta_harness_set_active_candidate",
+  "meta_harness_create_candidate",
+  "meta_harness_evaluate_candidate",
   "get_access_mode",
   "get_commands",
   "list_providers",

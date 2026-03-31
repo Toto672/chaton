@@ -642,6 +642,10 @@ contextBridge.exposeInMainWorld("pi", {
   updateSettings: (newSettings: unknown) =>
     ipcRenderer.invoke("pi:updateSettings", newSettings),
   isUsingUserConfig: () => ipcRenderer.invoke("pi:isUsingUserConfig"),
+  metaHarnessListCandidates: (benchmarkId?: string | null) =>
+    ipcRenderer.invoke("meta-harness:listCandidates", benchmarkId),
+  metaHarnessGetFrontier: (benchmarkId?: string | null) =>
+    ipcRenderer.invoke("meta-harness:getFrontier", benchmarkId),
 });
 
 // Exposer les méthodes de logging

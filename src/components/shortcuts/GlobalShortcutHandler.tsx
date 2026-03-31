@@ -19,15 +19,30 @@ export function GlobalShortcutHandler() {
           description: 'Create a new global workspace conversation'
         });
 
+        await registerAction({
+          id: 'toggle-meta-harness-panel',
+          name: 'Toggle Meta-Harness Panel',
+          description: 'Show or hide the hidden Meta-Harness maintainer panel'
+        });
+
         // Register the shortcut for creating a new workspace conversation
         // Default: Ctrl+Shift+N (Windows/Linux) or Cmd+Shift+N (Mac)
         const accelerator = isMac ? 'Cmd+Shift+N' : 'Ctrl+Shift+N';
+        const metaHarnessAccelerator = isMac ? 'Cmd+Shift+M' : 'Ctrl+Shift+M';
         
         await registerShortcut({
           id: 'new-workspace-conversation-shortcut',
           scope: 'global', // This makes it work system-wide
           accelerator: accelerator,
           actionId: 'new-workspace-conversation',
+          enabled: true
+        });
+
+        await registerShortcut({
+          id: 'toggle-meta-harness-panel-shortcut',
+          scope: 'foreground',
+          accelerator: metaHarnessAccelerator,
+          actionId: 'toggle-meta-harness-panel',
           enabled: true
         });
       } catch (error) {

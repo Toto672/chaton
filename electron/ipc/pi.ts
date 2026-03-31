@@ -4,15 +4,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import electron from 'electron';
-const { ipcMain, BrowserWindow, dialog } = electron;
+const { ipcMain, BrowserWindow, dialog, app } = electron;
 import { getModels, getSettings, updateSettings, isUsingUserConfig } from '../lib/pi/pi-manager.js';
 import { getLogManager } from '../lib/logging/log-manager.js';
 import { getSentryTelemetry } from '../lib/telemetry/sentry.js';
+import {
+  listHarnessCandidates,
+  markActiveCandidateInSummaries,
+  readActiveCandidate,
+  readFrontier,
+} from '../meta-harness/archive.js';
+import { buildDefaultBenchmark } from '../meta-harness/benchmark.js';
 
 /**
  * Enregistre les handlers IPC pour Pi
  */
 export function registerPiIpc() {
+  const agentDir = path.join(app.getPath('userData'), '.pi', 'agent');
   // Récupère la liste des modèles disponibles
   ipcMain.handle('pi:getModels', () => {
     try {
@@ -146,5 +154,29 @@ export function registerPiIpc() {
       data: payload,
     })
     return true
+  })
+
+  ipcMain.handle('meta-harness:listCandidates', (_event, benchmarkId?: string | null) => {
+    const resolvedBenchmarkId = benchmarkId && benchmarkId.trim().length > 0
+      ? benchmarkId.trim()
+      : buildDefaultBenchmark().id
+    return {
+      benchmarkId: resolvedBenchmarkId,
+      activeCandidateId: readActiveCandidate(agentDir) ?? 'baseline',
+      candidates: markActiveCandidateInSummaries(
+        agentDir,
+        listHarnessCandidates(agentDir, resolvedBenchmarkId),
+      ),
+    }
+  })
+
+  ipcMain.handle('meta-harness:getFrontier', (_event, benchmarkId?: string | null) => {
+    const resolvedBenchmarkId = benchmarkId && benchmarkId.trim().length > 0
+      ? benchmarkId.trim()
+      : buildDefaultBenchmark().id
+    return {
+      benchmarkId: resolvedBenchmarkId,
+      frontier: readFrontier(agentDir, resolvedBenchmarkId),
+    }
   })
 }

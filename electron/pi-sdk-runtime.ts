@@ -85,6 +85,23 @@ import {
   toPiImageContent,
   type JsonValue,
 } from "./lib/pi/runtime-utils.js";
+import {
+  archiveHarnessArtifacts,
+  createRunId,
+  readActiveCandidate,
+} from "./meta-harness/archive.js";
+import {
+  applyHarnessCandidate,
+  buildHarnessPromptHints,
+} from "./meta-harness/bootstrap.js";
+import {
+  getDefaultHarnessCandidate,
+  loadHarnessCandidate,
+} from "./meta-harness/candidate.js";
+import type {
+  HarnessCandidate,
+  HarnessRuntimeMetadata,
+} from "./meta-harness/types.js";
 
 export type PiRuntimeStatus =
   | "stopped"
@@ -273,6 +290,7 @@ export type RpcSessionState = {
   autoCompactionEnabled: boolean;
   messageCount: number;
   pendingMessageCount: number;
+  harness: HarnessRuntimeMetadata | null;
 };
 
 export type PiProcessLifecycleEvent =
@@ -304,6 +322,7 @@ type RuntimeState = {
   status: PiRuntimeStatus;
   snapshotState: RpcSessionState | null;
   snapshotMessages: JsonValue[];
+  harness: HarnessRuntimeMetadata | null;
 };
 
 type RuntimeSubagentStatus =
@@ -384,6 +403,7 @@ function buildState(runtime: RuntimeState): RpcSessionState {
     autoCompactionEnabled: runtime.settingsManager.getCompactionEnabled(),
     messageCount: runtime.session.messages.length,
     pendingMessageCount: 0,
+    harness: runtime.harness,
   };
 }
 
@@ -716,7 +736,10 @@ export class PiSdkRuntime {
     });
   }
 
-  async start(conversation: DbConversation) {
+  async start(
+    conversation: DbConversation,
+    options?: { harnessCandidate?: HarnessCandidate | null },
+  ) {
     if (this.runtime) return;
 
     const db = getDb();
@@ -829,6 +852,43 @@ export class PiSdkRuntime {
       settingsManager.getDefaultThinkingLevel() ??
       "medium") as ThinkingLevel;
 
+    const explicitHarnessCandidate =
+      options && Object.prototype.hasOwnProperty.call(options, "harnessCandidate")
+        ? options.harnessCandidate
+        : undefined;
+    const activeHarnessCandidateId =
+      explicitHarnessCandidate === undefined
+        ? readActiveCandidate(getAgentDir())
+        : explicitHarnessCandidate?.id ?? null;
+    let harnessCandidate: HarnessCandidate | null = null;
+    if (explicitHarnessCandidate !== undefined) {
+      harnessCandidate = explicitHarnessCandidate ?? null;
+    } else {
+      try {
+        harnessCandidate = activeHarnessCandidateId
+          ? loadHarnessCandidate(getAgentDir(), activeHarnessCandidateId)
+          : getDefaultHarnessCandidate();
+      } catch {
+        harnessCandidate = getDefaultHarnessCandidate();
+      }
+    }
+    const harnessBootstrap = await applyHarnessCandidate(
+      harnessCandidate,
+      runtimeCwd,
+      toolsCwd,
+    );
+    const harnessPolicySections = buildHarnessPromptHints(harnessCandidate);
+    const harnessRunId = createRunId();
+    const harnessArchiveRoot = path.join(getAgentDir(), "meta-harness");
+    const harnessMetadata: HarnessRuntimeMetadata = {
+      candidateId: harnessCandidate?.id ?? null,
+      parentIds: harnessCandidate?.parentIds ?? [],
+      archiveRoot: harnessArchiveRoot,
+      environmentSnapshotEnabled:
+        harnessCandidate?.bootstrap.environmentSnapshot?.enabled === true,
+      environmentSnapshotCaptured: typeof harnessBootstrap.envSnapshotText === "string",
+    };
+
     let systemPromptSections: string[] = [];
 
     const resourceLoader = new DefaultResourceLoader({
@@ -836,7 +896,11 @@ export class PiSdkRuntime {
       agentDir: getAgentDir(),
       settingsManager,
       appendSystemPromptOverride: (base) => {
-        const sections = [...base];
+        const sections = [
+          ...harnessBootstrap.promptPrependSections,
+          ...harnessPolicySections,
+          ...base,
+        ];
         sections.push(
           "If the user mentions creating or editing an extension, first read the project's extension documentation before proposing or applying changes.",
         );
@@ -941,6 +1005,9 @@ export class PiSdkRuntime {
               "6. **Confirm before destruction**: For irreversible changes, briefly confirm the action aligns with the user's intent",
             ].join("\n"),
           );
+        }
+        if (harnessBootstrap.promptAppendSections.length > 0) {
+          sections.push(...harnessBootstrap.promptAppendSections);
         }
 
         // Store the sections for later emission
@@ -1331,6 +1398,7 @@ export class PiSdkRuntime {
       snapshotState: null,
       snapshotMessages: [],
       workingDirectory: runtimeCwd,
+      harness: harnessMetadata,
     };
 
     const extensionUiContext: ExtensionUIContext = {
@@ -1427,6 +1495,22 @@ export class PiSdkRuntime {
     this.runtime = runtime;
     this.attachSessionListener(runtime);
     this.refreshSnapshot();
+    if (harnessCandidate) {
+      archiveHarnessArtifacts({
+        agentDir: getAgentDir(),
+        benchmarkId: "runtime-startup",
+        runId: harnessRunId,
+        candidate: harnessCandidate,
+        promptSections: systemPromptSections,
+        envSnapshotText: harnessBootstrap.envSnapshotText,
+        summary: {
+          conversationId: conversation.id,
+          accessMode,
+          runtimeCwd,
+          toolsCwd,
+        },
+      });
+    }
 
     // Emit system prompt information to the renderer.
     this.emit({
@@ -1730,6 +1814,11 @@ export class PiSdkRuntime {
   }
 }
 
+(globalThis as Record<string, unknown>).__chatonsMetaHarnessRuntimeFactory = (
+  conversationId: string,
+  onEvent: (payload: PiRendererEvent) => void,
+) => new PiSdkRuntime(conversationId, onEvent);
+
 export class PiSessionRuntimeManager {
   private readonly runtimes = new Map<string, PiSdkRuntime>();
   private readonly startingRuntimes = new Map<
@@ -1796,7 +1885,9 @@ export class PiSessionRuntimeManager {
 
       const runtime = this.getOrCreateRuntime(conversationId);
       try {
-        await runtime.start(conversation);
+        await runtime.start(conversation, {
+          harnessCandidate: undefined,
+        });
         return { ok: true as const };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -2115,6 +2206,7 @@ export class PiSessionRuntimeManager {
     executionMode?: RuntimeSubagentExecutionMode;
     fileScope?: RuntimeSubagentFileScope;
     toolPolicy?: RuntimeSubagentToolPolicy;
+    harnessCandidate?: HarnessCandidate | null;
   }): Promise<
     | { ok: true; subAgentId: string; runtimeConversationId: string }
     | { ok: false; message: string }
@@ -2155,7 +2247,9 @@ export class PiSessionRuntimeManager {
 
     const runtime = this.getOrCreateRuntime(runtimeConversation.id);
     try {
-      await runtime.start(runtimeConversation);
+      await runtime.start(runtimeConversation, {
+        harnessCandidate: params.harnessCandidate,
+      });
       return {
         ok: true,
         subAgentId,
