@@ -8,16 +8,37 @@ export function buildDefaultBenchmark(): MetaHarnessBenchmarkDefinition {
         id: "cwd-and-toolchain",
         prompt:
           "Briefly report the current working directory and mention at least one detected toolchain version if available.",
-        expectedIncludes: ["directory"],
+        expectedIncludesAny: ["directory", "working directory", "cwd"],
+        expectedRegexAny: [
+          String.raw`(/users/|/home/|/workspace/|/tmp/|/var/|[a-z]:\\)`,
+          String.raw`\b(node(\.js)?|npm|pnpm|python|rust|cargo|git|ruby|java)\b[^\n]*\b(v?\d+[\w.:-]*)`,
+        ],
+        expectedRegexAnyMin: 2,
       },
       {
         id: "repo-shape",
         prompt:
           "Briefly summarize the top-level repository contents or workspace shape before making any changes.",
-        expectedIncludes: ["repository"],
+        expectedIncludesAny: ["repository", "repo", "workspace", "monorepo", "project"],
+        expectedRegexAny: [
+          String.raw`\b(src|electron|docs|apps|packages|landing|extension-registry|scripts|dist)\b`,
+          String.raw`\b(repository|repo|workspace|monorepo|project)\b`,
+        ],
+        expectedRegexAnyMin: 2,
       },
     ],
   };
+}
+
+function countMatchingRegexes(patterns: string[] | undefined, outputText: string): number {
+  if (!patterns || patterns.length === 0) return 0;
+  return patterns.reduce((count, pattern) => {
+    try {
+      return new RegExp(pattern, "i").test(outputText) ? count + 1 : count;
+    } catch {
+      return count;
+    }
+  }, 0);
 }
 
 export function scoreTaskResult(params: {
@@ -27,7 +48,10 @@ export function scoreTaskResult(params: {
   outputText?: string;
   errorMessage?: string;
   expectedIncludes?: string[];
+  expectedIncludesAny?: string[];
   expectedRegex?: string[];
+  expectedRegexAny?: string[];
+  expectedRegexAnyMin?: number;
 }): MetaHarnessTaskResult {
   const outputText = params.outputText?.trim();
   let success = !params.errorMessage && !!outputText;
@@ -35,6 +59,10 @@ export function scoreTaskResult(params: {
   if (success && params.expectedIncludes && params.expectedIncludes.length > 0) {
     const lowered = outputText!.toLowerCase();
     success = params.expectedIncludes.every((needle) => lowered.includes(needle.toLowerCase()));
+  }
+  if (success && params.expectedIncludesAny && params.expectedIncludesAny.length > 0) {
+    const lowered = outputText!.toLowerCase();
+    success = params.expectedIncludesAny.some((needle) => lowered.includes(needle.toLowerCase()));
   }
   if (success && params.expectedRegex && params.expectedRegex.length > 0) {
     success = params.expectedRegex.every((pattern) => {
@@ -44,6 +72,10 @@ export function scoreTaskResult(params: {
         return true;
       }
     });
+  }
+  if (success && params.expectedRegexAny && params.expectedRegexAny.length > 0) {
+    const matchCount = countMatchingRegexes(params.expectedRegexAny, outputText ?? "");
+    success = matchCount >= (params.expectedRegexAnyMin ?? 1);
   }
 
   return {

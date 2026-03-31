@@ -67,7 +67,10 @@ export type MetaHarnessBenchmarkTask = {
   workingDirectory?: string;
   accessMode?: "secure" | "open";
   expectedIncludes?: string[];
+  expectedIncludesAny?: string[];
   expectedRegex?: string[];
+  expectedRegexAny?: string[];
+  expectedRegexAnyMin?: number;
   modelProvider?: string;
   modelId?: string;
   thinkingLevel?: string;

@@ -103,13 +103,73 @@ function buildOptimizerConversation(params: {
   };
 }
 
-function extractJsonBlock(text: string): string | null {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced && fenced[1]) return fenced[1].trim();
-  const start = text.indexOf("[");
-  const end = text.lastIndexOf("]");
-  if (start >= 0 && end > start) return text.slice(start, end + 1);
+function extractTextPartsFromMessage(message: unknown): string[] {
+  if (!message || typeof message !== "object") return [];
+  const record = message as Record<string, unknown>;
+  const content = Array.isArray(record.content) ? record.content : [];
+  return content
+    .map((part) => {
+      if (!part || typeof part !== "object") return "";
+      const contentPart = part as Record<string, unknown>;
+      if (contentPart.type === "text" && typeof contentPart.text === "string") return contentPart.text;
+      if (contentPart.type === "reasoning" && typeof contentPart.text === "string") return contentPart.text;
+      return "";
+    })
+    .filter((value) => value.trim().length > 0);
+}
+
+function extractJsonArraySubstring(text: string): string | null {
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaping = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (escaping) {
+      escaping = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaping = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) {
+      continue;
+    }
+    if (char === "[") {
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+    if (char === "]" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        return text.slice(start, index + 1);
+      }
+    }
+  }
+
   return null;
+}
+
+function extractJsonCandidate(text: string): string | null {
+  const fencedMatches = Array.from(text.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi));
+  for (const match of fencedMatches) {
+    const block = match[1]?.trim();
+    if (!block) continue;
+    if (block.startsWith("[") || block.startsWith("{")) return block;
+    const nestedArray = extractJsonArraySubstring(block);
+    if (nestedArray) return nestedArray;
+  }
+
+  const trimmed = text.trim();
+  if (trimmed.startsWith("[") || trimmed.startsWith("{")) return trimmed;
+  return extractJsonArraySubstring(text);
 }
 
 function coercePromptSections(value: unknown): string[] | undefined {
@@ -205,6 +265,7 @@ function buildFallbackProposal(params: {
   baseCandidate: HarnessCandidate;
   iteration: number;
   index: number;
+  failureReason?: string;
 }): MetaHarnessOptimizerProposal {
   const envSnapshot = params.baseCandidate.bootstrap.environmentSnapshot ?? {
     enabled: false,
@@ -231,9 +292,12 @@ function buildFallbackProposal(params: {
       },
     },
   });
+  const failureSuffix = params.failureReason?.trim()
+    ? ` Failure: ${params.failureReason.trim()}`
+    : "";
   return {
     candidate: candidate ?? getDefaultHarnessCandidate(),
-    rationale: "Fallback heuristic proposal used because the optimizer model did not return valid JSON proposals.",
+    rationale: `Fallback heuristic proposal used because the optimizer model did not return valid JSON proposals.${failureSuffix}`,
   };
 }
 
@@ -267,10 +331,10 @@ async function askOptimizerModel(params: {
   config: MetaHarnessOptimizerConfig;
   baseCandidate: HarnessCandidate;
   attemptSummary: string[];
-}): Promise<MetaHarnessOptimizerProposal[]> {
+}): Promise<{ proposals: MetaHarnessOptimizerProposal[]; failureReason?: string }> {
   const runtimeFactory = getRuntimeFactory();
   if (!runtimeFactory) {
-    return [];
+    return { proposals: [], failureReason: "Meta-Harness runtime factory is not available." };
   }
 
   const conversation = buildOptimizerConversation({
@@ -298,43 +362,49 @@ async function askOptimizerModel(params: {
     await runtime.start(conversation, { harnessCandidate: null });
     const response = await runtime.send({
       type: "prompt",
-      message: buildProposalPrompt({
+      message: `${buildProposalPrompt({
         baseCandidate: params.baseCandidate,
         benchmarkId: params.config.benchmarkId,
         attemptSummary: params.attemptSummary,
         maxVariantsPerIteration: params.config.maxVariantsPerIteration,
-      }),
+      })}\n\nIf you cannot comply perfectly, return a JSON object with a \"proposals\" array anyway. Do not include markdown fencing.`,
     });
     if (!response.success) {
-      return [];
+      return {
+        proposals: [],
+        failureReason: typeof response.error === "string" && response.error.trim().length > 0
+          ? response.error
+          : "Optimizer model prompt failed.",
+      };
     }
-    const text = runtime.getSnapshot().messages
-      .map((entry) => {
-        if (!entry || typeof entry !== "object") return "";
-        const record = entry as Record<string, unknown>;
-        const content = Array.isArray(record.content) ? record.content : [];
-        return content
-          .map((part) => {
-            if (!part || typeof part !== "object") return "";
-            const contentPart = part as Record<string, unknown>;
-            return contentPart.type === "text" && typeof contentPart.text === "string"
-              ? contentPart.text
-              : "";
-          })
-          .filter((value) => value.trim().length > 0)
-          .join("\n\n");
-      })
-      .filter((value) => value.trim().length > 0)
+    const snapshot = runtime.getSnapshot();
+    const assistantMessages = snapshot.messages.filter((entry) => {
+      if (!entry || typeof entry !== "object") return false;
+      return (entry as Record<string, unknown>).role === "assistant";
+    });
+    const text = assistantMessages
+      .flatMap((entry) => extractTextPartsFromMessage(entry))
       .join("\n\n");
-    const jsonBlock = extractJsonBlock(text);
+    const jsonBlock = extractJsonCandidate(text);
     if (!jsonBlock) {
-      return [];
+      return {
+        proposals: [],
+        failureReason: "Optimizer model returned no parseable JSON payload.",
+      };
     }
     const parsed = JSON.parse(jsonBlock) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
+    const proposalRecords = Array.isArray(parsed)
+      ? parsed
+      : (parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).proposals)
+        ? (parsed as Record<string, unknown>).proposals
+        : []);
+    if (!Array.isArray(proposalRecords) || proposalRecords.length === 0) {
+      return {
+        proposals: [],
+        failureReason: "Optimizer model JSON did not contain a proposal array.",
+      };
     }
-    return parsed
+    const proposals = proposalRecords
       .map((item, index) => {
         if (!item || typeof item !== "object") return null;
         const record = item as Record<string, unknown>;
@@ -358,8 +428,20 @@ async function askOptimizerModel(params: {
       })
       .filter((item): item is MetaHarnessOptimizerProposal => !!item)
       .slice(0, Math.max(1, Math.min(4, params.config.maxVariantsPerIteration)));
-  } catch {
-    return [];
+
+    if (proposals.length === 0) {
+      return {
+        proposals: [],
+        failureReason: "Optimizer model JSON parsed, but no valid candidate proposals matched the schema.",
+      };
+    }
+
+    return { proposals };
+  } catch (error) {
+    return {
+      proposals: [],
+      failureReason: error instanceof Error ? error.message : String(error),
+    };
   } finally {
     await runtime.stop();
   }
@@ -500,7 +582,7 @@ class MetaHarnessOptimizerRunner {
           .map((entry) => entry.summary)
           .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
 
-        let proposals = await askOptimizerModel({
+        const optimizerResult = await askOptimizerModel({
           runId: state.runId!,
           iteration: nextIteration,
           config: {
@@ -519,12 +601,14 @@ class MetaHarnessOptimizerRunner {
           attemptSummary: previousSummaries,
         });
 
+        let proposals = optimizerResult.proposals;
         if (proposals.length === 0) {
           proposals = Array.from({ length: Math.max(1, state.maxVariantsPerIteration) }, (_, index) =>
             buildFallbackProposal({
               baseCandidate,
               iteration: nextIteration,
               index,
+              failureReason: optimizerResult.failureReason,
             }),
           );
         }

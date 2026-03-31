@@ -168,7 +168,10 @@ export async function evaluateHarnessCandidate(params: {
         outputText,
         errorMessage,
         expectedIncludes: task.expectedIncludes,
+        expectedIncludesAny: task.expectedIncludesAny,
         expectedRegex: task.expectedRegex,
+        expectedRegexAny: task.expectedRegexAny,
+        expectedRegexAnyMin: task.expectedRegexAnyMin,
       }),
     );
   }
