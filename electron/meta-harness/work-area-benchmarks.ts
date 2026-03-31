@@ -493,7 +493,7 @@ const codeReviewBenchmark: MetaHarnessBenchmarkDefinition = {
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   
-  const query = ` + "`" + String.raw`SELECT * FROM users WHERE username = '${username}'` + "`" + String.raw`;
+  const query = ` + "`" + String.raw`SELECT * FROM users WHERE username = '\${username}'` + "`" + String.raw`;
   const user = await db.query(query);
   
   if (user && user.password === password) {
@@ -1355,7 +1355,7 @@ app.post('/register', async (req, res) => {
   const { username, password, email } = req.body;
   
   const query = ` + "`" + String.raw`INSERT INTO users (username, password, email) 
-                 VALUES ('${username}', '${password}', '${email}')` + "`" + String.raw`;
+                 VALUES ('\${username}', '\${password}', '\${email}')` + "`" + String.raw`;
   
   await db.query(query);
   
