@@ -646,6 +646,24 @@ contextBridge.exposeInMainWorld("pi", {
     ipcRenderer.invoke("meta-harness:listCandidates", benchmarkId),
   metaHarnessGetFrontier: (benchmarkId?: string | null) =>
     ipcRenderer.invoke("meta-harness:getFrontier", benchmarkId),
+  metaHarnessGetOptimizerState: () =>
+    ipcRenderer.invoke("meta-harness:getOptimizerState"),
+  metaHarnessListOptimizerAttempts: (runId?: string | null) =>
+    ipcRenderer.invoke("meta-harness:listOptimizerAttempts", runId),
+  metaHarnessStartOptimizer: (config: {
+    benchmarkId?: string
+    optimizerModelProvider: string
+    optimizerModelId: string
+    optimizerThinkingLevel?: string | null
+    autoPromote?: boolean
+    loop?: boolean
+    maxIterations?: number | null
+    maxVariantsPerIteration?: number
+    minScoreDelta?: number
+    sleepMs?: number
+  }) => ipcRenderer.invoke("meta-harness:startOptimizer", config),
+  metaHarnessStopOptimizer: () =>
+    ipcRenderer.invoke("meta-harness:stopOptimizer"),
 });
 
 // Exposer les méthodes de logging

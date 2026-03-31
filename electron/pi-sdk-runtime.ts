@@ -110,7 +110,6 @@ export type PiRuntimeStatus =
   | "streaming"
   | "error";
 
-
 export type ImageContent = {
   type: "image";
   data: string;
@@ -379,14 +378,13 @@ type RuntimeSubagentRecord = {
   cleanupTimer?: NodeJS.Timeout;
 };
 
-function getAgentDir() {
+export function getAgentDir() {
   return path.join(app.getPath("userData"), ".pi", "agent");
 }
 
 function getGlobalWorkspaceDir() {
   return path.join(app.getPath("userData"), "workspace", "global");
 }
-
 
 function buildState(runtime: RuntimeState): RpcSessionState {
   const model = runtime.session.model;
@@ -420,7 +418,6 @@ function listScopedOrAllModels(
   return source.map((model) => ({ provider: model.provider, id: model.id }));
 }
 
-
 function convertEvent(event: AgentSessionEvent): RpcEvent | null {
   switch (event.type) {
     case "agent_start":
@@ -446,7 +443,6 @@ function convertEvent(event: AgentSessionEvent): RpcEvent | null {
 function getManifestToolCatalog() {
   return buildToolCatalogFromManifests(listExtensionManifests());
 }
-
 
 export class PiSdkRuntime {
   private status: PiRuntimeStatus = "stopped";
@@ -558,7 +554,8 @@ export class PiSdkRuntime {
       if (entry.role !== "assistant") continue;
       if (entry.stopReason !== "error") continue;
       if (typeof entry.errorMessage !== "string") continue;
-      if (entry.errorMessage.trim().toLowerCase() !== "connection error.") continue;
+      if (entry.errorMessage.trim().toLowerCase() !== "connection error.")
+        continue;
 
       const nested = extractNestedErrorMessage(entry.error);
       if (!nested) return null;
@@ -580,7 +577,8 @@ export class PiSdkRuntime {
       if (entry.role !== "assistant") continue;
       if (entry.stopReason !== "error") continue;
       if (typeof entry.errorMessage !== "string") continue;
-      if (entry.errorMessage.trim().toLowerCase() !== "connection error.") continue;
+      if (entry.errorMessage.trim().toLowerCase() !== "connection error.")
+        continue;
       entry.errorMessage = message;
       break;
     }
@@ -612,7 +610,11 @@ export class PiSdkRuntime {
 
         const startHook = (globalThis as Record<string, unknown>)
           .__chatonsToolExecutionContextStart as
-          | ((requestId: string, conversationId: string, signal?: AbortSignal) => void)
+          | ((
+              requestId: string,
+              conversationId: string,
+              signal?: AbortSignal,
+            ) => void)
           | undefined;
         startHook?.(event.toolCallId, this.conversationId, controller.signal);
       }
@@ -853,13 +855,14 @@ export class PiSdkRuntime {
       "medium") as ThinkingLevel;
 
     const explicitHarnessCandidate =
-      options && Object.prototype.hasOwnProperty.call(options, "harnessCandidate")
+      options &&
+      Object.prototype.hasOwnProperty.call(options, "harnessCandidate")
         ? options.harnessCandidate
         : undefined;
     const activeHarnessCandidateId =
       explicitHarnessCandidate === undefined
         ? readActiveCandidate(getAgentDir())
-        : explicitHarnessCandidate?.id ?? null;
+        : (explicitHarnessCandidate?.id ?? null);
     let harnessCandidate: HarnessCandidate | null = null;
     if (explicitHarnessCandidate !== undefined) {
       harnessCandidate = explicitHarnessCandidate ?? null;
@@ -886,7 +889,8 @@ export class PiSdkRuntime {
       archiveRoot: harnessArchiveRoot,
       environmentSnapshotEnabled:
         harnessCandidate?.bootstrap.environmentSnapshot?.enabled === true,
-      environmentSnapshotCaptured: typeof harnessBootstrap.envSnapshotText === "string",
+      environmentSnapshotCaptured:
+        typeof harnessBootstrap.envSnapshotText === "string",
     };
 
     let systemPromptSections: string[] = [];
@@ -1018,13 +1022,24 @@ export class PiSdkRuntime {
     });
     await resourceLoader.reload();
 
-    const runtimePolicy = ((globalThis as Record<string, unknown>)
-      .__chatonsRuntimePolicyByConversation as Map<string, RuntimePolicyContext> | undefined)
-      ?.get(this.conversationId);
+    const runtimePolicy = (
+      (globalThis as Record<string, unknown>)
+        .__chatonsRuntimePolicyByConversation as
+        | Map<string, RuntimePolicyContext>
+        | undefined
+    )?.get(this.conversationId);
 
     const assertAllowedPath = (absolutePath: string) => {
-      if (!isPathWithinAllowedScope(absolutePath, runtimeCwd, runtimePolicy?.fileScope)) {
-        throw new Error(`Path is outside the subagent file scope: ${absolutePath}`);
+      if (
+        !isPathWithinAllowedScope(
+          absolutePath,
+          runtimeCwd,
+          runtimePolicy?.fileScope,
+        )
+      ) {
+        throw new Error(
+          `Path is outside the subagent file scope: ${absolutePath}`,
+        );
       }
     };
 
@@ -1050,7 +1065,9 @@ export class PiSdkRuntime {
       },
       mkdir: async (dir: string) => {
         if (runtimePolicy?.toolPolicy?.readOnly) {
-          throw new Error("This subagent is read-only and cannot create directories.");
+          throw new Error(
+            "This subagent is read-only and cannot create directories.",
+          );
         }
         assertAllowedPath(dir);
         await fs.promises.mkdir(dir, { recursive: true });
@@ -1065,7 +1082,10 @@ export class PiSdkRuntime {
       writeFile: trackedWriteOperations.writeFile,
       access: async (absolutePath: string) => {
         assertAllowedPath(absolutePath);
-        await fs.promises.access(absolutePath, fs.constants.R_OK | fs.constants.W_OK);
+        await fs.promises.access(
+          absolutePath,
+          fs.constants.R_OK | fs.constants.W_OK,
+        );
       },
     };
 
@@ -1074,8 +1094,13 @@ export class PiSdkRuntime {
       createBashTool(toolsCwd, {
         env: hostToolEnv,
         execute: async (command: string) => {
-          if (runtimePolicy?.toolPolicy?.readOnly && isWriteLikeBashCommand(command)) {
-            throw new Error("This subagent is read-only and cannot run write-like bash commands.");
+          if (
+            runtimePolicy?.toolPolicy?.readOnly &&
+            isWriteLikeBashCommand(command)
+          ) {
+            throw new Error(
+              "This subagent is read-only and cannot run write-like bash commands.",
+            );
           }
           return undefined as never;
         },
@@ -1089,7 +1114,11 @@ export class PiSdkRuntime {
     // registered directly on the session, not through the extension system.
     const coreTools = createCoreTools(
       this.conversationId,
-      (method, payload) => this.emitExtensionUiRequest(method as RpcExtensionUiRequest["method"], payload as Record<string, JsonValue | undefined>),
+      (method, payload) =>
+        this.emitExtensionUiRequest(
+          method as RpcExtensionUiRequest["method"],
+          payload as Record<string, JsonValue | undefined>,
+        ),
       settingsManager,
       modelRegistry,
     );
@@ -1144,24 +1173,41 @@ export class PiSdkRuntime {
         parameters: Type.Object({
           query: Type.Union([
             Type.String({
-              description: "Search query describing the desired tool or capability.",
+              description:
+                "Search query describing the desired tool or capability.",
             }),
-            Type.Array(Type.String({
-              description: "Keyword to search for when combining multiple inclusive search terms.",
-            }), {
-              description: "Optional array of inclusive search queries or keywords. Results are merged and deduplicated.",
-            }),
+            Type.Array(
+              Type.String({
+                description:
+                  "Keyword to search for when combining multiple inclusive search terms.",
+              }),
+              {
+                description:
+                  "Optional array of inclusive search queries or keywords. Results are merged and deduplicated.",
+              },
+            ),
           ]),
           limit: Type.Optional(
             Type.Number({
-              description: "Optional maximum number of matches to return after merging and deduplication.",
+              description:
+                "Optional maximum number of matches to return after merging and deduplication.",
             }),
           ),
         }),
-        execute: async (_toolCallId: string, params: { query: string | string[]; limit?: number }) => {
-          const query = typeof params.query === "string" || Array.isArray(params.query) ? params.query : "";
+        execute: async (
+          _toolCallId: string,
+          params: { query: string | string[]; limit?: number },
+        ) => {
+          const query =
+            typeof params.query === "string" || Array.isArray(params.query)
+              ? params.query
+              : "";
           const limit = typeof params.limit === "number" ? params.limit : 20;
-          const manifestResults = searchToolCatalog(getManifestToolCatalog(), query, limit);
+          const manifestResults = searchToolCatalog(
+            getManifestToolCatalog(),
+            query,
+            limit,
+          );
           const exposedResults = searchExposedTools(query, limit);
           const merged = new Map<string, Record<string, unknown>>();
 
@@ -1176,16 +1222,27 @@ export class PiSdkRuntime {
             });
           }
 
-          const results = Array.from(merged.values()).slice(0, Math.max(1, limit));
+          const results = Array.from(merged.values()).slice(
+            0,
+            Math.max(1, limit),
+          );
 
           // Auto-activate lazy tools when search results reference them
           // Check both result names and extensionIds since grouped entries
           // use the group key as name (e.g. "@chaton/browser")
-          const touchedIds = results.flatMap((r) => [String(r.name), String(r.extensionId ?? "")]);
+          const touchedIds = results.flatMap((r) => [
+            String(r.name),
+            String(r.extensionId ?? ""),
+          ]);
           activateLazyToolsIfNeeded(touchedIds);
 
           return {
-            content: [{ type: "text" as const, text: JSON.stringify({ results }, null, 2) }],
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({ results }, null, 2),
+              },
+            ],
             details: { ok: true, results },
           };
         },
@@ -1202,7 +1259,10 @@ export class PiSdkRuntime {
         }),
         execute: async (_toolCallId: string, params: { name: string }) => {
           const toolName = typeof params.name === "string" ? params.name : "";
-          const manifestEntry = getToolCatalogEntry(getManifestToolCatalog(), toolName);
+          const manifestEntry = getToolCatalogEntry(
+            getManifestToolCatalog(),
+            toolName,
+          );
           const exposedEntry = getExposedToolDetail(toolName);
           const entry = exposedEntry ?? manifestEntry;
 
@@ -1235,7 +1295,9 @@ export class PiSdkRuntime {
           };
 
           return {
-            content: [{ type: "text" as const, text: JSON.stringify(detail, null, 2) }],
+            content: [
+              { type: "text" as const, text: JSON.stringify(detail, null, 2) },
+            ],
             details: { ok: true, detail },
           };
         },
@@ -1245,10 +1307,14 @@ export class PiSdkRuntime {
     const blockOnRequirementSheet = async (
       result: AgentToolResult<unknown>,
     ): Promise<AgentToolResult<unknown>> => {
-      const details = (result.details ?? null) as Record<string, unknown> | null;
-      const sheet = (details?.requirementSheet ?? null) as
-        | Record<string, unknown>
-        | null;
+      const details = (result.details ?? null) as Record<
+        string,
+        unknown
+      > | null;
+      const sheet = (details?.requirementSheet ?? null) as Record<
+        string,
+        unknown
+      > | null;
       if (!details || details.pending !== true || !sheet) {
         return result;
       }
@@ -1274,7 +1340,9 @@ export class PiSdkRuntime {
             ? details.extensionId
             : undefined,
         toolCallId:
-          typeof details.toolCallId === "string" ? details.toolCallId : undefined,
+          typeof details.toolCallId === "string"
+            ? details.toolCallId
+            : undefined,
       });
 
       if (
@@ -1283,7 +1351,10 @@ export class PiSdkRuntime {
       ) {
         return {
           content: [
-            { type: "text", text: "Requirement completed by user." } satisfies TextContent,
+            {
+              type: "text",
+              text: "Requirement completed by user.",
+            } satisfies TextContent,
           ],
           details: {
             ...details,
@@ -1350,7 +1421,11 @@ export class PiSdkRuntime {
       resourceLoader,
       sessionManager,
       tools: builtinTools,
-      customTools: [...coreTools, ...lazyDiscoveryTools, ...wrappedExtensionTools],
+      customTools: [
+        ...coreTools,
+        ...lazyDiscoveryTools,
+        ...wrappedExtensionTools,
+      ],
       ...(model ? { model } : {}),
       thinkingLevel: effectiveThinkingLevel,
     });
@@ -1362,9 +1437,9 @@ export class PiSdkRuntime {
     if (lazyToolNames.size > 0) {
       // setActiveToolsByName rebuilds the system prompt with only the
       // non-lazy tools listed, which is what we want for prompt brevity.
-      const nonLazyNames = session.getActiveToolNames().filter(
-        (name: string) => !lazyToolNames.has(name),
-      );
+      const nonLazyNames = session
+        .getActiveToolNames()
+        .filter((name: string) => !lazyToolNames.has(name));
       session.setActiveToolsByName(nonLazyNames);
 
       // Re-inject the lazy tools into agent.state.tools so executeToolCalls
@@ -1825,7 +1900,11 @@ export class PiSessionRuntimeManager {
     string,
     Promise<
       | { ok: true }
-      | { ok: false; reason: "conversation_not_found" | "start_failed"; message: string }
+      | {
+          ok: false;
+          reason: "conversation_not_found" | "start_failed";
+          message: string;
+        }
     >
   >();
   /** Ephemeral subagents running for channel ingestion, keyed by real conversation ID. */
@@ -1872,7 +1951,14 @@ export class PiSessionRuntimeManager {
       return inFlight;
     }
 
-    const startPromise = (async (): Promise<{ ok: true } | { ok: false; reason: "conversation_not_found" | "start_failed"; message: string }> => {
+    const startPromise = (async (): Promise<
+      | { ok: true }
+      | {
+          ok: false;
+          reason: "conversation_not_found" | "start_failed";
+          message: string;
+        }
+    > => {
       const db = getDb();
       const conversation = findConversationById(db, conversationId);
       if (!conversation) {
@@ -2147,7 +2233,9 @@ export class PiSessionRuntimeManager {
     }
     record.cleanupTimer = setTimeout(() => {
       const policyMap = (globalThis as Record<string, unknown>)
-        .__chatonsRuntimePolicyByConversation as Map<string, RuntimePolicyContext> | undefined;
+        .__chatonsRuntimePolicyByConversation as
+        | Map<string, RuntimePolicyContext>
+        | undefined;
       policyMap?.delete(record.runtimeConversationId);
       void this.stop(record.runtimeConversationId);
       this.runtimeSubagents.delete(record.id);
@@ -2192,7 +2280,12 @@ export class PiSessionRuntimeManager {
     return {
       ...parentConversation,
       id: runtimeConversationId,
-      pi_session_file: path.join(agentDir, "sessions", "chaton", `${runtimeConversationId}.jsonl`),
+      pi_session_file: path.join(
+        agentDir,
+        "sessions",
+        "chaton",
+        `${runtimeConversationId}.jsonl`,
+      ),
       last_runtime_error: null,
     };
   }
@@ -2218,7 +2311,10 @@ export class PiSessionRuntimeManager {
     }
 
     const subAgentId = `runtime-subagent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const runtimeConversation = this.buildRuntimeSubagentConversation(parentConversation, subAgentId);
+    const runtimeConversation = this.buildRuntimeSubagentConversation(
+      parentConversation,
+      subAgentId,
+    );
     const record: RuntimeSubagentRecord = {
       id: subAgentId,
       parentConversationId: params.conversationId,
@@ -2237,9 +2333,14 @@ export class PiSessionRuntimeManager {
     this.runtimeSubagents.set(subAgentId, record);
     this.emitSubagentUiRegistration(record);
 
-    const policyMap = (((globalThis as Record<string, unknown>).__chatonsRuntimePolicyByConversation as Map<string, RuntimePolicyContext> | undefined)
-      ?? new Map<string, RuntimePolicyContext>());
-    (globalThis as Record<string, unknown>).__chatonsRuntimePolicyByConversation = policyMap;
+    const policyMap =
+      ((globalThis as Record<string, unknown>)
+        .__chatonsRuntimePolicyByConversation as
+        | Map<string, RuntimePolicyContext>
+        | undefined) ?? new Map<string, RuntimePolicyContext>();
+    (
+      globalThis as Record<string, unknown>
+    ).__chatonsRuntimePolicyByConversation = policyMap;
     policyMap.set(runtimeConversation.id, {
       fileScope: record.fileScope,
       toolPolicy: record.toolPolicy,
@@ -2268,12 +2369,16 @@ export class PiSessionRuntimeManager {
   async runRuntimeSubagent(params: {
     subAgentId: string;
     prompt?: string;
-  }): Promise<{ ok: true; result: RuntimeSubagentResult } | { ok: false; message: string }> {
+  }): Promise<
+    { ok: true; result: RuntimeSubagentResult } | { ok: false; message: string }
+  > {
     const record = this.runtimeSubagents.get(params.subAgentId);
     if (!record) {
       return { ok: false, message: "Subagent not found" };
     }
-    const runtime = this.getRuntimeForConversation(record.runtimeConversationId);
+    const runtime = this.getRuntimeForConversation(
+      record.runtimeConversationId,
+    );
     if (!runtime) {
       return { ok: false, message: "Subagent runtime not started" };
     }
@@ -2284,16 +2389,34 @@ export class PiSessionRuntimeManager {
 
     const policyLines: string[] = [];
     if (record.toolPolicy?.readOnly) {
-      policyLines.push("You are running in read-only mode. Do not modify files or invoke write, edit, or destructive shell commands.");
+      policyLines.push(
+        "You are running in read-only mode. Do not modify files or invoke write, edit, or destructive shell commands.",
+      );
     }
-    if (record.toolPolicy?.allowedTools && record.toolPolicy.allowedTools.length > 0) {
-      policyLines.push(`Only use these tools if needed: ${record.toolPolicy.allowedTools.join(", ")}.`);
+    if (
+      record.toolPolicy?.allowedTools &&
+      record.toolPolicy.allowedTools.length > 0
+    ) {
+      policyLines.push(
+        `Only use these tools if needed: ${record.toolPolicy.allowedTools.join(", ")}.`,
+      );
     }
-    if (record.toolPolicy?.deniedTools && record.toolPolicy.deniedTools.length > 0) {
-      policyLines.push(`Do not use these tools: ${record.toolPolicy.deniedTools.join(", ")}.`);
+    if (
+      record.toolPolicy?.deniedTools &&
+      record.toolPolicy.deniedTools.length > 0
+    ) {
+      policyLines.push(
+        `Do not use these tools: ${record.toolPolicy.deniedTools.join(", ")}.`,
+      );
     }
-    if (record.fileScope?.mode === "allowlist" && record.fileScope.paths && record.fileScope.paths.length > 0) {
-      policyLines.push(`Restrict file access to these paths: ${record.fileScope.paths.join(", ")}.`);
+    if (
+      record.fileScope?.mode === "allowlist" &&
+      record.fileScope.paths &&
+      record.fileScope.paths.length > 0
+    ) {
+      policyLines.push(
+        `Restrict file access to these paths: ${record.fileScope.paths.join(", ")}.`,
+      );
     }
 
     const basePrompt = params.prompt?.trim()
@@ -2301,16 +2424,23 @@ export class PiSessionRuntimeManager {
       : record.instructions?.trim()
         ? `${record.objective}\n\nAdditional instructions:\n${record.instructions}`
         : record.objective;
-    const prompt = policyLines.length > 0
-      ? `${basePrompt}\n\nRuntime policy:\n- ${policyLines.join("\n- ")}`
-      : basePrompt;
+    const prompt =
+      policyLines.length > 0
+        ? `${basePrompt}\n\nRuntime policy:\n- ${policyLines.join("\n- ")}`
+        : basePrompt;
 
     const response = await runtime.send({ type: "prompt", message: prompt });
-    if (record.toolPolicy?.readOnly && runtime.getSnapshot().messages.length > 0) {
+    if (
+      record.toolPolicy?.readOnly &&
+      runtime.getSnapshot().messages.length > 0
+    ) {
       // Read-only is currently enforced by instruction-level policy. A future hard guard can inspect tool calls.
     }
     if (!response.success) {
-      const message = typeof response.error === "string" ? response.error : "Subagent run failed";
+      const message =
+        typeof response.error === "string"
+          ? response.error
+          : "Subagent run failed";
       record.status = "error";
       record.errorMessage = message;
       record.result = { errorMessage: message };
@@ -2336,7 +2466,13 @@ export class PiSessionRuntimeManager {
     subAgentId: string,
     timeoutMs?: number,
   ): Promise<
-    | { ok: true; done: boolean; status: RuntimeSubagentStatus; result?: RuntimeSubagentResult; errorMessage?: string }
+    | {
+        ok: true;
+        done: boolean;
+        status: RuntimeSubagentStatus;
+        result?: RuntimeSubagentResult;
+        errorMessage?: string;
+      }
     | { ok: false; message: string }
   > {
     const record = this.runtimeSubagents.get(subAgentId);
@@ -2344,10 +2480,19 @@ export class PiSessionRuntimeManager {
       return { ok: false, message: "Subagent not found" };
     }
 
-    const deadline = typeof timeoutMs === "number" && timeoutMs > 0 ? Date.now() + timeoutMs : null;
+    const deadline =
+      typeof timeoutMs === "number" && timeoutMs > 0
+        ? Date.now() + timeoutMs
+        : null;
     while (["pending", "queued", "running"].includes(record.status)) {
       if (deadline !== null && Date.now() > deadline) {
-        return { ok: true, done: false, status: record.status, result: record.result, errorMessage: record.errorMessage };
+        return {
+          ok: true,
+          done: false,
+          status: record.status,
+          result: record.result,
+          errorMessage: record.errorMessage,
+        };
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -2363,13 +2508,22 @@ export class PiSessionRuntimeManager {
 
   async cancelRuntimeSubagent(
     subAgentId: string,
-  ): Promise<{ ok: true; status: RuntimeSubagentStatus } | { ok: false; message: string }> {
+  ): Promise<
+    { ok: true; status: RuntimeSubagentStatus } | { ok: false; message: string }
+  > {
     const record = this.runtimeSubagents.get(subAgentId);
     if (!record) {
       return { ok: false, message: "Subagent not found" };
     }
-    const runtime = this.getRuntimeForConversation(record.runtimeConversationId);
-    if (runtime && (record.status === "running" || record.status === "queued" || record.status === "pending")) {
+    const runtime = this.getRuntimeForConversation(
+      record.runtimeConversationId,
+    );
+    if (
+      runtime &&
+      (record.status === "running" ||
+        record.status === "queued" ||
+        record.status === "pending")
+    ) {
       try {
         await runtime.send({ type: "abort" });
       } catch {
@@ -2409,17 +2563,19 @@ export class PiSessionRuntimeManager {
       return { ok: false, message: "One or more subagents were not found" };
     }
     const resolvedRecords = records as RuntimeSubagentRecord[];
-    const deadline = typeof params.timeoutMs === "number" && params.timeoutMs > 0
-      ? Date.now() + params.timeoutMs
-      : null;
+    const deadline =
+      typeof params.timeoutMs === "number" && params.timeoutMs > 0
+        ? Date.now() + params.timeoutMs
+        : null;
 
     while (true) {
       const terminal = resolvedRecords.filter((record) =>
         ["completed", "error", "cancelled"].includes(record.status),
       );
-      const done = params.mode === "all"
-        ? terminal.length === resolvedRecords.length
-        : terminal.length > 0;
+      const done =
+        params.mode === "all"
+          ? terminal.length === resolvedRecords.length
+          : terminal.length > 0;
       if (done) {
         break;
       }
@@ -2433,7 +2589,9 @@ export class PiSessionRuntimeManager {
       .filter((record) => record.status === "completed")
       .map((record) => record.id);
     const pending = resolvedRecords
-      .filter((record) => ["pending", "queued", "running"].includes(record.status))
+      .filter((record) =>
+        ["pending", "queued", "running"].includes(record.status),
+      )
       .map((record) => record.id);
     const errored = resolvedRecords
       .filter((record) => record.status === "error")
@@ -2444,7 +2602,10 @@ export class PiSessionRuntimeManager {
 
     return {
       ok: true,
-      done: pending.length === 0 && (params.mode === "all" || completed.length + errored.length + cancelled.length > 0),
+      done:
+        pending.length === 0 &&
+        (params.mode === "all" ||
+          completed.length + errored.length + cancelled.length > 0),
       completed,
       pending,
       errored,
@@ -2458,4 +2619,3 @@ export class PiSessionRuntimeManager {
     };
   }
 }
-

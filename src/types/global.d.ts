@@ -1262,6 +1262,21 @@ declare global {
         benchmarkId: string;
         frontier: Array<Record<string, unknown>>;
       }>;
+      metaHarnessGetOptimizerState: () => Promise<Record<string, unknown>>;
+      metaHarnessListOptimizerAttempts: (runId?: string | null) => Promise<Array<Record<string, unknown>>>;
+      metaHarnessStartOptimizer: (config: {
+        benchmarkId?: string;
+        optimizerModelProvider: string;
+        optimizerModelId: string;
+        optimizerThinkingLevel?: string | null;
+        autoPromote?: boolean;
+        loop?: boolean;
+        maxIterations?: number | null;
+        maxVariantsPerIteration?: number;
+        minScoreDelta?: number;
+        sleepMs?: number;
+      }) => Promise<Record<string, unknown>>;
+      metaHarnessStopOptimizer: () => Promise<Record<string, unknown>>;
     };
     logger: {
       getLogs: (limit?: number, conversationId?: string | null) => Promise<

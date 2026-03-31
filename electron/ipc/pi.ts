@@ -15,6 +15,7 @@ import {
   readFrontier,
 } from '../meta-harness/archive.js';
 import { buildDefaultBenchmark } from '../meta-harness/benchmark.js';
+import { metaHarnessOptimizerRunner } from '../meta-harness/optimizer-runner.js';
 
 /**
  * Enregistre les handlers IPC pour Pi
@@ -178,5 +179,43 @@ export function registerPiIpc() {
       benchmarkId: resolvedBenchmarkId,
       frontier: readFrontier(agentDir, resolvedBenchmarkId),
     }
+  })
+
+  ipcMain.handle('meta-harness:getOptimizerState', () => {
+    return metaHarnessOptimizerRunner.getState()
+  })
+
+  ipcMain.handle('meta-harness:listOptimizerAttempts', (_event, runId?: string | null) => {
+    return metaHarnessOptimizerRunner.listAttempts(runId)
+  })
+
+  ipcMain.handle('meta-harness:startOptimizer', async (_event, config: {
+    benchmarkId?: string
+    optimizerModelProvider: string
+    optimizerModelId: string
+    optimizerThinkingLevel?: string | null
+    autoPromote?: boolean
+    loop?: boolean
+    maxIterations?: number | null
+    maxVariantsPerIteration?: number
+    minScoreDelta?: number
+    sleepMs?: number
+  }) => {
+    return await metaHarnessOptimizerRunner.start({
+      benchmarkId: config.benchmarkId,
+      optimizerModelProvider: config.optimizerModelProvider,
+      optimizerModelId: config.optimizerModelId,
+      optimizerThinkingLevel: config.optimizerThinkingLevel,
+      autoPromote: config.autoPromote,
+      loop: config.loop,
+      maxIterations: config.maxIterations,
+      maxVariantsPerIteration: config.maxVariantsPerIteration,
+      minScoreDelta: config.minScoreDelta,
+      sleepMs: config.sleepMs,
+    })
+  })
+
+  ipcMain.handle('meta-harness:stopOptimizer', () => {
+    return metaHarnessOptimizerRunner.stop()
   })
 }
