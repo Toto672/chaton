@@ -29,6 +29,8 @@ const config: Config = {
         'accent-foreground': 'hsl(var(--accent-foreground))',
         primary: 'hsl(var(--primary))',
         'primary-foreground': 'hsl(var(--primary-foreground))',
+        destructive: 'hsl(var(--destructive))',
+        'destructive-foreground': 'hsl(var(--destructive-foreground))',
       },
       borderRadius: {
         lg: 'var(--radius)',

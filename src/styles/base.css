@@ -14,6 +14,8 @@
   --border: 220 9% 85%;
   --input: 220 9% 85%;
   --ring: 220 9% 70%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
   --radius: 0.7rem;
 
   --ui-sidebar-width: 320px;
