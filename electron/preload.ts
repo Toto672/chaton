@@ -673,6 +673,9 @@ contextBridge.exposeInMainWorld("pi", {
     maxVariantsPerIteration?: number
     minScoreDelta?: number
     sleepMs?: number
+    validationModelProvider?: string | null
+    validationModelId?: string | null
+    validationThinkingLevel?: string | null
   }) => ipcRenderer.invoke("meta-harness:startOptimizer", config),
   metaHarnessStopOptimizer: () =>
     ipcRenderer.invoke("meta-harness:stopOptimizer"),

@@ -30,6 +30,9 @@ export type MetaHarnessOptimizerConfig = {
   maxVariantsPerIteration: number;
   minScoreDelta: number;
   sleepMs: number;
+  validationModelProvider?: string | null;
+  validationModelId?: string | null;
+  validationThinkingLevel?: string | null;
 };
 
 export type MetaHarnessOptimizerAttemptCandidate = {
@@ -64,6 +67,9 @@ export type MetaHarnessOptimizerRunState = {
   optimizerModelProvider: string | null;
   optimizerModelId: string | null;
   optimizerThinkingLevel?: string | null;
+  validationModelProvider?: string | null;
+  validationModelId?: string | null;
+  validationThinkingLevel?: string | null;
   startedAt?: string;
   updatedAt?: string;
   stoppedAt?: string;

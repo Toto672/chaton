@@ -201,7 +201,14 @@ export function registerPiIpc() {
   })
 
   ipcMain.handle('meta-harness:getOptimizerState', () => {
-    return metaHarnessOptimizerRunner.getState()
+    try {
+      return metaHarnessOptimizerRunner.getState()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      getLogManager().log('error', 'electron', '[meta-harness optimizer] Failed to read optimizer state.', { error: message })
+      console.error('Erreur lors de la récupération de l\'état de l\'optimiseur Meta-Harness:', error)
+      throw error
+    }
   })
 
   ipcMain.handle('meta-harness:listOptimizerAttempts', (_event, runId?: string | null) => {
@@ -306,22 +313,52 @@ export function registerPiIpc() {
     maxVariantsPerIteration?: number
     minScoreDelta?: number
     sleepMs?: number
+    validationModelProvider?: string | null
+    validationModelId?: string | null
+    validationThinkingLevel?: string | null
   }) => {
-    return await metaHarnessOptimizerRunner.start({
-      benchmarkId: config.benchmarkId,
-      optimizerModelProvider: config.optimizerModelProvider,
-      optimizerModelId: config.optimizerModelId,
-      optimizerThinkingLevel: config.optimizerThinkingLevel,
-      autoPromote: config.autoPromote,
-      loop: config.loop,
-      maxIterations: config.maxIterations,
-      maxVariantsPerIteration: config.maxVariantsPerIteration,
-      minScoreDelta: config.minScoreDelta,
-      sleepMs: config.sleepMs,
-    })
+    try {
+      getLogManager().log('info', 'electron', '[meta-harness optimizer] IPC start requested.', {
+        benchmarkId: config.benchmarkId,
+        optimizerModelProvider: config.optimizerModelProvider,
+        optimizerModelId: config.optimizerModelId,
+      })
+      return await metaHarnessOptimizerRunner.start({
+        benchmarkId: config.benchmarkId,
+        optimizerModelProvider: config.optimizerModelProvider,
+        optimizerModelId: config.optimizerModelId,
+        optimizerThinkingLevel: config.optimizerThinkingLevel,
+        autoPromote: config.autoPromote,
+        loop: config.loop,
+        maxIterations: config.maxIterations,
+        maxVariantsPerIteration: config.maxVariantsPerIteration,
+        minScoreDelta: config.minScoreDelta,
+        sleepMs: config.sleepMs,
+        validationModelProvider: config.validationModelProvider,
+        validationModelId: config.validationModelId,
+        validationThinkingLevel: config.validationThinkingLevel,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      getLogManager().log('error', 'electron', '[meta-harness optimizer] Failed to start.', {
+        error: message,
+        benchmarkId: config.benchmarkId,
+        optimizerModelProvider: config.optimizerModelProvider,
+        optimizerModelId: config.optimizerModelId,
+      })
+      console.error('Erreur lors du démarrage de l\'optimiseur Meta-Harness:', error)
+      throw error
+    }
   })
 
   ipcMain.handle('meta-harness:stopOptimizer', () => {
-    return metaHarnessOptimizerRunner.stop()
+    try {
+      return metaHarnessOptimizerRunner.stop()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      getLogManager().log('error', 'electron', '[meta-harness optimizer] Failed to stop.', { error: message })
+      console.error('Erreur lors de l\'arrêt de l\'optimiseur Meta-Harness:', error)
+      throw error
+    }
   })
 }

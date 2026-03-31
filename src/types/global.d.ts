@@ -1331,6 +1331,9 @@ declare global {
         maxVariantsPerIteration?: number;
         minScoreDelta?: number;
         sleepMs?: number;
+        validationModelProvider?: string | null;
+        validationModelId?: string | null;
+        validationThinkingLevel?: string | null;
       }) => Promise<Record<string, unknown>>;
       metaHarnessStopOptimizer: () => Promise<Record<string, unknown>>;
     };

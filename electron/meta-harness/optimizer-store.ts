@@ -47,6 +47,9 @@ export function buildDefaultOptimizerConfig(): MetaHarnessOptimizerConfig {
     maxVariantsPerIteration: 2,
     minScoreDelta: 0.01,
     sleepMs: 1500,
+    validationModelProvider: null,
+    validationModelId: null,
+    validationThinkingLevel: "medium",
   };
 }
 
@@ -61,6 +64,9 @@ export function getDefaultOptimizerState(): MetaHarnessOptimizerRunState {
     optimizerModelProvider: config.optimizerModelProvider,
     optimizerModelId: config.optimizerModelId,
     optimizerThinkingLevel: config.optimizerThinkingLevel,
+    validationModelProvider: config.validationModelProvider,
+    validationModelId: config.validationModelId,
+    validationThinkingLevel: config.validationThinkingLevel,
     iteration: 0,
     stopRequested: false,
     autoPromote: config.autoPromote,

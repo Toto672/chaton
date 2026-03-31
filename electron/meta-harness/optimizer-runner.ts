@@ -6,13 +6,14 @@ import type { Model } from "@mariozechner/pi-ai";
 import { getDb } from "../db/index.js";
 import { insertConversation } from "../db/repos/conversations.js";
 import type { DbConversation } from "../db/repos/conversations.js";
+import { getLogManager } from "../lib/logging/log-manager.js";
 import type { PiRendererEvent } from "../pi-sdk-runtime.js";
 import { getAgentDir } from "../pi-sdk-runtime.js";
 import { readActiveCandidate, updateFrontierForScore, writeActiveCandidate } from "./archive.js";
 import { buildDefaultBenchmark } from "./benchmark.js";
 import { ensureCandidateStored, getDefaultHarnessCandidate, loadHarnessCandidate, validateHarnessCandidate } from "./candidate.js";
 import { evaluateHarnessCandidate } from "./evaluator.js";
-import type { HarnessCandidate, HarnessEvaluationScore } from "./types.js";
+import type { HarnessCandidate, HarnessEvaluationProfileScore, HarnessEvaluationScore } from "./types.js";
 import type {
   MetaHarnessOptimizerAttempt,
   MetaHarnessOptimizerAttemptCandidate,
@@ -58,7 +59,10 @@ function sleep(ms: number): Promise<void> {
 
 function scoreValue(score?: HarnessEvaluationScore | null): number {
   if (!score) return Number.NEGATIVE_INFINITY;
-  const humanBoost = typeof score.humanFeedbackScore === 'number'
+  if (typeof score.robustnessScore === "number") {
+    return score.robustnessScore;
+  }
+  const humanBoost = typeof score.humanFeedbackScore === "number"
     ? score.humanFeedbackScore * Math.min(0.2, Math.max(0.05, (score.humanFeedbackCount ?? 0) * 0.02))
     : 0;
   return score.successRate - score.averageLatencyMs / 100000 - score.totalToolCalls / 10000 + humanBoost;
@@ -208,7 +212,6 @@ function buildCandidateFromPatch(params: {
     ? (params.patch.scoring as Record<string, unknown>)
     : {};
 
-  /** behaviorPrompt can be explicitly null/undefined to clear the base value, or a string to override it. */
   const behaviorPrompt =
     params.patch.behaviorPrompt === null || params.patch.behaviorPrompt === undefined
       ? params.baseCandidate.behaviorPrompt
@@ -334,7 +337,7 @@ function buildProposalPrompt(params: {
     "Base candidate:",
     JSON.stringify(params.baseCandidate, null, 2),
     params.attemptSummary.length > 0 ? `Recent attempt summaries:\n${params.attemptSummary.map((item) => `- ${item}`).join("\n")}` : "Recent attempt summaries: none",
-    "Human feedback is available indirectly through candidate scores. Prefer variants that improve satisfaction without overfitting to one benchmark.",
+    "Human feedback is available indirectly through candidate scores. Prefer variants that improve satisfaction without overfitting to one benchmark or one model.",
   ].join("\n\n");
 }
 
@@ -460,11 +463,71 @@ async function askOptimizerModel(params: {
   }
 }
 
+function buildProfileBaseline(score?: HarnessEvaluationScore | null): HarnessEvaluationProfileScore[] | undefined {
+  if (!score?.profileScores || score.profileScores.length === 0) {
+    return undefined;
+  }
+  return score.profileScores;
+}
+
+function formatAttemptSummary(best?: MetaHarnessOptimizerAttemptCandidate): string {
+  if (!best?.score) {
+    return "No valid benchmark score was produced.";
+  }
+  const robustnessPart = typeof best.score.robustnessScore === "number"
+    ? ` robust ${best.score.robustnessScore.toFixed(3)}`
+    : "";
+  const variancePart = typeof best.score.scoreStddev === "number"
+    ? `, variance ${best.score.scoreStddev.toFixed(3)}`
+    : "";
+  const worstPart = typeof best.score.worstProfileScore === "number"
+    ? `, worst ${best.score.worstProfileScore.toFixed(3)}`
+    : "";
+  return `Best candidate ${best.candidate.id}${robustnessPart}, success ${(best.score.successRate * 100).toFixed(0)}%, latency ${Math.round(best.score.averageLatencyMs)}ms${variancePart}${worstPart}${best.promoted ? ", promoted" : ""}.`;
+}
+
 class MetaHarnessOptimizerRunner {
   private currentRun: Promise<void> | null = null;
 
+  private currentRunId: string | null = null;
+
+  private log(level: "info" | "warn" | "error" | "debug", message: string, data?: unknown): void {
+    getLogManager().log(level, "electron", `[meta-harness optimizer] ${message}`, data);
+  }
+
   getState(): MetaHarnessOptimizerRunState {
-    return readOptimizerState(getAgentDir());
+    const state = readOptimizerState(getAgentDir());
+    if (
+      this.currentRunId &&
+      state.runId === this.currentRunId &&
+      (state.status === "running" || state.status === "stopping")
+    ) {
+      return state;
+    }
+    if (this.currentRun) {
+      // If a new run has been scheduled but the persisted state briefly lags,
+      // avoid rewriting it as stale during the same start flow.
+      if (state.status === "running" || state.status === "stopping") {
+        return state;
+      }
+    }
+    if (state.status !== "running" && state.status !== "stopping") {
+      return state;
+    }
+    const message = "Recovered stale optimizer state after app restart.";
+    this.log("warn", message, {
+      runId: state.runId,
+      status: state.status,
+      phase: state.phase,
+    });
+    return writeOptimizerState(getAgentDir(), {
+      ...state,
+      status: "stopped",
+      phase: "stopped",
+      stopRequested: false,
+      stoppedAt: state.stoppedAt ?? new Date().toISOString(),
+      lastError: state.lastError ?? message,
+    });
   }
 
   listAttempts(runId?: string | null): MetaHarnessOptimizerAttempt[] {
@@ -477,8 +540,18 @@ class MetaHarnessOptimizerRunner {
       optimizerModelId: string;
     },
   ): Promise<MetaHarnessOptimizerRunState> {
+    this.log("info", "Start requested.", {
+      optimizerModelProvider: configInput.optimizerModelProvider,
+      optimizerModelId: configInput.optimizerModelId,
+      benchmarkId: configInput.benchmarkId,
+    });
     const current = this.getState();
     if (current.status === "running" || current.status === "stopping") {
+      this.log("warn", "Ignored start request because optimizer is already active.", {
+        runId: current.runId,
+        status: current.status,
+        phase: current.phase,
+      });
       return current;
     }
 
@@ -490,7 +563,15 @@ class MetaHarnessOptimizerRunner {
     };
     const model = resolveOptimizerModel(config);
     if (!model) {
-      throw new Error(`Optimizer model not found: ${config.optimizerModelProvider}/${config.optimizerModelId}`);
+      const message = `Optimizer model not found: ${config.optimizerModelProvider}/${config.optimizerModelId}`;
+      this.log("error", message, { config });
+      throw new Error(message);
+    }
+
+    if ((config.validationModelProvider && !config.validationModelId) || (!config.validationModelProvider && config.validationModelId)) {
+      const message = "Validation model provider and model id must be provided together.";
+      this.log("error", message, { config });
+      throw new Error(message);
     }
 
     const activeCandidateId = readActiveCandidate(getAgentDir()) ?? getDefaultHarnessCandidate().id;
@@ -502,6 +583,9 @@ class MetaHarnessOptimizerRunner {
       optimizerModelProvider: config.optimizerModelProvider,
       optimizerModelId: config.optimizerModelId,
       optimizerThinkingLevel: config.optimizerThinkingLevel ?? "medium",
+      validationModelProvider: config.validationModelProvider ?? null,
+      validationModelId: config.validationModelId ?? null,
+      validationThinkingLevel: config.validationThinkingLevel ?? "medium",
       startedAt: new Date().toISOString(),
       stoppedAt: undefined,
       iteration: 0,
@@ -519,14 +603,30 @@ class MetaHarnessOptimizerRunner {
       lastAttemptId: undefined,
     });
 
+    this.log("info", "Optimizer run started.", {
+      runId: state.runId,
+      benchmarkId: state.benchmarkId,
+      optimizerModelProvider: state.optimizerModelProvider,
+      optimizerModelId: state.optimizerModelId,
+    });
+    this.currentRunId = state.runId;
     this.currentRun = this.runLoop().finally(() => {
       this.currentRun = null;
+      this.currentRunId = null;
     });
     return state;
   }
 
   stop(): MetaHarnessOptimizerRunState {
     const state = this.getState();
+    this.log("info", "Stop requested.", {
+      runId: state.runId,
+      status: state.status,
+      phase: state.phase,
+    });
+    if (state.status !== "running" && state.status !== "stopping") {
+      return state;
+    }
     return writeOptimizerState(getAgentDir(), {
       ...state,
       status: "stopping",
@@ -609,6 +709,9 @@ class MetaHarnessOptimizerRunner {
             maxVariantsPerIteration: state.maxVariantsPerIteration,
             minScoreDelta: state.minScoreDelta,
             sleepMs: state.sleepMs,
+            validationModelProvider: state.validationModelProvider ?? null,
+            validationModelId: state.validationModelId ?? null,
+            validationThinkingLevel: state.validationThinkingLevel ?? null,
           },
           baseCandidate,
           attemptSummary: previousSummaries,
@@ -633,6 +736,7 @@ class MetaHarnessOptimizerRunner {
         attempt.phase = "evaluating";
         appendOptimizerAttempt(getAgentDir(), attempt);
 
+        const baselineProfileScores = buildProfileBaseline(state.bestScore ?? null);
         const evaluated: MetaHarnessOptimizerAttemptCandidate[] = [];
         for (const proposal of proposals.slice(0, Math.max(1, state.maxVariantsPerIteration))) {
           ensureCandidateStored(getAgentDir(), proposal.candidate);
@@ -641,6 +745,10 @@ class MetaHarnessOptimizerRunner {
             candidate: proposal.candidate,
             benchmarkId: state.benchmarkId,
             workspaceRoot: process.cwd(),
+            validationModelProvider: state.validationModelProvider ?? null,
+            validationModelId: state.validationModelId ?? null,
+            validationThinkingLevel: state.validationThinkingLevel ?? null,
+            baselineProfileScores,
           });
           evaluated.push({
             candidate: proposal.candidate,
@@ -685,9 +793,7 @@ class MetaHarnessOptimizerRunner {
 
         attempt.phase = "sleeping";
         attempt.status = "completed";
-        attempt.summary = best?.score
-          ? `Best candidate ${best.candidate.id} success ${(best.score.successRate * 100).toFixed(0)}%, latency ${Math.round(best.score.averageLatencyMs)}ms${best.promoted ? ", promoted" : ""}.`
-          : "No valid benchmark score was produced.";
+        attempt.summary = formatAttemptSummary(best);
         attempt.finishedAt = new Date().toISOString();
         appendOptimizerAttempt(getAgentDir(), attempt);
 

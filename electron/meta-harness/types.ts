@@ -97,6 +97,16 @@ export type MetaHarnessBenchmarkDefinition = {
   tasks: MetaHarnessBenchmarkTask[];
 };
 
+export type MetaHarnessEvaluationProfile = {
+  id: string;
+  benchmarkId: string;
+  benchmark?: MetaHarnessBenchmarkDefinition;
+  modelProvider?: string | null;
+  modelId?: string | null;
+  thinkingLevel?: string | null;
+  weight?: number;
+};
+
 export type MetaHarnessTaskResult = {
   taskId: string;
   success: boolean;
@@ -104,6 +114,21 @@ export type MetaHarnessTaskResult = {
   toolCalls: number;
   outputText?: string;
   errorMessage?: string;
+};
+
+export type HarnessEvaluationProfileScore = {
+  profileId: string;
+  benchmarkId: string;
+  modelProvider?: string | null;
+  modelId?: string | null;
+  thinkingLevel?: string | null;
+  weight?: number;
+  successRate: number;
+  averageLatencyMs: number;
+  totalToolCalls: number;
+  tokenCost?: number | null;
+  scalarScore: number;
+  taskResults: MetaHarnessTaskResult[];
 };
 
 export type HarnessEvaluationScore = {
@@ -118,6 +143,12 @@ export type HarnessEvaluationScore = {
   humanFeedbackScore?: number | null;
   humanFeedbackCount?: number;
   taskResults: MetaHarnessTaskResult[];
+  profileScores?: HarnessEvaluationProfileScore[];
+  robustnessScore?: number;
+  scoreStddev?: number;
+  worstProfileScore?: number;
+  regressionPenalty?: number;
+  worstCasePenalty?: number;
   createdAt: string;
 };
 
@@ -130,6 +161,7 @@ export type HarnessFrontierEntry = {
 
 export type HarnessEvaluationTraceEvent = {
   timestamp: string;
+  profileId?: string;
   taskId?: string;
   event: unknown;
 };

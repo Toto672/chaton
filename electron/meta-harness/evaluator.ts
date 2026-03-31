@@ -6,20 +6,42 @@ import type { DbConversation } from "../db/repos/conversations.js";
 import type { PiRendererEvent } from "../pi-sdk-runtime.js";
 import { archiveHarnessArtifacts, createRunId, updateFrontierForScore } from "./archive.js";
 import { resolveBenchmarkWorkspace, sanitizeBenchmarkId } from "./bootstrap.js";
-import { buildDefaultBenchmark, scoreTaskResult, aggregateBenchmarkScore } from "./benchmark.js";
+import {
+  aggregateBenchmarkScore,
+  aggregateProfileScore,
+  buildDefaultBenchmark,
+  buildEvaluationProfiles,
+  scoreTaskResult,
+} from "./benchmark.js";
 import type {
   HarnessCandidate,
+  HarnessEvaluationProfileScore,
   HarnessEvaluationTraceEvent,
   MetaHarnessBenchmarkDefinition,
+  MetaHarnessEvaluationProfile,
   MetaHarnessTaskResult,
 } from "./types.js";
 
-function buildEphemeralConversation(task: MetaHarnessBenchmarkDefinition["tasks"][number], runId: string): DbConversation {
+type RuntimeFacade = {
+  start: (
+    conversation: DbConversation,
+    options?: { harnessCandidate?: HarnessCandidate | null },
+  ) => Promise<void>;
+  send: (command: { type: "prompt"; message: string }) => Promise<{ success: boolean; error?: string }>;
+  getSnapshot: () => { state: unknown; messages: unknown[]; status: string };
+  stop: () => Promise<void>;
+};
+
+function buildEphemeralConversation(
+  task: MetaHarnessBenchmarkDefinition["tasks"][number],
+  runId: string,
+  profile: MetaHarnessEvaluationProfile,
+): DbConversation {
   const now = new Date().toISOString();
   return {
-    id: `__meta_harness__:${runId}:${task.id}:${crypto.randomUUID()}`,
+    id: `__meta_harness__:${runId}:${profile.id}:${task.id}:${crypto.randomUUID()}`,
     project_id: null,
-    title: `Meta-Harness Eval ${task.id}`,
+    title: `Meta-Harness Eval ${profile.id} ${task.id}`,
     title_source: "manual",
     status: "active",
     is_relevant: 0,
@@ -27,9 +49,9 @@ function buildEphemeralConversation(task: MetaHarnessBenchmarkDefinition["tasks"
     updated_at: now,
     last_message_at: now,
     pi_session_file: null,
-    model_provider: task.modelProvider ?? null,
-    model_id: task.modelId ?? null,
-    thinking_level: task.thinkingLevel ?? null,
+    model_provider: profile.modelProvider ?? task.modelProvider ?? null,
+    model_id: profile.modelId ?? task.modelId ?? null,
+    thinking_level: profile.thinkingLevel ?? task.thinkingLevel ?? null,
     last_runtime_error: null,
     worktree_path: task.workingDirectory ?? null,
     access_mode: task.accessMode === "open" ? "open" : "secure",
@@ -41,22 +63,25 @@ function buildEphemeralConversation(task: MetaHarnessBenchmarkDefinition["tasks"
   };
 }
 
-export async function evaluateHarnessCandidate(params: {
+async function evaluateProfile(params: {
   agentDir: string;
+  runId: string;
   candidate: HarnessCandidate;
-  benchmark?: MetaHarnessBenchmarkDefinition;
-  benchmarkId?: string;
+  profile: MetaHarnessEvaluationProfile;
   workspaceRoot: string;
 }): Promise<{
-  benchmarkId: string;
-  runId: string;
-  score: ReturnType<typeof aggregateBenchmarkScore>;
-  frontier: ReturnType<typeof updateFrontierForScore>;
+  profileScore: HarnessEvaluationProfileScore;
+  taskResults: MetaHarnessTaskResult[];
 }> {
-  const benchmark = params.benchmark ?? buildDefaultBenchmark();
-  const benchmarkId = sanitizeBenchmarkId(params.benchmarkId ?? benchmark.id);
-  const runId = createRunId();
+  const benchmark = params.profile.benchmark ?? buildDefaultBenchmark();
   const taskResults: MetaHarnessTaskResult[] = [];
+  const manager = globalThis as Record<string, unknown>;
+  const runtimeFactory = manager.__chatonsMetaHarnessRuntimeFactory as
+    | ((conversationId: string, onEvent: (payload: PiRendererEvent) => void) => RuntimeFacade)
+    | undefined;
+  if (!runtimeFactory) {
+    throw new Error("Meta-Harness runtime factory is not available");
+  }
 
   for (const task of benchmark.tasks) {
     const conversation = buildEphemeralConversation(
@@ -64,7 +89,8 @@ export async function evaluateHarnessCandidate(params: {
         ...task,
         workingDirectory: resolveBenchmarkWorkspace(params.workspaceRoot, task.workingDirectory),
       },
-      runId,
+      params.runId,
+      params.profile,
     );
 
     const db = getDb();
@@ -84,24 +110,10 @@ export async function evaluateHarnessCandidate(params: {
     });
 
     const traceEvents: HarnessEvaluationTraceEvent[] = [];
-    const manager = globalThis as Record<string, unknown>;
-    const runtimeFactory = manager.__chatonsMetaHarnessRuntimeFactory as
-      | ((conversationId: string, onEvent: (payload: PiRendererEvent) => void) => {
-          start: (
-            conversation: DbConversation,
-            options?: { harnessCandidate?: HarnessCandidate | null },
-          ) => Promise<void>;
-          send: (command: { type: "prompt"; message: string }) => Promise<{ success: boolean; error?: string }>;
-          getSnapshot: () => { state: unknown; messages: unknown[]; status: string };
-          stop: () => Promise<void>;
-        })
-      | undefined;
-    if (!runtimeFactory) {
-      throw new Error("Meta-Harness runtime factory is not available");
-    }
     const runtime = runtimeFactory(conversation.id, (payload: PiRendererEvent) => {
       traceEvents.push({
         timestamp: new Date().toISOString(),
+        profileId: params.profile.id,
         taskId: task.id,
         event: payload.event,
       });
@@ -133,17 +145,15 @@ export async function evaluateHarnessCandidate(params: {
           .join("\n\n") || undefined;
       }
 
-      const promptSections = snapshot.state && typeof snapshot.state === "object"
-        ? []
-        : [];
       archiveHarnessArtifacts({
         agentDir: params.agentDir,
-        benchmarkId,
-        runId,
+        benchmarkId: params.profile.benchmarkId,
+        runId: params.runId,
         candidate: params.candidate,
-        promptSections,
+        promptSections: [],
         traceEvents,
         summary: {
+          profileId: params.profile.id,
           taskId: task.id,
           success: !errorMessage,
         },
@@ -162,7 +172,7 @@ export async function evaluateHarnessCandidate(params: {
 
     taskResults.push(
       scoreTaskResult({
-        taskId: task.id,
+        taskId: `${params.profile.id}:${task.id}`,
         latencyMs,
         toolCalls,
         outputText,
@@ -176,11 +186,68 @@ export async function evaluateHarnessCandidate(params: {
     );
   }
 
+  const profileScore = aggregateProfileScore({
+    profile: params.profile,
+    candidate: params.candidate,
+    taskResults,
+  });
+
+  return {
+    profileScore,
+    taskResults,
+  };
+}
+
+export async function evaluateHarnessCandidate(params: {
+  agentDir: string;
+  candidate: HarnessCandidate;
+  benchmark?: MetaHarnessBenchmarkDefinition;
+  benchmarkId?: string;
+  workspaceRoot: string;
+  validationModelProvider?: string | null;
+  validationModelId?: string | null;
+  validationThinkingLevel?: string | null;
+  baselineProfileScores?: HarnessEvaluationProfileScore[];
+}): Promise<{
+  benchmarkId: string;
+  runId: string;
+  score: ReturnType<typeof aggregateBenchmarkScore>;
+  frontier: ReturnType<typeof updateFrontierForScore>;
+}> {
+  const benchmark = params.benchmark ?? buildDefaultBenchmark();
+  const benchmarkId = sanitizeBenchmarkId(params.benchmarkId ?? benchmark.id);
+  const runId = createRunId();
+  const profiles = buildEvaluationProfiles({
+    benchmark,
+    benchmarkId,
+    sentinelModelProvider: params.validationModelProvider ?? null,
+    sentinelModelId: params.validationModelId ?? null,
+    sentinelThinkingLevel: params.validationThinkingLevel ?? null,
+  });
+
+  const profileScores: HarnessEvaluationProfileScore[] = [];
+  const allTaskResults: MetaHarnessTaskResult[] = [];
+
+  for (const profile of profiles) {
+    const result = await evaluateProfile({
+      agentDir: params.agentDir,
+      runId,
+      candidate: params.candidate,
+      profile,
+      workspaceRoot: params.workspaceRoot,
+    });
+    profileScores.push(result.profileScore);
+    allTaskResults.push(...result.taskResults);
+  }
+
+  const primaryProfile = profileScores[0];
   const score = aggregateBenchmarkScore({
     benchmarkId,
     runId,
     candidate: params.candidate,
-    taskResults,
+    taskResults: primaryProfile?.taskResults ?? allTaskResults,
+    profileScores,
+    baselineProfileScores: params.baselineProfileScores,
   });
   const frontier = updateFrontierForScore(params.agentDir, benchmarkId, score);
   archiveHarnessArtifacts({
@@ -196,6 +263,10 @@ export async function evaluateHarnessCandidate(params: {
       successRate: score.successRate,
       averageLatencyMs: score.averageLatencyMs,
       totalToolCalls: score.totalToolCalls,
+      robustnessScore: score.robustnessScore ?? null,
+      scoreStddev: score.scoreStddev ?? null,
+      worstProfileScore: score.worstProfileScore ?? null,
+      profileIds: profileScores.map((profile) => profile.profileId),
     },
   });
 

@@ -166,6 +166,13 @@ export function updateFrontierForScore(
     score,
   });
   current.sort((a, b) => {
+    const leftRobust = typeof a.score.robustnessScore === "number" ? a.score.robustnessScore : null;
+    const rightRobust = typeof b.score.robustnessScore === "number" ? b.score.robustnessScore : null;
+    if (leftRobust !== null || rightRobust !== null) {
+      if (leftRobust === null) return 1;
+      if (rightRobust === null) return -1;
+      if (rightRobust !== leftRobust) return rightRobust - leftRobust;
+    }
     if (b.score.successRate !== a.score.successRate) return b.score.successRate - a.score.successRate;
     if (a.score.averageLatencyMs !== b.score.averageLatencyMs) return a.score.averageLatencyMs - b.score.averageLatencyMs;
     return a.score.totalToolCalls - b.score.totalToolCalls;

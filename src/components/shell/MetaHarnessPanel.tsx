@@ -2,19 +2,27 @@ import {
   Activity,
   Beaker,
   Brain,
+  Clock,
   Play,
   RefreshCw,
+  Signal,
+  SignalHigh,
+  SignalLow,
+  SignalMedium,
   Square,
+  Target,
   ThumbsDown,
   ThumbsUp,
+  TrendingUp,
   Trophy,
   X,
+  Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { createPortal } from "react-dom";
 import type { PiModel } from "@/types/pi-types";
+import { createPortal } from "react-dom";
 import { useWorkspace } from "@/features/workspace/store";
 
 type MetaHarnessCandidateSummary = Record<string, unknown> & {
@@ -83,18 +91,51 @@ type MetaHarnessPanelProps = {
 };
 
 function formatPercent(value: unknown) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "n/a";
+  if (typeof value !== "number" || Number.isNaN(value)) return "—";
   return `${Math.round(value * 100)}%`;
 }
 
 function formatNumber(value: unknown) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "n/a";
+  if (typeof value !== "number" || Number.isNaN(value)) return "—";
   return value.toFixed(2);
 }
 
 function formatLatency(value: unknown) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "n/a";
-  return `${Math.round(value)} ms`;
+  if (typeof value !== "number" || Number.isNaN(value)) return "—";
+  if (value < 1000) return `${Math.round(value)}ms`;
+  return `${(value / 1000).toFixed(1)}s`;
+}
+
+function getLatencyColor(ms: number | undefined): string {
+  if (ms === undefined) return "text-slate-400";
+  if (ms < 3000) return "text-emerald-600 dark:text-emerald-400";
+  if (ms < 8000) return "text-amber-600 dark:text-amber-400";
+  return "text-rose-600 dark:text-rose-400";
+}
+
+function getSuccessIcon(rate: number | undefined) {
+  if (rate === undefined) return null;
+  if (rate >= 0.95)
+    return (
+      <SignalHigh className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+    );
+  if (rate >= 0.8)
+    return (
+      <SignalMedium className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+    );
+  if (rate >= 0.5)
+    return (
+      <SignalLow className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+    );
+  return <Signal className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />;
+}
+
+function getScoreColor(score: number | undefined): string {
+  if (score === undefined) return "text-slate-400";
+  if (score >= 0.8) return "text-emerald-600 dark:text-emerald-400";
+  if (score >= 0.6) return "text-amber-600 dark:text-amber-400";
+  if (score >= 0.4) return "text-orange-600 dark:text-orange-400";
+  return "text-rose-600 dark:text-rose-400";
 }
 
 function formatDateTime(value: unknown) {
@@ -118,22 +159,55 @@ function getScoreSummary(score: unknown) {
     typeof record?.totalToolCalls === "number"
       ? record.totalToolCalls
       : undefined;
-  const compositeScore =
-    typeof successRate === "number" &&
-    typeof averageLatencyMs === "number" &&
-    typeof totalToolCalls === "number"
-      ? successRate - averageLatencyMs / 100000 - totalToolCalls / 10000
+  const robustnessScore =
+    typeof record?.robustnessScore === "number"
+      ? record.robustnessScore
       : undefined;
+  const scoreStddev =
+    typeof record?.scoreStddev === "number" ? record.scoreStddev : undefined;
+  const worstProfileScore =
+    typeof record?.worstProfileScore === "number"
+      ? record.worstProfileScore
+      : undefined;
+  const compositeScore =
+    typeof robustnessScore === "number"
+      ? robustnessScore
+      : typeof successRate === "number" &&
+          typeof averageLatencyMs === "number" &&
+          typeof totalToolCalls === "number"
+        ? successRate - averageLatencyMs / 100000 - totalToolCalls / 10000
+        : undefined;
 
   return {
     successRate,
     averageLatencyMs,
     totalToolCalls,
     compositeScore,
+    robustnessScore,
+    scoreStddev,
+    worstProfileScore,
   };
 }
 
-function normalizeModelOption(model: Pick<PiModel, "provider" | "id" | "name">) {
+function getOptionalNumber(
+  record: Record<string, unknown> | null | undefined,
+  key: string,
+): number | undefined {
+  const value = record?.[key];
+  return typeof value === "number" && !Number.isNaN(value) ? value : undefined;
+}
+
+function getOptionalString(
+  record: Record<string, unknown> | null | undefined,
+  key: string,
+): string | undefined {
+  const value = record?.[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function normalizeModelOption(
+  model: Pick<PiModel, "provider" | "id" | "name">,
+) {
   const provider = String(model.provider ?? "").trim();
   const rawId = String(model.id ?? "").trim();
   const name = String(model.name ?? rawId).trim();
@@ -154,7 +228,7 @@ function normalizeModelOption(model: Pick<PiModel, "provider" | "id" | "name">) 
 }
 
 export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
-  const { state, persistSettings } = useWorkspace();
+  const { state, updateSettings } = useWorkspace();
   const panelRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<number | null>(null);
   const [benchmarkId, setBenchmarkId] = useState("environment-bootstrap-smoke");
@@ -177,6 +251,9 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
   const [optimizerModel, setOptimizerModel] = useState("");
   const [optimizerThinkingLevel, setOptimizerThinkingLevel] =
     useState("medium");
+  const [validationModel, setValidationModel] = useState("");
+  const [validationThinkingLevel, setValidationThinkingLevel] =
+    useState("medium");
   const [autoPromote, setAutoPromote] = useState(true);
   const [loop, setLoop] = useState(true);
   const [maxIterations, setMaxIterations] = useState("");
@@ -190,6 +267,16 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
     useState<MetaHarnessAttemptResult | null>(null);
   const [selectedAttemptLabel, setSelectedAttemptLabel] = useState<string>("");
   const [isAttemptResultLoading, setIsAttemptResultLoading] = useState(false);
+  const [optimizerLogs, setOptimizerLogs] = useState<
+    Array<{
+      timestamp: string;
+      source: "electron" | "pi" | "frontend";
+      level: "info" | "warn" | "error" | "debug";
+      message: string;
+      data?: unknown;
+      conversationId?: string;
+    }>
+  >([]);
   const resultPanelRef = useRef<HTMLDivElement>(null);
 
   const refreshAll = useCallback(async () => {
@@ -197,12 +284,13 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const [candidateResult, frontierResult, stateResult, rawModels] =
+      const [candidateResult, frontierResult, stateResult, rawModels, rawLogs] =
         await Promise.all([
           window.pi.metaHarnessListCandidates(benchmarkId),
           window.pi.metaHarnessGetFrontier(benchmarkId),
           window.pi.metaHarnessGetOptimizerState(),
           window.pi.getModels(),
+          window.logger.getLogs(200),
         ]);
       setResolvedBenchmarkId(candidateResult.benchmarkId);
       setActiveCandidateId(candidateResult.activeCandidateId);
@@ -211,6 +299,23 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
       );
       setFrontier(frontierResult.frontier as MetaHarnessFrontierEntry[]);
       setOptimizerState(stateResult as MetaHarnessOptimizerState);
+      setOptimizerLogs(
+        Array.isArray(rawLogs)
+          ? (rawLogs.filter((entry) => {
+              if (!entry || typeof entry !== "object") return false;
+              const record = entry as Record<string, unknown>;
+              const message = String(record.message ?? "");
+              return message.includes("[meta-harness optimizer]");
+            }) as Array<{
+              timestamp: string;
+              source: "electron" | "pi" | "frontend";
+              level: "info" | "warn" | "error" | "debug";
+              message: string;
+              data?: unknown;
+              conversationId?: string;
+            }>)
+          : [],
+      );
       const modelOptions = (rawModels ?? [])
         .map((model) => normalizeModelOption(model))
         .filter((model): model is NonNullable<typeof model> => Boolean(model));
@@ -240,6 +345,27 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
         if (fallbackKey) {
           setOptimizerModel(fallbackKey);
         }
+      }
+
+      const validationModelOption =
+        stateResult && typeof stateResult === "object"
+          ? normalizeModelOption({
+              provider: String(
+                (stateResult as Record<string, unknown>)
+                  .validationModelProvider ?? "",
+              ),
+              id: String(
+                (stateResult as Record<string, unknown>).validationModelId ??
+                  "",
+              ),
+              name: String(
+                (stateResult as Record<string, unknown>).validationModelId ??
+                  "",
+              ),
+            })
+          : null;
+      if (!validationModel && validationModelOption?.key) {
+        setValidationModel(validationModelOption.key);
       }
 
       const runId =
@@ -320,6 +446,7 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
   const optimizerPhase = String(optimizerState?.phase ?? "idle");
   const isOptimizerRunning =
     optimizerStatus === "running" || optimizerStatus === "stopping";
+  const recentOptimizerLogs = optimizerLogs.slice(-8).reverse();
 
   const startOptimizer = useCallback(async () => {
     if (!window.pi || !optimizerModel) return;
@@ -330,27 +457,48 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
     }
     const optimizerModelProvider = optimizerModel.slice(0, separatorIndex);
     const optimizerModelId = optimizerModel.slice(separatorIndex + 1);
+    const validationSeparatorIndex = validationModel.indexOf("/");
+    const validationModelProvider =
+      validationSeparatorIndex > 0
+        ? validationModel.slice(0, validationSeparatorIndex)
+        : null;
+    const validationModelId =
+      validationSeparatorIndex > 0
+        ? validationModel.slice(validationSeparatorIndex + 1)
+        : null;
     setIsStarting(true);
     setError(null);
+    const startConfig = {
+      benchmarkId,
+      optimizerModelProvider,
+      optimizerModelId,
+      optimizerThinkingLevel,
+      autoPromote,
+      loop,
+      maxIterations:
+        maxIterations.trim().length > 0 ? Number(maxIterations) : null,
+      maxVariantsPerIteration: Number(maxVariantsPerIteration),
+      minScoreDelta: Number(minScoreDelta),
+      sleepMs: Number(sleepMs),
+      validationModelProvider,
+      validationModelId,
+      validationThinkingLevel,
+    };
+    window.logger.log("info", "Meta-Harness start button clicked", startConfig);
     try {
-      await window.pi.metaHarnessStartOptimizer({
-        benchmarkId,
-        optimizerModelProvider,
-        optimizerModelId,
-        optimizerThinkingLevel,
-        autoPromote,
-        loop,
-        maxIterations:
-          maxIterations.trim().length > 0 ? Number(maxIterations) : null,
-        maxVariantsPerIteration: Number(maxVariantsPerIteration),
-        minScoreDelta: Number(minScoreDelta),
-        sleepMs: Number(sleepMs),
-      });
+      const nextState = await window.pi.metaHarnessStartOptimizer(startConfig);
+      window.logger.log("info", "Meta-Harness start returned", nextState);
       await refreshAll();
     } catch (startError) {
+      window.logger.log("error", "Meta-Harness start failed", {
+        error:
+          startError instanceof Error ? startError.message : String(startError),
+        startConfig,
+      });
       setError(
         startError instanceof Error ? startError.message : String(startError),
       );
+      await refreshAll();
     } finally {
       setIsStarting(false);
     }
@@ -365,6 +513,8 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
     optimizerThinkingLevel,
     refreshAll,
     sleepMs,
+    validationModel,
+    validationThinkingLevel,
   ]);
 
   const stopOptimizer = useCallback(async () => {
@@ -384,25 +534,28 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
   }, [refreshAll]);
 
   const openAttemptResult = useCallback(
-    async (attempt: MetaHarnessOptimizerAttempt, candidateId?: string | null) => {
+    async (
+      attempt: MetaHarnessOptimizerAttempt,
+      candidateId?: string | null,
+    ) => {
       if (!window.pi || !attempt.attemptId) return;
       const runId =
-        typeof optimizerState?.runId === "string" && optimizerState.runId.trim().length > 0
+        typeof optimizerState?.runId === "string" &&
+        optimizerState.runId.trim().length > 0
           ? optimizerState.runId
           : undefined;
       setIsAttemptResultLoading(true);
       setError(null);
       try {
-        const result =
-          await window.pi.metaHarnessGetOptimizerAttemptResult({
-            runId,
-            benchmarkId:
-              typeof attempt.benchmarkId === "string"
-                ? attempt.benchmarkId
-                : undefined,
-            attemptId: String(attempt.attemptId),
-            candidateId: candidateId ?? undefined,
-          });
+        const result = await window.pi.metaHarnessGetOptimizerAttemptResult({
+          runId,
+          benchmarkId:
+            typeof attempt.benchmarkId === "string"
+              ? attempt.benchmarkId
+              : undefined,
+          attemptId: String(attempt.attemptId),
+          candidateId: candidateId ?? undefined,
+        });
         setSelectedAttemptResult(result as MetaHarnessAttemptResult);
         setSelectedAttemptLabel(
           candidateId
@@ -535,6 +688,45 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                       <option value="high">high</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Validation model
+                    </label>
+                    <select
+                      value={validationModel}
+                      onChange={(event) =>
+                        setValidationModel(event.target.value)
+                      }
+                      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-violet-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                    >
+                      <option value="">None</option>
+                      {availableModels.map((model) => (
+                        <option
+                          key={`validation-${model.key}`}
+                          value={model.key}
+                        >
+                          {model.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Validation thinking
+                    </label>
+                    <select
+                      value={validationThinkingLevel}
+                      onChange={(event) =>
+                        setValidationThinkingLevel(event.target.value)
+                      }
+                      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-violet-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                    >
+                      <option value="off">off</option>
+                      <option value="low">low</option>
+                      <option value="medium">medium</option>
+                      <option value="high">high</option>
+                    </select>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
@@ -640,7 +832,10 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                       type="checkbox"
                       checked={state.settings.enableHarnessUI}
                       onChange={(event) => {
-                        void persistSettings({ ...state.settings, enableHarnessUI: event.target.checked });
+                        void updateSettings({
+                          ...state.settings,
+                          enableHarnessUI: event.target.checked,
+                        });
                       }}
                     />
                   </div>
@@ -703,6 +898,15 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                     </span>
                   </div>
                   <div className="flex justify-between gap-3">
+                    <span>Validation model</span>
+                    <span>
+                      {optimizerState?.validationModelProvider &&
+                      optimizerState?.validationModelId
+                        ? `${String(optimizerState.validationModelProvider)}/${String(optimizerState.validationModelId)}`
+                        : "none"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
                     <span>Active candidate</span>
                     <span>
                       {String(
@@ -726,28 +930,81 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                   </div>
                   {optimizerState?.bestScore &&
                   typeof optimizerState.bestScore === "object" ? (
-                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-                      <div>
-                        Best success{" "}
-                        {formatPercent(
-                          (optimizerState.bestScore as Record<string, unknown>)
-                            .successRate,
-                        )}
-                      </div>
-                      <div>
-                        Best latency{" "}
-                        {formatLatency(
-                          (optimizerState.bestScore as Record<string, unknown>)
-                            .averageLatencyMs,
-                        )}
-                      </div>
-                      <div>
-                        Best tool calls{" "}
-                        {String(
-                          (optimizerState.bestScore as Record<string, unknown>)
-                            .totalToolCalls ?? "n/a",
-                        )}
-                      </div>
+                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950/60">
+                      {(() => {
+                        const bestScoreRecord =
+                          optimizerState.bestScore as Record<string, unknown>;
+                        const robustnessScore = getOptionalNumber(
+                          bestScoreRecord,
+                          "robustnessScore",
+                        );
+                        const successRate = getOptionalNumber(
+                          bestScoreRecord,
+                          "successRate",
+                        );
+                        const averageLatencyMs = getOptionalNumber(
+                          bestScoreRecord,
+                          "averageLatencyMs",
+                        );
+                        const scoreStddev = getOptionalNumber(
+                          bestScoreRecord,
+                          "scoreStddev",
+                        );
+                        const worstProfileScore = getOptionalNumber(
+                          bestScoreRecord,
+                          "worstProfileScore",
+                        );
+
+                        return (
+                          <>
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-900/50">
+                                <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                  <Target className="h-3 w-3" />
+                                  Robust
+                                </div>
+                                <div
+                                  className={`mt-0.5 text-base font-semibold ${getScoreColor(robustnessScore)}`}
+                                >
+                                  {formatNumber(robustnessScore)}
+                                </div>
+                              </div>
+                              <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-900/50">
+                                <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                  {getSuccessIcon(successRate)}
+                                  Success
+                                </div>
+                                <div
+                                  className={`mt-0.5 text-base font-semibold ${successRate !== undefined && successRate >= 0.8 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-700 dark:text-slate-200"}`}
+                                >
+                                  {formatPercent(successRate)}
+                                </div>
+                              </div>
+                              <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-900/50">
+                                <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                  <Clock className="h-3 w-3" />
+                                  Latency
+                                </div>
+                                <div
+                                  className={`mt-0.5 text-base font-semibold ${getLatencyColor(averageLatencyMs)}`}
+                                >
+                                  {formatLatency(averageLatencyMs)}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="mt-2 flex items-center gap-4 border-t border-slate-100 pt-2 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                              <span>Variance σ{formatNumber(scoreStddev)}</span>
+                              <span>
+                                Worst {formatNumber(worstProfileScore)}
+                              </span>
+                              <span className="ml-auto">
+                                {String(bestScoreRecord.totalToolCalls ?? "—")}{" "}
+                                calls
+                              </span>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   ) : null}
                   {optimizerState?.lastError ? (
@@ -755,6 +1012,38 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                       {String(optimizerState.lastError)}
                     </div>
                   ) : null}
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Optimizer logs
+                    </div>
+                    <div className="max-h-48 space-y-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] dark:border-slate-800 dark:bg-slate-950/60">
+                      {recentOptimizerLogs.length > 0 ? (
+                        recentOptimizerLogs.map((entry, index) => (
+                          <div
+                            key={`${entry.timestamp}-${index}`}
+                            className="space-y-1 border-b border-slate-200/70 pb-2 last:border-b-0 last:pb-0 dark:border-slate-800/70"
+                          >
+                            <div className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                              <span>{entry.level}</span>
+                              <span>{formatDateTime(entry.timestamp)}</span>
+                            </div>
+                            <div className="break-words text-slate-700 dark:text-slate-200">
+                              {entry.message}
+                            </div>
+                            {entry.data !== undefined ? (
+                              <pre className="overflow-auto whitespace-pre-wrap break-words rounded-md bg-white/80 p-2 text-[10px] text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+                                {JSON.stringify(entry.data, null, 2)}
+                              </pre>
+                            ) : null}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-slate-500 dark:text-slate-400">
+                          No optimizer logs yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </section>
             </div>
@@ -778,14 +1067,23 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
               <div className="space-y-3">
                 {rankedCandidates.map((candidate) => {
                   const latestScore = candidate.latestScore ?? null;
-                  const { compositeScore, successRate, averageLatencyMs } =
-                    getScoreSummary(latestScore);
+                  const {
+                    compositeScore,
+                    successRate,
+                    averageLatencyMs,
+                    scoreStddev,
+                  } = getScoreSummary(latestScore);
                   const humanFeedback =
-                    candidate.humanFeedback && typeof candidate.humanFeedback === 'object'
+                    candidate.humanFeedback &&
+                    typeof candidate.humanFeedback === "object"
                       ? (candidate.humanFeedback as Record<string, unknown>)
                       : null;
                   const isActive =
                     candidate.active || candidate.id === activeCandidateId;
+                  const displayName =
+                    candidate.name || candidate.id || "Unnamed";
+                  const showId =
+                    candidate.id && candidate.id !== candidate.name;
 
                   return (
                     <article
@@ -793,48 +1091,105 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                         candidate.id ??
                           `candidate-${candidate.name ?? "unknown"}`,
                       )}
-                      className={`rounded-2xl border p-4 ${
+                      className={`rounded-xl border p-3.5 transition ${
                         isActive
-                          ? "border-violet-300 bg-violet-50 dark:border-violet-800 dark:bg-violet-950/30"
-                          : "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/60"
+                          ? "border-violet-300 bg-violet-50/70 dark:border-violet-700/50 dark:bg-violet-950/25"
+                          : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/50 hover:border-slate-300 dark:hover:border-slate-700"
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                              {candidate.name ||
-                                candidate.id ||
-                                "Unnamed candidate"}
-                            </h4>
-                            {isActive ? (
-                              <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
-                                Active
-                              </span>
-                            ) : null}
+                      {/* Header row: Name + Active badge + Score */}
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <h4
+                            className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100"
+                            title={displayName}
+                          >
+                            {displayName}
+                          </h4>
+                          {isActive && (
+                            <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
+                              <Zap className="h-3 w-3" />
+                              Active
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          className={`shrink-0 text-sm font-bold ${getScoreColor(compositeScore)}`}
+                        >
+                          {formatNumber(compositeScore)}
+                        </div>
+                      </div>
+
+                      {/* Optional: Show ID if different from name */}
+                      {showId && (
+                        <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                          {candidate.id}
+                        </p>
+                      )}
+
+                      {/* Description - single line, muted */}
+                      {candidate.description && (
+                        <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
+                          {candidate.description}
+                        </p>
+                      )}
+
+                      {/* Metrics row - compact horizontal layout */}
+                      <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+                        {/* Success rate with icon */}
+                        <div
+                          className="flex items-center gap-1.5"
+                          title="Success rate"
+                        >
+                          {getSuccessIcon(successRate)}
+                          <span
+                            className={
+                              successRate && successRate >= 0.8
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-slate-500 dark:text-slate-400"
+                            }
+                          >
+                            {formatPercent(successRate)}
+                          </span>
+                        </div>
+
+                        {/* Latency */}
+                        <div
+                          className="flex items-center gap-1.5"
+                          title="Average latency"
+                        >
+                          <Clock className="h-3.5 w-3.5 text-slate-400" />
+                          <span className={getLatencyColor(averageLatencyMs)}>
+                            {formatLatency(averageLatencyMs)}
+                          </span>
+                        </div>
+
+                        {/* Variance (only show if meaningful) */}
+                        {scoreStddev !== undefined && scoreStddev > 0 && (
+                          <div
+                            className="flex items-center gap-1.5"
+                            title="Score variance"
+                          >
+                            <TrendingUp className="h-3.5 w-3.5 text-slate-400" />
+                            <span className="text-slate-500 dark:text-slate-400">
+                              σ{formatNumber(scoreStddev)}
+                            </span>
                           </div>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            {candidate.id || "unknown-id"}
-                          </p>
-                          {candidate.description ? (
-                            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                              {candidate.description}
-                            </p>
-                          ) : null}
-                        </div>
-                        <div className="text-right text-xs text-slate-500 dark:text-slate-400">
-                          <div>Score {formatNumber(compositeScore)}</div>
-                          <div>Success {formatPercent(successRate)}</div>
-                          <div>Latency {formatLatency(averageLatencyMs)}</div>
-                          {humanFeedback ? (
-                            <div className="mt-1 inline-flex items-center gap-1">
-                              <ThumbsUp className="h-3 w-3" />
+                        )}
+
+                        {/* Human feedback summary */}
+                        {humanFeedback && (
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            <ThumbsUp className="h-3 w-3 text-emerald-500" />
+                            <span className="text-[11px] text-slate-500">
                               {String(humanFeedback.positive ?? 0)}
-                              <ThumbsDown className="ml-1 h-3 w-3" />
+                            </span>
+                            <ThumbsDown className="ml-1.5 h-3 w-3 text-rose-500" />
+                            <span className="text-[11px] text-slate-500">
                               {String(humanFeedback.negative ?? 0)}
-                            </div>
-                          ) : null}
-                        </div>
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </article>
                   );
@@ -851,13 +1206,18 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
               </div>
 
               <div className="mb-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">
-                Cliquez sur une tentative ou sur un candidat proposé pour voir le résultat détaillé du harness.
+                Cliquez sur une tentative ou sur un candidat proposé pour voir
+                le résultat détaillé du harness.
               </div>
 
-              <div className="mb-5 space-y-3">
+              <div className="mb-5 space-y-2">
                 {frontier.map((entry, index) => {
-                  const { compositeScore, successRate, averageLatencyMs } =
-                    getScoreSummary(entry.score);
+                  const {
+                    compositeScore,
+                    successRate,
+                    averageLatencyMs,
+                    scoreStddev,
+                  } = getScoreSummary(entry.score);
                   const frontierRunId =
                     typeof entry.score?.runId === "string" &&
                     entry.score.runId.trim().length > 0
@@ -873,23 +1233,41 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                     entry.candidateId.trim().length > 0
                       ? entry.candidateId
                       : undefined;
+
+                  // Get rank styling
+                  const rank = entry.rank ?? index + 1;
+                  const rankColor =
+                    rank === 1
+                      ? "text-amber-600 dark:text-amber-400"
+                      : rank === 2
+                        ? "text-slate-500 dark:text-slate-400"
+                        : rank === 3
+                          ? "text-orange-700 dark:text-orange-500"
+                          : "text-slate-400 dark:text-slate-500";
+
                   return (
                     <article
                       key={`${String(entry.candidateId ?? "candidate")}-${index}`}
-                      className="cursor-pointer rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-violet-300 hover:bg-violet-50/40 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-violet-700 dark:hover:bg-violet-950/20"
+                      className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 transition hover:border-violet-300 hover:bg-violet-50/30 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-violet-700 dark:hover:bg-violet-950/20"
                       onClick={async () => {
-                        if (!window.pi || !frontierRunId || !frontierCandidateId) {
+                        if (
+                          !window.pi ||
+                          !frontierRunId ||
+                          !frontierCandidateId
+                        ) {
                           return;
                         }
                         setIsAttemptResultLoading(true);
                         setError(null);
                         try {
                           const result =
-                            await window.pi.metaHarnessGetOptimizerAttemptResult({
-                              runId: frontierRunId,
-                              benchmarkId: frontierBenchmarkId,
-                              candidateId: frontierCandidateId,
-                            });
+                            await window.pi.metaHarnessGetOptimizerAttemptResult(
+                              {
+                                runId: frontierRunId,
+                                benchmarkId: frontierBenchmarkId,
+                                candidateId: frontierCandidateId,
+                              },
+                            );
                           setSelectedAttemptResult(
                             result as MetaHarnessAttemptResult,
                           );
@@ -913,20 +1291,49 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                         }
                       }}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            Rank #{entry.rank ?? index + 1}
-                          </div>
-                          <h4 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                            {entry.candidateId || "unknown-candidate"}
-                          </h4>
+                      {/* Compact header: Rank badge + Name + Score */}
+                      <div className="flex items-center gap-2.5">
+                        {/* Rank medal */}
+                        <div
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold dark:bg-slate-800 ${rankColor}`}
+                        >
+                          {rank}
                         </div>
-                        <div className="text-right text-xs text-slate-500 dark:text-slate-400">
-                          <div>Score {formatNumber(compositeScore)}</div>
-                          <div>Success {formatPercent(successRate)}</div>
-                          <div>Latency {formatLatency(averageLatencyMs)}</div>
+
+                        {/* Candidate name */}
+                        <h4
+                          className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900 dark:text-slate-100"
+                          title={frontierCandidateId}
+                        >
+                          {frontierCandidateId}
+                        </h4>
+
+                        {/* Score pill */}
+                        <div
+                          className={`shrink-0 rounded-lg bg-slate-100 px-2 py-0.5 text-sm font-semibold dark:bg-slate-800 ${getScoreColor(compositeScore)}`}
+                        >
+                          {formatNumber(compositeScore)}
                         </div>
+                      </div>
+
+                      {/* Subtle metrics row */}
+                      <div className="mt-2 flex items-center gap-4 pl-9 text-xs text-slate-500 dark:text-slate-400">
+                        <span className="flex items-center gap-1">
+                          {getSuccessIcon(successRate)}
+                          {formatPercent(successRate)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          <span className={getLatencyColor(averageLatencyMs)}>
+                            {formatLatency(averageLatencyMs)}
+                          </span>
+                        </span>
+                        {scoreStddev !== undefined && scoreStddev > 0 && (
+                          <span className="flex items-center gap-1">
+                            <TrendingUp className="h-3 w-3" />σ
+                            {formatNumber(scoreStddev)}
+                          </span>
+                        )}
                       </div>
                     </article>
                   );
@@ -997,10 +1404,37 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                                     unknown
                                   >)
                                 : null;
+                            const robustnessScore =
+                              typeof score?.robustnessScore === "number"
+                                ? score.robustnessScore
+                                : undefined;
+                            const successRate =
+                              typeof score?.successRate === "number"
+                                ? score.successRate
+                                : undefined;
+                            const avgLatency =
+                              typeof score?.averageLatencyMs === "number"
+                                ? score.averageLatencyMs
+                                : undefined;
+                            const variance =
+                              typeof score?.scoreStddev === "number"
+                                ? score.scoreStddev
+                                : undefined;
+                            const rationale = getOptionalString(
+                              candidateRecord,
+                              "rationale",
+                            );
+                            const isPromoted =
+                              candidateRecord.promoted === true;
+
                             return (
                               <div
                                 key={`${String(candidate?.id ?? "candidate")}-${index}`}
-                                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs transition hover:border-violet-300 hover:bg-violet-50 dark:border-slate-800 dark:bg-slate-950/50 dark:hover:border-violet-700 dark:hover:bg-violet-950/30"
+                                className={`rounded-lg border px-3 py-2 text-xs transition hover:bg-violet-50/30 dark:hover:bg-violet-950/20 ${
+                                  isPromoted
+                                    ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800/50 dark:bg-emerald-950/20"
+                                    : "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50"
+                                }`}
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   void openAttemptResult(
@@ -1009,32 +1443,47 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                                   );
                                 }}
                               >
-                                <div className="flex items-center justify-between gap-3">
-                                  <div>
-                                    <div className="font-medium text-slate-900 dark:text-slate-100">
-                                      {String(
-                                        candidate?.id ?? "unknown-candidate",
-                                      )}
-                                    </div>
-                                    <div className="text-slate-500 dark:text-slate-400">
-                                      {String(candidateRecord.rationale ?? "")}
-                                    </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="truncate font-medium text-slate-900 dark:text-slate-100">
+                                      {String(candidate?.id ?? "unknown")}
+                                    </span>
+                                    {isPromoted && (
+                                      <span className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                                        <Target className="h-2.5 w-2.5" />
+                                        Promoted
+                                      </span>
+                                    )}
                                   </div>
-                                  <div className="text-right text-slate-500 dark:text-slate-400">
-                                    <div>
-                                      Success{" "}
-                                      {formatPercent(score?.successRate)}
-                                    </div>
-                                    <div>
-                                      Latency{" "}
-                                      {formatLatency(score?.averageLatencyMs)}
-                                    </div>
-                                    <div>
-                                      {candidateRecord.promoted
-                                        ? "Promoted"
-                                        : "Not promoted"}
-                                    </div>
-                                  </div>
+                                  <span
+                                    className={`shrink-0 font-semibold ${getScoreColor(robustnessScore)}`}
+                                  >
+                                    {formatNumber(robustnessScore)}
+                                  </span>
+                                </div>
+
+                                {rationale && (
+                                  <p className="mt-1 line-clamp-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                    {rationale}
+                                  </p>
+                                )}
+
+                                <div className="mt-1.5 flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+                                  <span className="flex items-center gap-1">
+                                    {getSuccessIcon(successRate)}
+                                    {formatPercent(successRate)}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    <span
+                                      className={getLatencyColor(avgLatency)}
+                                    >
+                                      {formatLatency(avgLatency)}
+                                    </span>
+                                  </span>
+                                  {variance !== undefined && variance > 0 && (
+                                    <span>σ{formatNumber(variance)}</span>
+                                  )}
                                 </div>
                               </div>
                             );
@@ -1055,7 +1504,8 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                       Résultat du harness
                     </h4>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {selectedAttemptLabel || "Sélectionnez une tentative pour afficher les artefacts."}
+                      {selectedAttemptLabel ||
+                        "Sélectionnez une tentative pour afficher les artefacts."}
                     </p>
                   </div>
                   {isAttemptResultLoading ? (
@@ -1081,7 +1531,23 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                           Score
                         </div>
                         <div className="mt-1 text-slate-900 dark:text-slate-100">
-                          Success {formatPercent(selectedAttemptResult.score?.successRate)} • Latency {formatLatency(selectedAttemptResult.score?.averageLatencyMs)}
+                          Robust{" "}
+                          {formatNumber(
+                            (
+                              selectedAttemptResult.score as Record<
+                                string,
+                                unknown
+                              > | null
+                            )?.robustnessScore,
+                          )}{" "}
+                          • Success{" "}
+                          {formatPercent(
+                            selectedAttemptResult.score?.successRate,
+                          )}{" "}
+                          • Latency{" "}
+                          {formatLatency(
+                            selectedAttemptResult.score?.averageLatencyMs,
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1091,7 +1557,13 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                         <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           Summary JSON
                         </div>
-                        <pre className="max-h-48 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">{JSON.stringify(selectedAttemptResult.summary, null, 2)}</pre>
+                        <pre className="max-h-48 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">
+                          {JSON.stringify(
+                            selectedAttemptResult.summary,
+                            null,
+                            2,
+                          )}
+                        </pre>
                       </div>
                     ) : null}
 
@@ -1100,7 +1572,9 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                         <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           Prompt
                         </div>
-                        <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">{selectedAttemptResult.promptText}</pre>
+                        <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">
+                          {selectedAttemptResult.promptText}
+                        </pre>
                       </div>
                     ) : null}
 
@@ -1109,7 +1583,9 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                         <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           Environment snapshot
                         </div>
-                        <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">{selectedAttemptResult.envSnapshotText}</pre>
+                        <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">
+                          {selectedAttemptResult.envSnapshotText}
+                        </pre>
                       </div>
                     ) : null}
 
@@ -1118,7 +1594,9 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                         <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           Trace
                         </div>
-                        <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">{selectedAttemptResult.traceText}</pre>
+                        <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">
+                          {selectedAttemptResult.traceText}
+                        </pre>
                       </div>
                     ) : null}
 
