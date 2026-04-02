@@ -24,23 +24,6 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-async function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        reject(new Error("Résultat de lecture invalide."));
-        return;
-      }
-      resolve(reader.result);
-    };
-    reader.onerror = () => {
-      reject(reader.error ?? new Error("Impossible de lire le fichier."));
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
 async function fileToText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
