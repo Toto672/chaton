@@ -271,9 +271,9 @@ export const ChatMessageItem = memo(function ChatMessageItem({
 
   const bodyClassName =
     role === 'user'
-      ? 'relative min-w-0 ml-auto w-auto max-w-[min(80%,720px)] rounded-2xl bg-[#eceef2] px-4 py-3'
+      ? 'relative min-w-0 ml-auto w-auto max-w-[min(80%,720px)] rounded-2xl bg-[#eceef2] dark:bg-[#121a27] px-4 py-3'
       : role === 'toolResult'
-        ? 'relative min-w-0 w-full max-w-[min(86%,860px)] rounded-2xl bg-[#f6f8fc] px-4 py-3'
+        ? 'relative min-w-0 w-full max-w-[min(86%,860px)] rounded-2xl bg-[#f6f8fc] dark:bg-[#0e1420] px-4 py-3'
         : 'relative min-w-0'
 
   return (

@@ -228,6 +228,7 @@ Current architecture:
 - `electron/meta-harness/types.ts` defines the typed `HarnessCandidate` surface
 - `electron/meta-harness/bootstrap.ts` performs the bounded environment-bootstrap probe and returns additive prompt sections
 - `electron/meta-harness/archive.ts` stores candidates, prompt text, scores, traces, and frontier metadata under the managed Pi directory
+- `electron/pi-sdk-runtime.ts` now maps harness tool permissions and hook policies onto Pi's native `beforeToolCall` / `afterToolCall` primitives
 - `electron/meta-harness/evaluator.ts` evaluates stored candidates against a narrow benchmark in isolated ephemeral local conversations
 - `electron/core-tools.ts` exposes maintainer-facing Meta-Harness tools for listing candidates, inspecting the frontier, storing candidates, promoting one as active, and running evaluation
 - `electron/ipc/pi.ts` exposes lightweight IPC readers for candidate/frontier inspection

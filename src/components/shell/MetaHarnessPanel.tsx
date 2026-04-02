@@ -6,8 +6,10 @@ import {
   ChevronRight,
   Clock,
   Code2,
+  ExternalLink,
   FileSearch,
   LayoutGrid,
+  Lightbulb,
   Play,
   RefreshCw,
   Shield,
@@ -191,6 +193,7 @@ type MetaHarnessCandidateSummary = Record<string, unknown> & {
   active?: boolean;
   objective?: string;
   latestScore?: Record<string, unknown> | null;
+  tools?: Record<string, unknown> | null;
 };
 
 type MetaHarnessFrontierEntry = Record<string, unknown> & {
@@ -242,6 +245,30 @@ type MetaHarnessAttemptResult = {
   envSnapshotText: string | null;
   traceText: string | null;
   diffPatch: string | null;
+};
+
+type MetaHarnessHumanReportAction = {
+  title: string;
+  rationale: string;
+  implementation: string;
+  priority: "high" | "medium" | "low";
+  filesOrAreas: string[];
+};
+
+type MetaHarnessHumanReport = {
+  title: string;
+  summary: string;
+  mainDiscovery: string;
+  recommendation: "adopt" | "iterate" | "reject";
+  findings: string[];
+  evidence: string[];
+  actions: MetaHarnessHumanReportAction[];
+  risks: string[];
+};
+
+type MetaHarnessResultModalState = {
+  label: string;
+  result: MetaHarnessAttemptResult;
 };
 
 type MetaHarnessPanelProps = {
@@ -301,6 +328,71 @@ function formatDateTime(value: unknown) {
   if (typeof value !== "string" || value.trim().length === 0) return "n/a";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function getCandidatePolicySummary(candidate: MetaHarnessCandidateSummary): string[] {
+  const tools =
+    candidate.tools && typeof candidate.tools === "object"
+      ? (candidate.tools as Record<string, unknown>)
+      : null;
+  const permissions =
+    tools?.permissions && typeof tools.permissions === "object"
+      ? (tools.permissions as Record<string, unknown>)
+      : null;
+  const hooks =
+    tools?.hooks && typeof tools.hooks === "object"
+      ? (tools.hooks as Record<string, unknown>)
+      : null;
+  const beforeToolCall =
+    hooks?.beforeToolCall && typeof hooks.beforeToolCall === "object"
+      ? (hooks.beforeToolCall as Record<string, unknown>)
+      : null;
+  const afterToolCall =
+    hooks?.afterToolCall && typeof hooks.afterToolCall === "object"
+      ? (hooks.afterToolCall as Record<string, unknown>)
+      : null;
+
+  const badges: string[] = [];
+
+  if (permissions?.mode === "allowlist") {
+    const allowed = readStringArray(permissions.allowedTools);
+    badges.push(`allowlist${allowed.length > 0 ? ` (${allowed.length})` : ""}`);
+  }
+  if (permissions?.mode === "denylist") {
+    const denied = readStringArray(permissions.deniedTools);
+    badges.push(`denylist${denied.length > 0 ? ` (${denied.length})` : ""}`);
+  }
+  if (permissions?.requireReadOnlyForSubagents === true) {
+    badges.push("read-only subagents");
+  }
+  if (permissions?.allowBypassForSearchTools === true) {
+    badges.push("search bypass");
+  }
+  if (permissions?.blockWriteToolsInOpenMode === true) {
+    badges.push("no open-mode writes");
+  }
+  if (beforeToolCall?.mode === "enforce") {
+    badges.push("before hook");
+  }
+  if (beforeToolCall?.blockOnDeniedTool === true) {
+    badges.push("block denied tools");
+  }
+  if (beforeToolCall?.blockOnWriteLikeBash === true) {
+    badges.push("block write-like bash");
+  }
+  if (afterToolCall?.mode === "summarize-errors") {
+    badges.push("after hook");
+  }
+  if (afterToolCall?.annotateErrors === true) {
+    badges.push("annotate errors");
+  }
+
+  return badges;
 }
 
 function getScoreSummary(score: unknown) {
@@ -386,6 +478,43 @@ function normalizeModelOption(
   };
 }
 
+function getRecommendationTone(recommendation: MetaHarnessHumanReport["recommendation"]): {
+  label: string;
+  className: string;
+} {
+  switch (recommendation) {
+    case "adopt":
+      return {
+        label: "Ready to adopt",
+        className:
+          "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+      };
+    case "reject":
+      return {
+        label: "Do not adopt yet",
+        className:
+          "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300",
+      };
+    default:
+      return {
+        label: "Needs iteration",
+        className:
+          "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+      };
+  }
+}
+
+function getPriorityTone(priority: MetaHarnessHumanReportAction["priority"]): string {
+  switch (priority) {
+    case "high":
+      return "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300";
+    case "low":
+      return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+    default:
+      return "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300";
+  }
+}
+
 export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
   const { state, updateSettings } = useWorkspace();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -438,10 +567,12 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
   const [availableModels, setAvailableModels] = useState<
     Array<{ provider: string; id: string; key: string; label: string }>
   >([]);
-  const [selectedAttemptResult, setSelectedAttemptResult] =
-    useState<MetaHarnessAttemptResult | null>(null);
-  const [selectedAttemptLabel, setSelectedAttemptLabel] = useState<string>("");
   const [isAttemptResultLoading, setIsAttemptResultLoading] = useState(false);
+  const [resultModalState, setResultModalState] =
+    useState<MetaHarnessResultModalState | null>(null);
+  const [humanReport, setHumanReport] = useState<MetaHarnessHumanReport | null>(null);
+  const [isHumanReportLoading, setIsHumanReportLoading] = useState(false);
+  const [humanReportError, setHumanReportError] = useState<string | null>(null);
   const [optimizerLogs, setOptimizerLogs] = useState<
     Array<{
       timestamp: string;
@@ -453,7 +584,6 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
     }>
   >([]);
   const [isParamsExpanded, setIsParamsExpanded] = useState(true);
-  const resultPanelRef = useRef<HTMLDivElement>(null);
 
   const refreshAll = useCallback(async () => {
     if (!window.pi) return;
@@ -776,42 +906,52 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
     }
   }, [benchmarkId, refreshAll]);
 
-  const openAttemptResult = useCallback(
-    async (
-      attempt: MetaHarnessOptimizerAttempt,
-      candidateId?: string | null,
-    ) => {
-      if (!window.pi || !attempt.attemptId) return;
-      const runId =
-        typeof optimizerState?.runId === "string" &&
-        optimizerState.runId.trim().length > 0
-          ? optimizerState.runId
-          : undefined;
+  const openResultModal = useCallback(
+    async ({
+      label,
+      input,
+    }: {
+      label: string;
+      input: {
+        runId?: string | null;
+        benchmarkId?: string | null;
+        attemptId?: string | null;
+        candidateId?: string | null;
+      };
+    }) => {
+      if (!window.pi) return;
       setIsAttemptResultLoading(true);
+      setIsHumanReportLoading(true);
       setError(null);
+      setHumanReportError(null);
+      setHumanReport(null);
       try {
-        const result = await window.pi.metaHarnessGetOptimizerAttemptResult({
-          runId,
-          benchmarkId:
-            typeof attempt.benchmarkId === "string"
-              ? attempt.benchmarkId
-              : undefined,
-          attemptId: String(attempt.attemptId),
-          candidateId: candidateId ?? undefined,
-        });
-        setSelectedAttemptResult(result as MetaHarnessAttemptResult);
-        setSelectedAttemptLabel(
-          candidateId
-            ? `Attempt ${String(attempt.iteration ?? "?")} • ${candidateId}`
-            : `Attempt ${String(attempt.iteration ?? "?")}`,
-        );
-        window.requestAnimationFrame(() => {
-          resultPanelRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-        });
+        const result = (await window.pi.metaHarnessGetOptimizerAttemptResult(
+          input,
+        )) as MetaHarnessAttemptResult;
+        setResultModalState({ label, result });
+
+        if (!result.selectedCandidateId) {
+          setHumanReportError("No candidate was found for this harness result.");
+          setIsHumanReportLoading(false);
+          return;
+        }
+
+        try {
+          const report = await window.pi.metaHarnessGenerateHumanReport(input);
+          setHumanReport(report as MetaHarnessHumanReport);
+        } catch (reportError) {
+          setHumanReportError(
+            reportError instanceof Error
+              ? reportError.message
+              : String(reportError),
+          );
+        } finally {
+          setIsHumanReportLoading(false);
+        }
       } catch (loadError) {
+        setHumanReportError(null);
+        setIsHumanReportLoading(false);
         setError(
           loadError instanceof Error ? loadError.message : String(loadError),
         );
@@ -819,7 +959,38 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
         setIsAttemptResultLoading(false);
       }
     },
-    [optimizerState?.runId],
+    [],
+  );
+
+  const openAttemptResult = useCallback(
+    async (
+      attempt: MetaHarnessOptimizerAttempt,
+      candidateId?: string | null,
+    ) => {
+      if (!attempt.attemptId) return;
+      const runId =
+        typeof optimizerState?.runId === "string" &&
+        optimizerState.runId.trim().length > 0
+          ? optimizerState.runId
+          : undefined;
+      const benchmarkId =
+        typeof attempt.benchmarkId === "string"
+          ? attempt.benchmarkId
+          : undefined;
+      const label = candidateId
+        ? `Attempt ${String(attempt.iteration ?? "?")} • ${candidateId}`
+        : `Attempt ${String(attempt.iteration ?? "?")}`;
+      await openResultModal({
+        label,
+        input: {
+          runId,
+          benchmarkId,
+          attemptId: String(attempt.attemptId),
+          candidateId: candidateId ?? undefined,
+        },
+      });
+    },
+    [openResultModal, optimizerState?.runId],
   );
 
   if (!isOpen) {
@@ -1486,7 +1657,8 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                     candidate.name || candidate.id || "Unnamed";
                   const showId =
                     candidate.id && candidate.id !== candidate.name;
-                  
+                  const policyBadges = getCandidatePolicySummary(candidate);
+
                   // Get work area for this candidate
                   const candidateWorkArea = (candidate.workArea ?? "environment-bootstrap") as string;
                   const workAreaConfig = getWorkAreaById(candidateWorkArea);
@@ -1550,6 +1722,19 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                         </p>
                       )}
 
+                      {policyBadges.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {policyBadges.map((badge) => (
+                            <span
+                              key={badge}
+                              className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300"
+                            >
+                              {badge}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
                       {/* Metrics row - compact horizontal layout */}
                       <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
                         {/* Success rate with icon */}
@@ -1606,6 +1791,39 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                             </span>
                           </div>
                         )}
+                      </div>
+
+                      <div className="mt-3 flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            void openResultModal({
+                              label: `Candidate • ${String(candidate.id ?? displayName)}`,
+                              input: {
+                                runId:
+                                  typeof latestScore === "object" &&
+                                  latestScore &&
+                                  typeof (latestScore as Record<string, unknown>).runId === "string"
+                                    ? String((latestScore as Record<string, unknown>).runId)
+                                    : undefined,
+                                benchmarkId: resolvedBenchmarkId,
+                                candidateId:
+                                  typeof candidate.id === "string"
+                                    ? candidate.id
+                                    : undefined,
+                              },
+                            })
+                          }
+                          disabled={
+                            isAttemptResultLoading ||
+                            typeof candidate.id !== "string" ||
+                            candidate.id.trim().length === 0
+                          }
+                        >
+                          <Lightbulb className="h-4 w-4" />
+                          Explain result
+                        </Button>
                       </div>
                     </article>
                   );
@@ -1671,25 +1889,13 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                         setIsAttemptResultLoading(true);
                         setError(null);
                         try {
-                          const result =
-                            await window.pi.metaHarnessGetOptimizerAttemptResult(
-                              {
-                                runId: frontierRunId,
-                                benchmarkId: frontierBenchmarkId,
-                                candidateId: frontierCandidateId,
-                              },
-                            );
-                          setSelectedAttemptResult(
-                            result as MetaHarnessAttemptResult,
-                          );
-                          setSelectedAttemptLabel(
-                            `Frontier • ${frontierCandidateId}`,
-                          );
-                          window.requestAnimationFrame(() => {
-                            resultPanelRef.current?.scrollIntoView({
-                              behavior: "smooth",
-                              block: "start",
-                            });
+                          await openResultModal({
+                            label: `Frontier • ${frontierCandidateId}`,
+                            input: {
+                              runId: frontierRunId,
+                              benchmarkId: frontierBenchmarkId,
+                              candidateId: frontierCandidateId,
+                            },
                           });
                         } catch (loadError) {
                           setError(
@@ -1896,6 +2102,27 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                                     <span>σ{formatNumber(variance)}</span>
                                   )}
                                 </div>
+                                <div className="mt-2 flex justify-end">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      void openAttemptResult(
+                                        attempt,
+                                        String(candidate?.id ?? ""),
+                                      );
+                                    }}
+                                    disabled={
+                                      isAttemptResultLoading ||
+                                      typeof candidate?.id !== "string" ||
+                                      String(candidate.id).trim().length === 0
+                                    }
+                                  >
+                                    <Lightbulb className="h-4 w-4" />
+                                    Explain
+                                  </Button>
+                                </div>
                               </div>
                             );
                           })}
@@ -1905,131 +2132,324 @@ export function MetaHarnessPanel({ isOpen, onClose }: MetaHarnessPanelProps) {
                   ))}
               </div>
 
-              <div
-                ref={resultPanelRef}
-                className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60"
-              >
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      Résultat du harness
-                    </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {selectedAttemptLabel ||
-                        "Sélectionnez une tentative pour afficher les artefacts."}
-                    </p>
-                  </div>
-                  {isAttemptResultLoading ? (
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                      Chargement…
-                    </span>
-                  ) : null}
-                </div>
-
-                {selectedAttemptResult ? (
-                  <div className="space-y-4 text-xs">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-950/60">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          Candidate
-                        </div>
-                        <div className="mt-1 font-mono text-slate-900 dark:text-slate-100">
-                          {selectedAttemptResult.selectedCandidateId ?? "n/a"}
-                        </div>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-950/60">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          Score
-                        </div>
-                        <div className="mt-1 text-slate-900 dark:text-slate-100">
-                          Robust{" "}
-                          {formatNumber(
-                            (
-                              selectedAttemptResult.score as Record<
-                                string,
-                                unknown
-                              > | null
-                            )?.robustnessScore,
-                          )}{" "}
-                          • Success{" "}
-                          {formatPercent(
-                            selectedAttemptResult.score?.successRate,
-                          )}{" "}
-                          • Latency{" "}
-                          {formatLatency(
-                            selectedAttemptResult.score?.averageLatencyMs,
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {selectedAttemptResult.summary ? (
-                      <div>
-                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          Summary JSON
-                        </div>
-                        <pre className="max-h-48 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">
-                          {JSON.stringify(
-                            selectedAttemptResult.summary,
-                            null,
-                            2,
-                          )}
-                        </pre>
-                      </div>
-                    ) : null}
-
-                    {selectedAttemptResult.promptText ? (
-                      <div>
-                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          Prompt
-                        </div>
-                        <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">
-                          {selectedAttemptResult.promptText}
-                        </pre>
-                      </div>
-                    ) : null}
-
-                    {selectedAttemptResult.envSnapshotText ? (
-                      <div>
-                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          Environment snapshot
-                        </div>
-                        <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">
-                          {selectedAttemptResult.envSnapshotText}
-                        </pre>
-                      </div>
-                    ) : null}
-
-                    {selectedAttemptResult.traceText ? (
-                      <div>
-                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          Trace
-                        </div>
-                        <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">
-                          {selectedAttemptResult.traceText}
-                        </pre>
-                      </div>
-                    ) : null}
-
-                    {!selectedAttemptResult.summary &&
-                    !selectedAttemptResult.promptText &&
-                    !selectedAttemptResult.envSnapshotText &&
-                    !selectedAttemptResult.traceText ? (
-                      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                        Aucun artefact détaillé trouvé pour cette tentative.
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-4 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                    Aucun résultat sélectionné.
-                  </div>
-                )}
+              <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">
+                Click a frontier entry, attempt, or candidate to open a readable results modal with recommended next steps.
               </div>
             </section>
           </main>
         </div>
       </div>
+
+      {resultModalState ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-6 py-8 backdrop-blur-sm dark:bg-black/75"
+          onClick={() => {
+            setResultModalState(null);
+            setHumanReport(null);
+            setHumanReportError(null);
+            setIsHumanReportLoading(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Harness result details"
+            className="flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-950"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="rounded-xl bg-violet-100 p-2 text-violet-700 dark:bg-violet-500/20 dark:text-violet-200">
+                    <Lightbulb className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      {humanReport?.title ?? "Harness result"}
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {resultModalState.label}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {humanReport ? (
+                  <span
+                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${getRecommendationTone(humanReport.recommendation).className}`}
+                  >
+                    {getRecommendationTone(humanReport.recommendation).label}
+                  </span>
+                ) : null}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setResultModalState(null);
+                    setHumanReport(null);
+                    setHumanReportError(null);
+                    setIsHumanReportLoading(false);
+                  }}
+                  aria-label="Close harness result modal"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 md:grid-cols-[1.1fr_0.9fr]">
+              <section className="min-h-0 overflow-auto border-b border-slate-200 p-5 dark:border-slate-800 md:border-b-0 md:border-r">
+                {isHumanReportLoading ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
+                    Generating a human-readable summary and actionable implementation plan...
+                  </div>
+                ) : humanReportError ? (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+                      {humanReportError}
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
+                      The raw harness artifacts are still available on the right, so you can manually inspect the evidence.
+                    </div>
+                  </div>
+                ) : humanReport ? (
+                  <div className="space-y-5">
+                    <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/50 dark:bg-violet-950/20">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+                        Plain-English summary
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-200">
+                        {humanReport.summary}
+                      </p>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Main discovery
+                        </div>
+                        <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">
+                          {humanReport.mainDiscovery}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Candidate snapshot
+                        </div>
+                        <div className="mt-2 space-y-1 text-sm text-slate-700 dark:text-slate-200">
+                          <div>
+                            Candidate: <span className="font-mono">{resultModalState.result.selectedCandidateId ?? "n/a"}</span>
+                          </div>
+                          <div>
+                            Robustness: {formatNumber((resultModalState.result.score as Record<string, unknown> | null)?.robustnessScore)}
+                          </div>
+                          <div>
+                            Success: {formatPercent(resultModalState.result.score?.successRate)}
+                          </div>
+                          <div>
+                            Latency: {formatLatency(resultModalState.result.score?.averageLatencyMs)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          <Target className="h-4 w-4" />
+                          Findings
+                        </div>
+                        <ul className="space-y-2">
+                          {humanReport.findings.map((finding, index) => (
+                            <li
+                              key={`finding-${index}`}
+                              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-200"
+                            >
+                              {finding}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          <Beaker className="h-4 w-4" />
+                          Evidence
+                        </div>
+                        <ul className="space-y-2">
+                          {humanReport.evidence.map((item, index) => (
+                            <li
+                              key={`evidence-${index}`}
+                              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-200"
+                            >
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <Lightbulb className="h-4 w-4" />
+                        Actionable next steps
+                      </div>
+                      <div className="space-y-3">
+                        {humanReport.actions.map((action, index) => (
+                          <article
+                            key={`action-${index}`}
+                            className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/60"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                {action.title}
+                              </h4>
+                              <span
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${getPriorityTone(action.priority)}`}
+                              >
+                                {action.priority} priority
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                              <span className="font-medium text-slate-900 dark:text-slate-100">Why:</span> {action.rationale}
+                            </p>
+                            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                              <span className="font-medium text-slate-900 dark:text-slate-100">How:</span> {action.implementation}
+                            </p>
+                            {action.filesOrAreas.length > 0 ? (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {action.filesOrAreas.map((item) => (
+                                  <span
+                                    key={`${action.title}-${item}`}
+                                    className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                    {item}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                          </article>
+                        ))}
+                      </div>
+                    </div>
+
+                    {humanReport.risks.length > 0 ? (
+                      <div>
+                        <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          <Shield className="h-4 w-4" />
+                          Risks and caveats
+                        </div>
+                        <ul className="space-y-2">
+                          {humanReport.risks.map((risk, index) => (
+                            <li
+                              key={`risk-${index}`}
+                              className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300"
+                            >
+                              {risk}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
+                    No human-readable explanation available yet.
+                  </div>
+                )}
+              </section>
+
+              <aside className="min-h-0 overflow-auto p-5">
+                <div className="space-y-4 text-xs">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Candidate
+                      </div>
+                      <div className="mt-1 font-mono text-slate-900 dark:text-slate-100">
+                        {resultModalState.result.selectedCandidateId ?? "n/a"}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/60">
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Score
+                      </div>
+                      <div className="mt-1 text-slate-900 dark:text-slate-100">
+                        Robust {formatNumber((resultModalState.result.score as Record<string, unknown> | null)?.robustnessScore)} • Success {formatPercent(resultModalState.result.score?.successRate)} • Latency {formatLatency(resultModalState.result.score?.averageLatencyMs)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {resultModalState.result.summary ? (
+                    <div>
+                      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Summary JSON
+                      </div>
+                      <pre className="max-h-48 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">
+                        {JSON.stringify(resultModalState.result.summary, null, 2)}
+                      </pre>
+                    </div>
+                  ) : null}
+
+                  {resultModalState.result.promptText ? (
+                    <div>
+                      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Prompt
+                      </div>
+                      <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">
+                        {resultModalState.result.promptText}
+                      </pre>
+                    </div>
+                  ) : null}
+
+                  {resultModalState.result.envSnapshotText ? (
+                    <div>
+                      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Environment snapshot
+                      </div>
+                      <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">
+                        {resultModalState.result.envSnapshotText}
+                      </pre>
+                    </div>
+                  ) : null}
+
+                  {resultModalState.result.diffPatch ? (
+                    <div>
+                      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Diff patch
+                      </div>
+                      <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">
+                        {resultModalState.result.diffPatch}
+                      </pre>
+                    </div>
+                  ) : null}
+
+                  {resultModalState.result.traceText ? (
+                    <div>
+                      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Trace
+                      </div>
+                      <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-200">
+                        {resultModalState.result.traceText}
+                      </pre>
+                    </div>
+                  ) : null}
+
+                  {!resultModalState.result.summary &&
+                  !resultModalState.result.promptText &&
+                  !resultModalState.result.envSnapshotText &&
+                  !resultModalState.result.diffPatch &&
+                  !resultModalState.result.traceText ? (
+                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
+                      No detailed artifacts were found for this result.
+                    </div>
+                  ) : null}
+                </div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>,
     document.body,
   );

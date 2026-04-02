@@ -408,6 +408,42 @@
     @apply text-[#d5dbea];
   }
 
+  .dark .chat-message-user .chat-message-text {
+    @apply text-[#d5dbea];
+  }
+
+  .dark .chat-message-tools-only {
+    @apply py-1;
+  }
+
+  .dark .chat-message-assistant .chat-message-body {
+    @apply bg-transparent;
+  }
+
+  .dark .chat-message-system {
+    @apply bg-transparent;
+  }
+
+  .dark .chat-message-user .clickable-message {
+    @apply text-[#d5dbea];
+    [&_.clickable-link]:text-[#5ba3e0];
+    [&_.clickable-link]:underline;
+    [&_.clickable-link]:underline-offset-2;
+    hover:[&_.clickable-link]:text-[#3d8bc4];
+  }
+
+  .dark .chat-message-user .chat-markdown {
+    @apply leading-6;
+  }
+
+  .dark .clickable-message {
+    @apply text-[#d5dbea];
+    [&_.clickable-link]:text-[#5ba3e0];
+    [&_.clickable-link]:underline;
+    [&_.clickable-link]:underline-offset-2;
+    hover:[&_.clickable-link]:text-[#3d8bc4];
+  }
+
   .dark .chat-markdown h1,
   .dark .chat-markdown h2,
   .dark .chat-markdown h3,
@@ -425,6 +461,124 @@
 
   .dark .chat-error-icon {
     @apply text-[#f5b8b8];
+  }
+
+  /* ── Diff File Dark Mode ── */
+  .dark .chat-diff-file {
+    @apply border-[#2a3548] bg-[#0f1724];
+  }
+
+  .dark .chat-diff-file-header {
+    @apply border-[#1e2a3c];
+  }
+
+  .dark .chat-diff-file-header code {
+    @apply text-[#9ca3af];
+  }
+
+  .dark .chat-diff-lines {
+    @apply bg-[#0f1724] text-[#9ca3af];
+  }
+
+  .dark .chat-diff-line-neutral {
+    @apply border-[#2a3548];
+  }
+
+  .dark .chat-diff-line-plus {
+    @apply border-[#2f7b53] bg-[#0f1f17];
+    color: #6db686;
+  }
+
+  .dark .chat-diff-line-minus {
+    @apply border-[#8f3347] bg-[#1f0f17];
+    color: #e08a94;
+  }
+
+  .dark .chat-diff-line-first-change {
+    @apply border-[#f5c451];
+  }
+
+  .dark .chat-diff-line-number-old,
+  .dark .chat-diff-line-number-new {
+    @apply text-[#6b778a];
+  }
+
+  .dark .chat-diff-line-content {
+    @apply text-[#9ca3af];
+  }
+
+  .dark .chat-diff-more {
+    @apply text-[#7a859a];
+  }
+
+  /* ── Message Attachments Dark Mode ── */
+  .dark .message-attachment-clickable {
+    @apply hover:border-[#3b4558] hover:bg-[#1e2a3d];
+  }
+
+  .dark .message-image-preview {
+    @apply border-[#2a3548] bg-[#0f1520];
+  }
+
+  .dark .message-image-preview-meta {
+    @apply text-[#7a859a];
+  }
+
+  .dark .message-attachment-chip {
+    @apply border-[#2a3548] bg-[#0f1520] text-[#7a859a];
+  }
+
+  .dark .message-attachment-viewer {
+    @apply border-[#2a3548] bg-[#0d131d];
+  }
+
+  .dark .message-attachment-viewer-header {
+    @apply border-[#1e2a3c];
+  }
+
+  .dark .message-attachment-viewer-title {
+    @apply text-[#eef2fb];
+  }
+
+  .dark .message-attachment-viewer-subtitle {
+    @apply text-[#9ca3af];
+  }
+
+  .dark .message-attachment-viewer-close {
+    @apply text-[#9ca3af] hover:bg-[#1e2a3c] hover:text-[#eef2fb];
+  }
+
+  .dark .message-attachment-viewer-content {
+    @apply bg-[#0f1520];
+  }
+
+  .dark .message-attachment-viewer-pdf {
+    @apply border-[#2a3548] bg-[#0d131d];
+  }
+
+  .dark .message-attachment-viewer-empty {
+    @apply border-[#2a3548] bg-[#0f1520] text-[#7a859a];
+  }
+
+  .dark .message-attachment-viewer-thumbnails {
+    @apply border-[#1e2a3c] bg-[#0f1520];
+  }
+
+  .dark .message-attachment-viewer-thumbnail {
+    @apply hover:bg-[#1e2a3d];
+  }
+
+  .dark .message-attachment-viewer-thumbnail-active {
+    @apply border-[#3b4558] bg-[#1e2a3d];
+  }
+
+  .dark .message-attachment-viewer-thumbnail-preview {
+    @apply border-[#2a3548] bg-[#0f1520];
+  }
+
+  .dark .message-attachment-viewer-thumbnail-pdf,
+  .dark .message-attachment-viewer-thumbnail-file {
+    @apply text-[#7a859a];
   }
 
   .dark .quick-action-card {

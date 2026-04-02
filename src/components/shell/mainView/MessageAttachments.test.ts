@@ -23,7 +23,7 @@ describe('MessageAttachments', () => {
   describe('parseAttachmentsFromText', () => {
     it('should parse image attachments correctly', () => {
       const text = 'Check this screenshot --- Pièce jointe 1 ---\nNom: screenshot.png\nType: image/png\nTaille: 478.9 KB\ndata:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA'
-      
+
       const attachments = parseAttachmentsFromText(text)
       expect(attachments.length).toBe(1)
       expect(attachments[0]).toEqual({
@@ -32,13 +32,13 @@ describe('MessageAttachments', () => {
         size: '478.9 KB',
         isImage: true,
         imageData: 'iVBORw0KGgoAAAANSUhEUgAA',
-        imageMimeType: 'image/png'
+        imageMimeType: 'image/png',
       })
     })
 
     it('should parse file attachments correctly', () => {
       const text = 'Here is the document --- Pièce jointe 1 ---\nNom: document.pdf\nType: application/pdf\nTaille: 2.3 MB'
-      
+
       const attachments = parseAttachmentsFromText(text)
       expect(attachments.length).toBe(1)
       expect(attachments[0]).toEqual({
@@ -47,17 +47,43 @@ describe('MessageAttachments', () => {
         size: '2.3 MB',
         isImage: false,
         imageData: undefined,
-        imageMimeType: undefined
+        imageMimeType: undefined,
       })
     })
 
     it('should parse multiple attachments', () => {
       const text = 'Multiple files\n--- Pièce jointe 1 ---\nNom: image1.jpg\nType: image/jpeg\nTaille: 100 KB\n--- Pièce jointe 2 ---\nNom: document.txt\nType: text/plain\nTaille: 5 KB'
-      
+
       const attachments = parseAttachmentsFromText(text)
       expect(attachments.length).toBe(2)
       expect(attachments[0].name).toBe('image1.jpg')
       expect(attachments[1].name).toBe('document.txt')
+    })
+
+    it('should parse pdf preview payloads', () => {
+      const text = 'Here is the document\n--- Pièce jointe 1 ---\nNom: document.pdf\nType: application/pdf\nTaille: 2.3 MB\nAperçu base64 (fichier binaire):\nJVBERi0xLjcK'
+
+      const attachments = parseAttachmentsFromText(text)
+      expect(attachments).toEqual([
+        {
+          name: 'document.pdf',
+          type: 'application/pdf',
+          size: '2.3 MB',
+          isImage: false,
+          imageData: undefined,
+          imageMimeType: undefined,
+          fileData: 'JVBERi0xLjcK',
+          fileDataMimeType: 'application/pdf',
+        },
+      ])
+    })
+
+    it('should mark truncated binary previews', () => {
+      const text = 'Binary file\n--- Pièce jointe 1 ---\nNom: document.pdf\nType: application/pdf\nTaille: 12.0 MB\nAperçu base64 (fichier binaire) - TRONQUÉ:\n[ATTENTION: Fichier tronqué.]\nJVBERi0xLjcK'
+
+      const attachments = parseAttachmentsFromText(text)
+      expect(attachments[0]?.isTruncated).toBe(true)
+      expect(attachments[0]?.fileData).toBe('JVBERi0xLjcK')
     })
 
     it('should return empty array when no attachments found', () => {

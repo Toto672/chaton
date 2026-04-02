@@ -108,6 +108,31 @@ export function buildHarnessPromptHints(candidate: HarnessCandidate | null): str
         "Subagents are disabled and cannot be spawned.",
     );
   }
+  if (candidate.tools?.permissions?.mode === "allowlist") {
+    hints.push(
+      "This harness enforces a tool allowlist. Prefer only the explicitly allowed tools, and treat other tools as blocked unless the runtime says otherwise.",
+    );
+  }
+  if (candidate.tools?.permissions?.mode === "denylist") {
+    hints.push(
+      "This harness enforces a tool denylist. Avoid blocked tools even if they are visible in the runtime.",
+    );
+  }
+  if (candidate.tools?.permissions?.requireReadOnlyForSubagents) {
+    hints.push(
+      "Subagents should default to read-only tool policies unless the user clearly requires writes and the runtime policy allows them.",
+    );
+  }
+  if (candidate.tools?.hooks?.beforeToolCall?.mode === "enforce") {
+    hints.push(
+      "Before each tool execution, harness policy checks are enforced as runtime primitives rather than prompt-only guidance.",
+    );
+  }
+  if (candidate.tools?.hooks?.afterToolCall?.mode === "summarize-errors") {
+    hints.push(
+      "After tool failures, the runtime may annotate results with harness-policy context to make blocked actions explicit.",
+    );
+  }
   if (candidate.bootstrap?.environmentSnapshot?.enabled) {
     hints.push(
       "Environment snapshot is enabled. Use the provided context (cwd, platform, toolchain versions, git status) " +

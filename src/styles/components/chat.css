@@ -353,28 +353,114 @@
     @apply mt-2 flex flex-wrap gap-2;
   }
 
+  .message-attachment-clickable {
+    @apply cursor-pointer transition-all hover:border-[#bcc7d8] hover:bg-[#eef2f7] hover:shadow-sm;
+  }
+
+  .message-image-preview:disabled,
+  .message-attachment-chip:disabled {
+    @apply cursor-default opacity-85;
+  }
+
   .message-image-preview {
-    @apply relative rounded-lg border border-[#d8dce6] bg-[#f7f8fb];
+    @apply relative overflow-hidden rounded-lg border border-[#d8dce6] bg-[#f7f8fb] text-left;
   }
 
   .message-image-preview-thumb {
-    @apply max-w-[240px] max-h-[180px] object-contain rounded-t-lg;
+    @apply block max-w-[240px] max-h-[180px] object-contain rounded-t-lg bg-white;
   }
 
   .message-image-preview-meta {
-    @apply flex justify-between p-2 text-xs text-[#5f6879];
+    @apply flex justify-between gap-3 p-2 text-xs text-[#5f6879];
   }
 
   .message-image-preview-name {
     @apply overflow-hidden text-ellipsis whitespace-nowrap max-w-[180px];
   }
 
+  .message-image-preview-size {
+    @apply shrink-0;
+  }
+
   .message-attachment-chip {
-    @apply flex items-center gap-2 rounded-lg border border-[#d8dce6] bg-[#f7f8fb] px-3 py-2 text-xs text-[#5f6879];
+    @apply flex items-center gap-2 rounded-lg border border-[#d8dce6] bg-[#f7f8fb] px-3 py-2 text-xs text-[#5f6879] text-left;
   }
 
   .message-attachment-chip-label {
     @apply overflow-hidden text-ellipsis whitespace-nowrap max-w-[200px];
+  }
+
+  .message-attachment-viewer-backdrop {
+    @apply fixed inset-0 z-[1000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm;
+  }
+
+  .message-attachment-viewer {
+    @apply flex h-[min(88vh,860px)] w-[min(92vw,1100px)] flex-col overflow-hidden rounded-2xl border border-[#d8dce6] bg-white shadow-2xl;
+  }
+
+  .message-attachment-viewer-header {
+    @apply flex items-start justify-between gap-4 border-b border-[#e5e9f0] px-4 py-3;
+  }
+
+  .message-attachment-viewer-title-group {
+    @apply flex min-w-0 flex-col;
+  }
+
+  .message-attachment-viewer-title {
+    @apply truncate text-sm font-semibold text-[#232731];
+  }
+
+  .message-attachment-viewer-subtitle {
+    @apply mt-1 text-xs text-[#6e7a92];
+  }
+
+  .message-attachment-viewer-close {
+    @apply rounded-md px-2 py-1 text-2xl leading-none text-[#6e7a92] transition-colors hover:bg-[#f3f5f8] hover:text-[#232731];
+  }
+
+  .message-attachment-viewer-content {
+    @apply flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#f7f8fb] p-4;
+  }
+
+  .message-attachment-viewer-image {
+    @apply max-h-full max-w-full rounded-lg object-contain shadow-sm;
+  }
+
+  .message-attachment-viewer-pdf {
+    @apply h-full min-h-[420px] w-full rounded-lg border border-[#d8dce6] bg-white;
+  }
+
+  .message-attachment-viewer-empty {
+    @apply rounded-lg border border-dashed border-[#cfd7e3] bg-white px-4 py-8 text-sm text-[#6e7a92];
+  }
+
+  .message-attachment-viewer-thumbnails {
+    @apply flex gap-3 overflow-x-auto border-t border-[#e5e9f0] bg-[#fbfcfe] px-4 py-3;
+  }
+
+  .message-attachment-viewer-thumbnail {
+    @apply flex w-24 shrink-0 flex-col gap-2 rounded-xl border border-transparent p-2 text-left transition-colors hover:bg-[#f0f4fa];
+  }
+
+  .message-attachment-viewer-thumbnail-active {
+    @apply border-[#aebcd4] bg-[#eef3f9];
+  }
+
+  .message-attachment-viewer-thumbnail-preview {
+    @apply flex h-16 items-center justify-center overflow-hidden rounded-lg border border-[#d8dce6] bg-white;
+  }
+
+  .message-attachment-viewer-thumbnail-image {
+    @apply h-full w-full object-cover;
+  }
+
+  .message-attachment-viewer-thumbnail-pdf,
+  .message-attachment-viewer-thumbnail-file {
+    @apply flex flex-col items-center justify-center gap-1 text-[#6e7a92];
+  }
+
+  .message-attachment-viewer-thumbnail-name {
+    @apply overflow-hidden text-ellipsis whitespace-nowrap text-xs text-[#4f596d];
   }
 
 

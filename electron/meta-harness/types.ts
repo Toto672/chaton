@@ -10,6 +10,9 @@ export type HarnessObjective =
 
 export type HarnessLazyDiscoveryMode = "default" | "eager" | "minimal";
 export type HarnessSubagentPolicy = "default" | "encourage" | "restrict";
+export type HarnessPermissionMode = "default" | "allowlist" | "denylist";
+export type HarnessBeforeToolCallHookMode = "default" | "off" | "enforce";
+export type HarnessAfterToolCallHookMode = "default" | "off" | "summarize-errors";
 
 /**
  * Work areas define different domains where harness optimization can be applied.
@@ -123,6 +126,27 @@ export type HarnessCandidate = {
     preferredTools?: string[];
     /** Tools to avoid for this area */
     avoidedTools?: string[];
+    /** Runtime permission policy for tool execution. */
+    permissions?: {
+      mode?: HarnessPermissionMode;
+      allowedTools?: string[];
+      deniedTools?: string[];
+      requireReadOnlyForSubagents?: boolean;
+      allowBypassForSearchTools?: boolean;
+      blockWriteToolsInOpenMode?: boolean;
+    };
+    /** Runtime hook policies wired to the underlying agent tool hook primitives. */
+    hooks?: {
+      beforeToolCall?: {
+        mode?: HarnessBeforeToolCallHookMode;
+        blockOnDeniedTool?: boolean;
+        blockOnWriteLikeBash?: boolean;
+      };
+      afterToolCall?: {
+        mode?: HarnessAfterToolCallHookMode;
+        annotateErrors?: boolean;
+      };
+    };
   };
   scoring?: {
     objectives?: HarnessObjective[];

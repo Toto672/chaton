@@ -4,6 +4,13 @@ const MAX_TEXT_FILE_BYTES = 500_000;
 // Increased to allow larger binary file previews (was 500KB, now 1MB)
 const MAX_BINARY_PREVIEW_BYTES = 1_000_000;
 
+// Maximum dimension for image resizing to control token usage
+// 1024px is a good balance between quality and token consumption
+// Most vision models process images in patches/tiles; 1024px keeps token count reasonable
+const MAX_IMAGE_DIMENSION = 1024;
+// JPEG quality for resized images (0.85 = good balance of quality vs size)
+const IMAGE_QUALITY = 0.85;
+
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) {
     return "0 B";
@@ -79,32 +86,94 @@ function toBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+/**
+ * Resize an image to fit within MAX_IMAGE_DIMENSION while maintaining aspect ratio.
+ * Uses HTML Canvas API for resizing and outputs JPEG for better compression.
+ * This significantly reduces token usage when sending images to vision models.
+ */
+async function resizeImage(file: File): Promise<{ dataUrl: string; width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      // Calculate new dimensions maintaining aspect ratio
+      let { width, height } = img;
+      const maxDim = MAX_IMAGE_DIMENSION;
+
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+
+      // Create canvas and resize
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        reject(new Error("Impossible de créer le contexte canvas"));
+        return;
+      }
+
+      // Use better quality scaling
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Export as JPEG with compression
+      const dataUrl = canvas.toDataURL("image/jpeg", IMAGE_QUALITY);
+      resolve({ dataUrl, width, height });
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error(`Impossible de charger l'image: ${file.name}`));
+    };
+
+    img.src = url;
+  });
+}
+
 export async function buildAttachment(file: File): Promise<PendingAttachment> {
   const mimeType = file.type || "application/octet-stream";
   const isImage = mimeType.startsWith("image/");
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
   if (isImage) {
-    const dataUrl = await fileToDataUrl(file);
+    // Resize image to control token usage with vision models
+    const { dataUrl, width, height } = await resizeImage(file);
     const commaIndex = dataUrl.indexOf(",");
     if (commaIndex < 0) {
       throw new Error(`Image invalide: ${file.name}`);
     }
     const base64Data = dataUrl.slice(commaIndex + 1);
+    // Estimate new size from base64 length (base64 is ~4/3 of binary size)
+    const estimatedSize = Math.round((base64Data.length * 3) / 4);
     return {
       id,
       name: file.name,
-      mimeType,
-      size: file.size,
+      // Use JPEG mime type since resizeImage outputs JPEG
+      mimeType: "image/jpeg",
+      size: estimatedSize,
       isImage: true,
       image: {
         type: "image",
         data: base64Data,
-        mimeType,
+        mimeType: "image/jpeg",
       },
       // Include base64 data in textForPrompt so it can be parsed for UI display
       // Format: "Nom: ...\nType: ...\nTaille: ...\ndata:mimeType;base64,..."
-      textForPrompt: `Nom: ${file.name}\nType: ${mimeType}\nTaille: ${formatBytes(file.size)}\ndata:${mimeType};base64,${base64Data}`,
+      // Note: original dimensions are preserved for display, but image is resized to MAX_IMAGE_DIMENSION
+      textForPrompt: `Nom: ${file.name}\nType: image/jpeg (redimensionnée ${width}x${height})\nTaille originale: ${formatBytes(file.size)}\nTaille optimisée: ${formatBytes(estimatedSize)}\ndata:image/jpeg;base64,${base64Data}`,
     };
   }
 

@@ -105,6 +105,9 @@ import type {
   HarnessRuntimeMetadata,
 } from "./meta-harness/types.js";
 
+const HARNESS_SEARCH_TOOL_NAMES = new Set(["search_tool", "tool_detail"]);
+const HARNESS_WRITE_TOOL_NAMES = new Set(["edit", "write"]);
+
 export type PiRuntimeStatus =
   | "stopped"
   | "starting"
@@ -882,6 +885,8 @@ export class PiSdkRuntime {
       runtimeCwd,
       toolsCwd,
     );
+    const harnessPermissions = harnessCandidate?.tools?.permissions;
+    const harnessHooks = harnessCandidate?.tools?.hooks;
     /** Harness candidate's behaviorPrompt takes precedence over the app-level defaultBehaviorPrompt. */
     const effectiveBehaviorPrompt = harnessBootstrap.behaviorPrompt?.trim() ?? defaultBehaviorPrompt;
     const harnessPolicySections = buildHarnessPromptHints(harnessCandidate);
@@ -1058,6 +1063,58 @@ export class PiSdkRuntime {
           `Path is outside the subagent file scope: ${absolutePath}`,
         );
       }
+    };
+
+    const isHarnessToolAllowed = (toolName: string, runtimeKind: "main" | "subagent") => {
+      if (!harnessPermissions) return { allowed: true as const };
+      if (
+        harnessPermissions.allowBypassForSearchTools &&
+        HARNESS_SEARCH_TOOL_NAMES.has(toolName)
+      ) {
+        return { allowed: true as const };
+      }
+      if (
+        runtimeKind === "subagent" &&
+        harnessPermissions.requireReadOnlyForSubagents &&
+        !runtimePolicy?.toolPolicy?.readOnly &&
+        !HARNESS_SEARCH_TOOL_NAMES.has(toolName)
+      ) {
+        return {
+          allowed: false as const,
+          reason:
+            "Harness policy requires subagents to run with read-only tool policies.",
+        };
+      }
+      if (
+        accessMode === "open" &&
+        harnessPermissions.blockWriteToolsInOpenMode &&
+        HARNESS_WRITE_TOOL_NAMES.has(toolName)
+      ) {
+        return {
+          allowed: false as const,
+          reason:
+            "Harness policy blocks direct write tools while the conversation is in open mode.",
+        };
+      }
+      if (harnessPermissions.mode === "allowlist") {
+        const allowed = harnessPermissions.allowedTools ?? [];
+        if (allowed.length > 0 && !allowed.includes(toolName)) {
+          return {
+            allowed: false as const,
+            reason: `Harness policy blocked tool \"${toolName}\" because it is outside the allowed tool set.`,
+          };
+        }
+      }
+      if (harnessPermissions.mode === "denylist") {
+        const denied = harnessPermissions.deniedTools ?? [];
+        if (denied.includes(toolName)) {
+          return {
+            allowed: false as const,
+            reason: `Harness policy blocked tool \"${toolName}\" because it is denied.`,
+          };
+        }
+      }
+      return { allowed: true as const };
     };
 
     const trackedWriteOperations: WriteOperations = {
@@ -1449,6 +1506,56 @@ export class PiSdkRuntime {
       ...(model ? { model } : {}),
       thinkingLevel: effectiveThinkingLevel,
     });
+
+    if (harnessHooks?.beforeToolCall?.mode === "enforce") {
+      session.agent.setBeforeToolCall(async ({ toolCall, args }) => {
+        const isWriteLikeBash =
+          toolCall.name === "bash" &&
+          harnessHooks.beforeToolCall?.blockOnWriteLikeBash === true &&
+          typeof (args as { command?: unknown } | undefined)?.command === "string" &&
+          isWriteLikeBashCommand((args as { command: string }).command);
+        if (isWriteLikeBash) {
+          return {
+            block: true,
+            reason:
+              "Harness policy blocked a write-like bash command before execution.",
+          };
+        }
+        if (harnessHooks.beforeToolCall?.blockOnDeniedTool === true) {
+          const decision = isHarnessToolAllowed(toolCall.name, runtimePolicy ? "subagent" : "main");
+          if (!decision.allowed) {
+            return {
+              block: true,
+              reason: decision.reason,
+            };
+          }
+        }
+        return undefined;
+      });
+    }
+
+    if (harnessHooks?.afterToolCall?.mode === "summarize-errors") {
+      session.agent.setAfterToolCall(async ({ toolCall, result, isError }) => {
+        if (!isError || harnessHooks.afterToolCall?.annotateErrors !== true) {
+          return undefined;
+        }
+        const decision = isHarnessToolAllowed(toolCall.name, runtimePolicy ? "subagent" : "main");
+        const annotations: string[] = [];
+        if (!decision.allowed && decision.reason) {
+          annotations.push(`Harness policy: ${decision.reason}`);
+        }
+        if (annotations.length === 0) {
+          annotations.push(
+            "Harness policy observed this tool failure. Re-check tool choice, access mode, and runtime constraints before retrying.",
+          );
+        }
+        const combined = [
+          ...result.content,
+          { type: "text" as const, text: annotations.join("\n") },
+        ];
+        return { content: combined, isError };
+      });
+    }
 
     // Lazy tools: remove from the system prompt (to save context tokens)
     // but keep them callable in agent.state.tools so the LLM can invoke

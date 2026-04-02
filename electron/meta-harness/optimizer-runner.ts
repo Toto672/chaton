@@ -255,6 +255,20 @@ function buildCandidateFromPatch(params: {
         toolsPatch.subagentPolicy === "restrict"
           ? toolsPatch.subagentPolicy
           : params.baseCandidate.tools?.subagentPolicy,
+      permissions:
+        toolsPatch.permissions && typeof toolsPatch.permissions === "object"
+          ? {
+              ...(params.baseCandidate.tools?.permissions ?? {}),
+              ...(toolsPatch.permissions as Record<string, unknown>),
+            } as any
+          : params.baseCandidate.tools?.permissions,
+      hooks:
+        toolsPatch.hooks && typeof toolsPatch.hooks === "object"
+          ? {
+              ...(params.baseCandidate.tools?.hooks ?? {}),
+              ...(toolsPatch.hooks as Record<string, unknown>),
+            } as any
+          : params.baseCandidate.tools?.hooks,
     },
     scoring: {
       objectives: Array.isArray(scoringPatch.objectives)
@@ -330,7 +344,7 @@ function buildProposalPrompt(params: {
     "Each array item must be an object with:",
     '- "rationale": short string',
     '- "candidate": object shaped like a HarnessCandidate or a patch-compatible subset containing prompt/bootstrap/tools/scoring/description/id',
-    "Focus on bounded changes such as environmentSnapshot, lazyDiscoveryMode, subagentPolicy, and short prompt hints.",
+    "Focus on bounded changes such as environmentSnapshot, lazyDiscoveryMode, subagentPolicy, tool permissions/hooks, and short prompt hints.",
     `Generate up to ${Math.max(1, Math.min(4, params.maxVariantsPerIteration))} variants.`,
     "",
     `Benchmark: ${params.benchmarkId}`,

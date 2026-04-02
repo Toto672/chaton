@@ -11,7 +11,7 @@ const ClickableMessage: React.FC<ClickableMessageProps> = ({ text, onLinkClick }
 
   return (
     <div
-      className="whitespace-pre-wrap break-words overflow-wrap-anywhere bg-transparent p-0 text-[15px] leading-7 text-[#232731] [&_.clickable-link]:cursor-pointer [&_.clickable-link]:text-[#22579a] [&_.clickable-link]:underline [&_.clickable-link]:underline-offset-2 hover:[&_.clickable-link]:text-[#1a4478]"
+      className="whitespace-pre-wrap break-words overflow-wrap-anywhere bg-transparent p-0 text-[15px] leading-7 text-[#232731] dark:text-[#d5dbea] [&_.clickable-link]:cursor-pointer [&_.clickable-link]:text-[#22579a] [&_.clickable-link]:underline [&_.clickable-link]:underline-offset-2 hover:[&_.clickable-link]:text-[#1a4478] dark:[&_.clickable-link]:text-[#5ba3e0] dark:hover:[&_.clickable-link]:text-[#3d8bc4]"
       dangerouslySetInnerHTML={{ __html: processedText }}
       onClick={(e) => {
         const target = e.target as HTMLElement;

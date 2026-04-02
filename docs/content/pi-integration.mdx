@@ -225,13 +225,15 @@ Chatons now has a first-phase Meta-Harness layer around the normal Pi runtime. T
 
 The current implementation is intentionally narrow and typed:
 
-- a `HarnessCandidate` controls bounded prompt additions, environment bootstrap, tool-discovery posture, subagent posture, and scoring objectives
+- a `HarnessCandidate` controls bounded prompt additions, environment bootstrap, tool-discovery posture, subagent posture, tool permissions, hook behavior, and scoring objectives
 - the active candidate is loaded from the managed Pi archive under `<userData>/.pi/agent/meta-harness/`
 - before the first model turn, the runtime may gather a short environment snapshot from the workspace or tool cwd
 - when a snapshot is captured successfully, Chatons injects it into the initial system prompt as an additive `Environment Snapshot` section
 - startup prompt text, candidate metadata, scores, and evaluation traces are archived under the managed Pi directory for later comparison
 
 The first production milestone mirrors the paper's environment-bootstrap pattern: a short, best-effort probe with a timeout and silent failure behavior. If the snapshot fails, runtime startup continues normally.
+
+The harness layer now also maps its tool permissions and hook policy onto Pi's native tool-call primitives. That means allow/deny decisions and post-failure annotations are enforced at runtime through `beforeToolCall` / `afterToolCall`, rather than living only as prompt text.
 
 Chatons now also supports a hybrid human-in-the-loop harness mode. When the setting is enabled, new local conversations record which harness candidate was active at startup, the topbar shows a clickable badge for the active harness, and the thread footer offers thumbs-up / thumbs-down feedback after the agent has replied. That user feedback is stored over time in SQLite, surfaced in the Meta-Harness panel, and folded back into optimizer scoring as a bounded human-feedback bonus rather than replacing benchmark signals.
 

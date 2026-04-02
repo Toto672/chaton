@@ -5,6 +5,24 @@ description: Verified documentation changes and rationale for Chatons features a
 
 # Documentation Audit
 
+## 2026-04-01
+
+### Upgraded harness hooks and permissions from prompt scaffolding to runtime primitives
+
+**Change:** Extended the typed `HarnessCandidate` surface with explicit tool-permission and hook-policy fields, wired those settings through candidate validation and optimizer patching, and enforced them at runtime via Pi's native `beforeToolCall` / `afterToolCall` hooks. The baseline harness now ships with an allowlisted tool policy plus read-only subagent enforcement, while tool failures can be annotated with harness-policy context.
+
+**Why:** The previous harness behavior mainly expressed hook and permission expectations as prompt-level guidance. That was useful scaffolding, but it was not a true runtime primitive. This change makes harness policy materially enforceable during execution so optimizer candidates can tune real behavior instead of just wording.
+
+**Files updated:**
+- `electron/meta-harness/types.ts` -- Added typed tool permission and hook policy fields to `HarnessCandidate`
+- `electron/meta-harness/candidate.ts` -- Validates and persists harness permission/hook configuration and strengthens the default baseline candidate
+- `electron/meta-harness/bootstrap.ts` -- Surfaces the new runtime-enforced policy in prompt hints
+- `electron/meta-harness/optimizer-runner.ts` -- Lets optimizer proposals mutate the new bounded permission/hook fields
+- `electron/pi-sdk-runtime.ts` -- Enforces harness policy with Pi `beforeToolCall` / `afterToolCall` primitives
+- `electron/core-tools.ts` -- Requires read-only subagent policies when the active harness mandates them
+- `docs/content/pi-integration.mdx` -- Documented that harness hooks and permissions now use runtime primitives
+- `docs/content/developer-guide.mdx` -- Documented the runtime seam for harness primitive enforcement
+
 ## 2026-03-31
 
 ### Added hybrid human feedback loop for Meta-Harness optimization

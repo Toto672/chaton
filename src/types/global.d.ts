@@ -1320,6 +1320,27 @@ declare global {
         traceText: string | null;
         diffPatch: string | null;
       }>;
+      metaHarnessGenerateHumanReport: (input: {
+        runId?: string | null;
+        benchmarkId?: string | null;
+        attemptId?: string | null;
+        candidateId?: string | null;
+      }) => Promise<{
+        title: string;
+        summary: string;
+        mainDiscovery: string;
+        recommendation: "adopt" | "iterate" | "reject";
+        findings: string[];
+        evidence: string[];
+        actions: Array<{
+          title: string;
+          rationale: string;
+          implementation: string;
+          priority: "high" | "medium" | "low";
+          filesOrAreas: string[];
+        }>;
+        risks: string[];
+      }>;
       metaHarnessStartOptimizer: (config: {
         benchmarkId?: string;
         optimizerModelProvider: string;

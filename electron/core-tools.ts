@@ -623,6 +623,15 @@ export function createCoreTools(
         );
       }
 
+      if (
+        harnessCandidate?.tools?.permissions?.requireReadOnlyForSubagents &&
+        toolPolicy?.readOnly !== true
+      ) {
+        return errorResult(
+          "The active harness policy requires subagents to be spawned with readOnly toolPolicy=true.",
+        );
+      }
+
       const spawned = await piSessionRuntimeManager.spawnRuntimeSubagent({
         conversationId,
         label,

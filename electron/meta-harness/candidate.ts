@@ -44,11 +44,28 @@ export function getDefaultHarnessCandidate(workArea: HarnessWorkArea = "environm
     tools: {
       lazyDiscoveryMode: "minimal",
       subagentPolicy: "restrict",
+      permissions: {
+        mode: "allowlist",
+        allowedTools: ["read", "bash", "edit", "write", "search_tool", "tool_detail"],
+        requireReadOnlyForSubagents: true,
+        allowBypassForSearchTools: true,
+      },
+      hooks: {
+        beforeToolCall: {
+          mode: "enforce",
+          blockOnDeniedTool: true,
+          blockOnWriteLikeBash: true,
+        },
+        afterToolCall: {
+          mode: "summarize-errors",
+          annotateErrors: true,
+        },
+      },
     },
     scoring: {
       objectives: WORK_AREA_DEFAULT_OBJECTIVES[workArea],
     },
-    description: `Optimized baseline for ${workArea}: environment snapshot enabled, minimal lazy discovery, restrict subagents`,
+    description: `Optimized baseline for ${workArea}: environment snapshot enabled, minimal lazy discovery, restrict subagents, and enforce harness tool permissions/hooks`,
     createdAt: new Date(0).toISOString(),
   };
 }
@@ -119,6 +136,36 @@ export function validateHarnessCandidate(value: unknown):
     ? tools.avoidedTools.filter((item): item is string => typeof item === "string")
     : [];
 
+  const permissions = isPlainObject(tools.permissions) ? tools.permissions : {};
+  const permissionMode =
+    permissions.mode === "allowlist" || permissions.mode === "denylist"
+      ? permissions.mode
+      : "default";
+  const allowedTools = Array.isArray(permissions.allowedTools)
+    ? permissions.allowedTools.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  const deniedTools = Array.isArray(permissions.deniedTools)
+    ? permissions.deniedTools.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  const requireReadOnlyForSubagents = permissions.requireReadOnlyForSubagents === true;
+  const allowBypassForSearchTools = permissions.allowBypassForSearchTools === true;
+  const blockWriteToolsInOpenMode = permissions.blockWriteToolsInOpenMode === true;
+
+  const hooks = isPlainObject(tools.hooks) ? tools.hooks : {};
+  const beforeToolCall = isPlainObject(hooks.beforeToolCall) ? hooks.beforeToolCall : {};
+  const afterToolCall = isPlainObject(hooks.afterToolCall) ? hooks.afterToolCall : {};
+  const beforeToolCallMode =
+    beforeToolCall.mode === "off" || beforeToolCall.mode === "enforce"
+      ? beforeToolCall.mode
+      : "default";
+  const afterToolCallMode =
+    afterToolCall.mode === "off" || afterToolCall.mode === "summarize-errors"
+      ? afterToolCall.mode
+      : "default";
+  const blockOnDeniedTool = beforeToolCall.blockOnDeniedTool === true;
+  const blockOnWriteLikeBash = beforeToolCall.blockOnWriteLikeBash === true;
+  const annotateErrors = afterToolCall.annotateErrors === true;
+
   const validObjectives = [
     "successRate", "latency", "toolCalls", "tokenCost",
     "correctness", "helpfulness", "conciseness", "contextualAwareness"
@@ -164,6 +211,58 @@ export function validateHarnessCandidate(value: unknown):
         subagentPolicy,
         ...(preferredTools.length > 0 ? { preferredTools } : {}),
         ...(avoidedTools.length > 0 ? { avoidedTools } : {}),
+        ...(
+          permissionMode !== "default" ||
+          allowedTools.length > 0 ||
+          deniedTools.length > 0 ||
+          requireReadOnlyForSubagents ||
+          allowBypassForSearchTools ||
+          blockWriteToolsInOpenMode
+            ? {
+                permissions: {
+                  ...(permissionMode !== "default" ? { mode: permissionMode } : {}),
+                  ...(allowedTools.length > 0 ? { allowedTools } : {}),
+                  ...(deniedTools.length > 0 ? { deniedTools } : {}),
+                  ...(requireReadOnlyForSubagents ? { requireReadOnlyForSubagents } : {}),
+                  ...(allowBypassForSearchTools ? { allowBypassForSearchTools } : {}),
+                  ...(blockWriteToolsInOpenMode ? { blockWriteToolsInOpenMode } : {}),
+                },
+              }
+            : {}
+        ),
+        ...(
+          beforeToolCallMode !== "default" ||
+          afterToolCallMode !== "default" ||
+          blockOnDeniedTool ||
+          blockOnWriteLikeBash ||
+          annotateErrors
+            ? {
+                hooks: {
+                  ...(
+                    beforeToolCallMode !== "default" || blockOnDeniedTool || blockOnWriteLikeBash
+                      ? {
+                          beforeToolCall: {
+                            ...(beforeToolCallMode !== "default" ? { mode: beforeToolCallMode } : {}),
+                            ...(blockOnDeniedTool ? { blockOnDeniedTool } : {}),
+                            ...(blockOnWriteLikeBash ? { blockOnWriteLikeBash } : {}),
+                          },
+                        }
+                      : {}
+                  ),
+                  ...(
+                    afterToolCallMode !== "default" || annotateErrors
+                      ? {
+                          afterToolCall: {
+                            ...(afterToolCallMode !== "default" ? { mode: afterToolCallMode } : {}),
+                            ...(annotateErrors ? { annotateErrors } : {}),
+                          },
+                        }
+                      : {}
+                  ),
+                },
+              }
+            : {}
+        ),
       },
       scoring: {
         objectives: objectives.length > 0 ? objectives : WORK_AREA_DEFAULT_OBJECTIVES[workArea],

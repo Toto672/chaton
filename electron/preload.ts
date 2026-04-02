@@ -662,6 +662,12 @@ contextBridge.exposeInMainWorld("pi", {
     attemptId?: string | null
     candidateId?: string | null
   }) => ipcRenderer.invoke("meta-harness:getOptimizerAttemptResult", input),
+  metaHarnessGenerateHumanReport: (input: {
+    runId?: string | null
+    benchmarkId?: string | null
+    attemptId?: string | null
+    candidateId?: string | null
+  }) => ipcRenderer.invoke("meta-harness:generateHumanReport", input),
   metaHarnessStartOptimizer: (config: {
     benchmarkId?: string
     optimizerModelProvider: string
