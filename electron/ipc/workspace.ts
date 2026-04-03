@@ -1971,6 +1971,9 @@ function cacheMessagesFromSnapshot(
   conversationId: string,
   snapshot: { messages: unknown[] },
 ) {
+  if (conversationId.startsWith("__runtime_subagent__:")) {
+    return;
+  }
   const db = getDb();
   const MEMORY_CONTEXT_MARKER = "## Context from Past Memories";
   const messages = (snapshot.messages ?? []).filter((message) => {

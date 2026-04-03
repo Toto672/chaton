@@ -337,6 +337,10 @@ type RuntimeSubagentStatus =
   | "error"
   | "cancelled";
 
+function isEphemeralRuntimeConversationId(conversationId: string): boolean {
+  return conversationId.startsWith("__runtime_subagent__:");
+}
+
 type RuntimeSubagentExecutionMode = "sequential" | "parallel";
 
 type RuntimeSubagentResult = {
@@ -906,7 +910,10 @@ export class PiSdkRuntime {
       userFeedbackSubmittedAt: null,
     };
 
-    if (conversation.runtime_location === "local") {
+    if (
+      conversation.runtime_location === "local" &&
+      !isEphemeralRuntimeConversationId(conversation.id)
+    ) {
       upsertConversationHarnessFeedback(db, {
         conversationId: conversation.id,
         harnessCandidateId: harnessCandidate?.id ?? null,
@@ -1725,12 +1732,14 @@ export class PiSdkRuntime {
 
     this.setStatus("ready");
 
-    saveConversationPiRuntime(db, conversation.id, {
-      piSessionFile: session.sessionFile ?? sessionPath,
-      modelProvider: session.model?.provider,
-      modelId: session.model?.id,
-      thinkingLevel: session.thinkingLevel,
-    });
+    if (!isEphemeralRuntimeConversationId(conversation.id)) {
+      saveConversationPiRuntime(db, conversation.id, {
+        piSessionFile: session.sessionFile ?? sessionPath,
+        modelProvider: session.model?.provider,
+        modelId: session.model?.id,
+        thinkingLevel: session.thinkingLevel,
+      });
+    }
   }
 
   async send(command: RpcCommand): Promise<RpcResponse> {
@@ -1881,28 +1890,34 @@ export class PiSdkRuntime {
         if (command.provider === "github-copilot") {
           this.runtime.session.setThinkingLevel("off");
         }
-        const db = getDb();
-        saveConversationPiRuntime(db, this.conversationId, {
-          modelProvider: command.provider,
-          modelId: command.modelId,
-        });
+        if (!isEphemeralRuntimeConversationId(this.conversationId)) {
+          const db = getDb();
+          saveConversationPiRuntime(db, this.conversationId, {
+            modelProvider: command.provider,
+            modelId: command.modelId,
+          });
+        }
       }
 
       if (command.type === "set_thinking_level") {
         this.runtime.session.setThinkingLevel(command.level);
-        const db = getDb();
-        saveConversationPiRuntime(db, this.conversationId, {
-          thinkingLevel: command.level,
-        });
+        if (!isEphemeralRuntimeConversationId(this.conversationId)) {
+          const db = getDb();
+          saveConversationPiRuntime(db, this.conversationId, {
+            thinkingLevel: command.level,
+          });
+        }
       }
 
       if (command.type === "cycle_thinking_level") {
         const level = this.runtime.session.cycleThinkingLevel();
         if (level) {
-          const db = getDb();
-          saveConversationPiRuntime(db, this.conversationId, {
-            thinkingLevel: level,
-          });
+          if (!isEphemeralRuntimeConversationId(this.conversationId)) {
+            const db = getDb();
+            saveConversationPiRuntime(db, this.conversationId, {
+              thinkingLevel: level,
+            });
+          }
         }
       }
 
@@ -1938,10 +1953,12 @@ export class PiSdkRuntime {
         this.rewriteLastAssistantConnectionError(message);
       }
       this.refreshSnapshot();
-      const db = getDb();
-      saveConversationPiRuntime(db, this.conversationId, {
-        lastRuntimeError: message,
-      });
+      if (!isEphemeralRuntimeConversationId(this.conversationId)) {
+        const db = getDb();
+        saveConversationPiRuntime(db, this.conversationId, {
+          lastRuntimeError: message,
+        });
+      }
       this.setStatus("error", message);
       this.emit({ type: "runtime_error", message });
       return {
