@@ -10,6 +10,7 @@ import { AssistantMainView } from '@/components/assistant/AssistantMainView'
 import { Composer } from '@/components/shell/Composer'
 import { MainView } from '@/components/shell/MainView'
 import { Topbar } from '@/components/shell/Topbar'
+import { WindowControls } from '@/components/shell/WindowControls'
 import { ExtensionConfigSheet } from '@/components/shell/ExtensionConfigSheet'
 import { MetaHarnessPanel } from '@/components/shell/MetaHarnessPanel'
 import { ChangelogManager, setChangelogManagerRef } from '@/components/ChangelogManager'
@@ -282,6 +283,7 @@ function AppShell() {
 
   return (
     <div className={`app-shell ${isResizing ? 'is-resizing' : ''}`}>
+      <WindowControls />
       <div className="app-layout">
         <GlobalShortcutHandler />
         <Sidebar width={sidebarWidth} />

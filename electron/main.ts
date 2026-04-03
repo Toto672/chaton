@@ -6,7 +6,7 @@ global.__dirname = path.dirname(__filename);
 global.__filename = __filename;
 
 import electron from "electron";
-const { BrowserWindow, app, shell, Notification, protocol, net } = electron;
+const { BrowserWindow, app, shell, Notification, Tray, Menu, nativeImage } = electron;
 import {
   getLanguagePreference,
   getWindowBounds,
@@ -37,20 +37,6 @@ app.setName("Chatons");
 // On macOS the protocol is handled via open-url events; on Windows/Linux
 // it falls back to the single-instance lock / command-line argv.
 const PROTOCOL_PREFIX = "chatons";
-const EXTENSION_PROTOCOL_PREFIX = "chaton-extension";
-
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: EXTENSION_PROTOCOL_PREFIX,
-    privileges: {
-      standard: true,
-      secure: true,
-      supportFetchAPI: true,
-      corsEnabled: true,
-      stream: true,
-    },
-  },
-]);
 if (process.defaultApp) {
   // In development, register with the full path to the electron binary
   if (process.argv.length >= 2) {
@@ -69,8 +55,6 @@ let pendingDeepLinkUrl: string | null = null;
  * Parse a chatons:// URL and forward the relevant IPC event to the renderer.
  * Supported routes:
  *   chatons://extensions/install/<npm-package-id>
- *   chatons://cloud/connect?base_url=...
- *   chatons://cloud/auth/callback?... 
  */
 function handleDeepLink(url: string) {
   const win = getMainWindow();
@@ -95,32 +79,6 @@ function handleDeepLink(url: string) {
       // Reconstruct the full npm package id (may contain a scope like @scope/name)
       const extensionId = decodeURIComponent(segments.slice(2).join("/"));
       win.webContents.send("deeplink:extension-install", { extensionId });
-      return;
-    }
-
-    if (segments[0] === "cloud" && segments[1] === "connect") {
-      const baseUrl = parsed.searchParams.get("base_url");
-      win.webContents.send("deeplink:cloud-connect", {
-        baseUrl,
-        rawUrl: url,
-      });
-      return;
-    }
-
-    if (segments[0] === "cloud" && segments[1] === "auth" && segments[2] === "callback") {
-      console.log("[Cloud] Deeplink callback received", { url });
-      const code = parsed.searchParams.get("code");
-      const state = parsed.searchParams.get("state");
-      const error = parsed.searchParams.get("error");
-      const baseUrl = parsed.searchParams.get("base_url");
-      win.webContents.send("deeplink:cloud-auth-callback", {
-        code,
-        state,
-        error,
-        baseUrl,
-        rawUrl: url,
-      });
-      return;
     }
   } catch (err) {
     console.error("Failed to parse deep link URL:", url, err);
@@ -131,79 +89,12 @@ function handleDeepLink(url: string) {
 const userDataPath = path.join(app.getPath('appData'), 'Chatons');
 app.setPath('userData', userDataPath);
 
-const isDev = Boolean(process.env.VITE_DEV_SERVER_URL) && !app.isPackaged;
+const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 const appIconPath = path.join(__dirname, "../build/icons/icon.png");
 
 // Variable to keep track of the main window
 let mainWindow: electron.BrowserWindow | null = null;
 let isQuitting = false;
-let windowIpcRegistered = false;
-
-function registerWindowIpc() {
-  if (windowIpcRegistered) {
-    return;
-  }
-
-  windowIpcRegistered = true;
-
-  electron.ipcMain.handle('window:isFocused', () => {
-    return mainWindow?.isFocused() ?? false;
-  });
-
-  electron.ipcMain.handle('window:showNotification', (_event, title: string, body: string, conversationId?: string) => {
-    if (!mainWindow || mainWindow.isDestroyed()) return false;
-
-    if (mainWindow.isFocused()) {
-      return false;
-    }
-
-    const notification = new Notification({
-      title: title,
-      body: body,
-      icon: appIconPath,
-    });
-
-    notification.on('click', () => {
-      if (!mainWindow || mainWindow.isDestroyed()) {
-        return;
-      }
-      if (mainWindow.isMinimized()) {
-        mainWindow.restore();
-      }
-      mainWindow.show();
-      mainWindow.focus();
-      if (conversationId) {
-        mainWindow.webContents.send('desktop:notification-clicked', { conversationId });
-      }
-    });
-
-    notification.show();
-    return true;
-  });
-
-  electron.ipcMain.handle('window:close', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.close();
-    }
-  });
-
-  electron.ipcMain.handle('window:minimize', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.minimize();
-    }
-  });
-
-  electron.ipcMain.handle('window:maximize', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (mainWindow.isMaximized()) {
-        mainWindow.unmaximize();
-      } else {
-        mainWindow.maximize();
-      }
-    }
-  });
-}
-
 const isTelemetryEnabled = () => {
   try {
     const db = getDb();
@@ -221,10 +112,6 @@ const telemetryClient: ReturnType<typeof initSentryTelemetry> | null = isDev
     });
 
 async function createWindow() {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    return;
-  }
-
   const db = getDb();
   const initialBounds = getWindowBounds(db);
   const languagePreference = getLanguagePreference(db);
@@ -262,16 +149,13 @@ async function createWindow() {
     console.error('Error setting main window for shortcut manager:', error);
   }
 
-  const indexPath = path.join(__dirname, "../../dist/index.html");
-  console.log(`[DEBUG] isDev=${isDev}, __dirname=${__dirname}, indexPath=${indexPath}`);
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(
       `${process.env.VITE_DEV_SERVER_URL}?language=${languagePreference}`,
     );
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    console.log(`[DEBUG] Loading index.html from: ${indexPath}`);
-    mainWindow.loadFile(indexPath, {
+    mainWindow.loadFile(path.join(__dirname, "../dist/index.html"), {
       query: { language: languagePreference },
     });
   }
@@ -336,15 +220,160 @@ async function createWindow() {
       mainWindow!.hide();
     }
   });
-  mainWindow.on("closed", () => {
-    if (mainWindow?.isDestroyed()) {
-      setMainWindow(null);
-      mainWindow = null;
+
+  // Expose method to check if window is focused
+  electron.ipcMain.handle('window:isFocused', () => {
+    return mainWindow?.isFocused() ?? false;
+  });
+
+  // Expose method to show notification
+  electron.ipcMain.handle('window:showNotification', (_event, title: string, body: string, conversationId?: string) => {
+    if (!mainWindow) return false;
+    
+    // Only show notification if window is not focused
+    if (mainWindow.isFocused()) {
+      return false;
+    }
+    
+    const notification = new Notification({
+      title: title,
+      body: body,
+      icon: appIconPath,
+    });
+    
+    notification.on('click', () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) {
+          mainWindow.restore();
+        }
+        mainWindow.show();
+        mainWindow.focus();
+        if (conversationId) {
+          mainWindow.webContents.send('desktop:notification-clicked', { conversationId });
+        }
+      }
+    });
+    
+    notification.show();
+    return true;
+  });
+
+  // Window control handlers
+  electron.ipcMain.handle('window:close', () => {
+    if (mainWindow) {
+      // On Windows/Linux, minimize to tray instead of closing
+      if (process.platform !== 'darwin') {
+        mainWindow.hide();
+      } else {
+        mainWindow.close();
+      }
     }
   });
+
+  electron.ipcMain.handle('window:minimize', () => {
+    if (mainWindow) {
+      mainWindow.minimize();
+    }
+  });
+
+  electron.ipcMain.handle('window:maximize', () => {
+    if (mainWindow) {
+      if (mainWindow.isMaximized()) {
+        mainWindow.unmaximize();
+        mainWindow.webContents.send('window:unmaximized');
+      } else {
+        mainWindow.maximize();
+        mainWindow.webContents.send('window:maximized');
+      }
+    }
+  });
+
+  electron.ipcMain.handle('window:isMaximized', () => {
+    return mainWindow?.isMaximized() ?? false;
+  });
+
+  electron.ipcMain.handle('window:quit', () => {
+    isQuitting = true;
+    app.quit();
+  });
+
+  electron.ipcMain.handle('window:showTrayMenu', () => {
+    if (tray) {
+      tray.popUpContextMenu();
+    }
+  });
+
   // Setup status bar after window is created
   setupStatusBar(mainWindow);
 
+  // Update launch at startup setting
+  updateLaunchAtStartup(appSettings.launchAtStartup);
+
+  // Create system tray icon for Windows/Linux
+  if (process.platform !== 'darwin') {
+    createSystemTray();
+  }
+}
+
+// System tray management for Windows/Linux
+let tray: electron.Tray | null = null;
+
+function createSystemTray() {
+  // Use a simple icon - can be replaced with a custom icon file
+  const iconPath = path.join(__dirname, "../build/icons/icon.png");
+  let trayIcon: electron.NativeImage;
+
+  try {
+    trayIcon = nativeImage.createFromPath(iconPath);
+    if (trayIcon.isEmpty()) {
+      // Create a simple colored icon if the file doesn't exist
+      trayIcon = nativeImage.createEmpty();
+    }
+  } catch {
+    trayIcon = nativeImage.createEmpty();
+  }
+
+  // Resize for tray (16x16 on Windows is standard)
+  trayIcon = trayIcon.resize({ width: 16, height: 16 });
+
+  tray = new Tray(trayIcon);
+  tray.setToolTip('Chatons');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Afficher Chatons',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    },
+    {
+      type: 'separator',
+    },
+    {
+      label: 'Quitter',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+
+  // Click on tray icon to show the window
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
 }
 
 // macOS: handle chatons:// links when the app is already running
@@ -376,74 +405,6 @@ if (!gotTheLock) {
 }
 
 app.whenReady().then(async () => {
-  protocol.handle(EXTENSION_PROTOCOL_PREFIX, async (request) => {
-    try {
-      if (request.method === 'OPTIONS') {
-        return new Response(null, {
-          status: 204,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-            'Access-Control-Allow-Headers': '*',
-          },
-        });
-      }
-
-      const url = new URL(request.url);
-      const extensionId = decodeURIComponent(url.host || '');
-      const rawPath = decodeURIComponent(url.pathname || '/');
-      const relativePath = rawPath.replace(/^\/+/, '');
-      if (!extensionId || !relativePath) {
-        return new Response('Not found', {
-          status: 404,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-          },
-        });
-      }
-
-      const { getExtensionRootCandidates } = await import('./extensions/runtime/manifest.js');
-      const roots = getExtensionRootCandidates(extensionId);
-      for (const root of roots) {
-        const candidate = path.resolve(root, relativePath);
-        if (!candidate.startsWith(path.resolve(root))) {
-          continue;
-        }
-        try {
-          const response = await net.fetch(`file://${candidate}`);
-          if (response.ok) {
-            const headers = new Headers(response.headers);
-            headers.set('Access-Control-Allow-Origin', '*');
-            headers.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-            headers.set('Access-Control-Allow-Headers', '*');
-            headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
-            return new Response(response.body, {
-              status: response.status,
-              statusText: response.statusText,
-              headers,
-            });
-          }
-        } catch {
-          // Continue trying other candidate roots.
-        }
-      }
-      return new Response('Not found', {
-        status: 404,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-        },
-      });
-    } catch (error) {
-      console.error('Failed to resolve extension asset request:', request.url, error);
-      return new Response('Bad request', {
-        status: 400,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-        },
-      });
-    }
-  });
-
   if (process.platform === "darwin" && app.dock) {
     app.dock.setIcon(appIconPath);
   }
@@ -562,7 +523,6 @@ app.whenReady().then(async () => {
   registerPiIpc();
   registerUpdateIpc();
   registerShortcutsIpc();
-  registerWindowIpc();
   await createWindow();
 
   // Send a single startup heartbeat so Sentry can count active users
@@ -606,6 +566,11 @@ app.whenReady().then(async () => {
 app.on("before-quit", () => {
   isQuitting = true;
   void stopPiRuntimes();
+  // Cleanup tray icon
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
 });
 
 app.on("window-all-closed", () => {

@@ -576,42 +576,36 @@
     -webkit-app-region: no-drag;
   }
 
-  /* Window controls for macOS */
+  /* Window controls for all platforms */
   .window-controls {
-    @apply fixed left-0 top-0 z-50 flex h-14 items-center;
+    -webkit-app-region: no-drag;
+    @apply fixed right-0 top-0 z-50 flex h-10 items-center;
+    margin-right: 4px;
   }
 
   .window-control {
-    @apply flex h-14 w-14 items-center justify-center;
+    @apply flex h-8 w-8 items-center justify-center rounded-md text-[#6c6d75] transition-all duration-150;
     -webkit-app-region: no-drag;
   }
 
-  .window-control-icon {
-    @apply block h-3 w-3 rounded-full;
+  .window-control:hover {
+    @apply bg-[#eaeaee] text-[#3d3e45];
   }
 
-  .window-control-close .window-control-icon {
-    @apply bg-[#ff5f56];
+  .window-control:active {
+    @apply bg-[#dedee2];
   }
 
-  .window-control-close:hover .window-control-icon {
-    @apply bg-[#ff3b30];
+  .window-control svg {
+    @apply h-3.5 w-3.5;
   }
 
-  .window-control-minimize .window-control-icon {
-    @apply bg-[#ffbd2e];
+  .window-control-close:hover {
+    @apply bg-[#ff4d4f] text-white;
   }
 
-  .window-control-minimize:hover .window-control-icon {
-    @apply bg-[#ff9500];
-  }
-
-  .window-control-maximize .window-control-icon {
-    @apply bg-[#27c93f];
-  }
-
-  .window-control-maximize:hover .window-control-icon {
-    @apply bg-[#22c53a];
+  .window-control-close:active {
+    @apply bg-[#cc3d3f];
   }
 
   .topbar-title {
