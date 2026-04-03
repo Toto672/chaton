@@ -175,6 +175,59 @@ export function getPiMessageId(message: JsonValue): string | null {
   return typeof record.id === 'string' ? record.id : null
 }
 
+function getPiMessageTimestamp(message: JsonValue): number | null {
+  if (!message || typeof message !== 'object' || Array.isArray(message)) {
+    return null
+  }
+  const record = message as Record<string, JsonValue>
+  if (typeof record.timestamp === 'number' && Number.isFinite(record.timestamp)) {
+    return record.timestamp
+  }
+  const nested = record.message
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    const nestedTimestamp = (nested as Record<string, JsonValue>).timestamp
+    return typeof nestedTimestamp === 'number' && Number.isFinite(nestedTimestamp) ? nestedTimestamp : null
+  }
+  return null
+}
+
+function getPiMessageDedupKey(message: JsonValue): string | null {
+  if (!message || typeof message !== 'object' || Array.isArray(message)) {
+    return null
+  }
+
+  const role = getPiMessageRole(message)
+  const timestamp = getPiMessageTimestamp(message)
+  if (!role || timestamp === null) {
+    return null
+  }
+
+  const text = extractPiMessageText(message).trim()
+  if (text) {
+    return `${role}:${timestamp}:text:${text}`
+  }
+
+  const record = message as Record<string, JsonValue>
+  const nested =
+    record.message && typeof record.message === 'object' && !Array.isArray(record.message)
+      ? (record.message as Record<string, JsonValue>)
+      : null
+  const source = nested ?? record
+
+  if (role === 'toolResult') {
+    const toolName = typeof source.toolName === 'string' ? source.toolName : ''
+    const toolCallId = typeof source.toolCallId === 'string' ? source.toolCallId : ''
+    const isError = source.isError === true ? '1' : '0'
+    return `${role}:${timestamp}:tool:${toolName}:${toolCallId}:${isError}`
+  }
+
+  if (source.content !== undefined) {
+    return `${role}:${timestamp}:content:${JSON.stringify(source.content)}`
+  }
+
+  return `${role}:${timestamp}`
+}
+
 export function getPiMessageRole(message: JsonValue): string | null {
   if (!message || typeof message !== 'object' || Array.isArray(message)) {
     return null
@@ -825,23 +878,37 @@ export function piReducer(piState: PiStoreState, action: Action): PiStoreState {
         }
       }
       
-      // Build a set of message IDs from incoming messages
+      // Build lookup sets from the incoming snapshot so we can preserve only
+      // truly newer incremental messages that have not been folded into it yet.
       const incomingIds = new Set<string>()
+      const incomingDedupKeys = new Set<string>()
       for (const msg of incomingMessages) {
         const id = getPiMessageId(msg)
         if (id) {
           incomingIds.add(id)
         }
+        const dedupKey = getPiMessageDedupKey(msg)
+        if (dedupKey) {
+          incomingDedupKeys.add(dedupKey)
+        }
       }
       
-      // Keep existing messages that are NOT in the incoming list.
-      // This preserves any pending messages that arrived via message_update/agent_end
-      // but haven't been flushed before setPiMessages was called.
-      // These messages are appended at the end since they are newer than the snapshot.
+      // Keep existing messages that are NOT already represented by the incoming snapshot.
+      // This preserves newer incremental updates that arrived via message_update/agent_end
+      // before setPiMessages runs, while avoiding repeated duplication for ID-less messages
+      // such as prompt echoes and some nested/runtime-normalized payloads.
       const extraMessages = current.messages.filter((msg) => {
         const id = getPiMessageId(msg)
-        // Keep if no ID or ID not in incoming
-        return !id || !incomingIds.has(id)
+        if (id) {
+          return !incomingIds.has(id)
+        }
+
+        const dedupKey = getPiMessageDedupKey(msg)
+        if (dedupKey) {
+          return !incomingDedupKeys.has(dedupKey)
+        }
+
+        return false
       })
       
       const mergedMessages = [...incomingMessages, ...extraMessages]
